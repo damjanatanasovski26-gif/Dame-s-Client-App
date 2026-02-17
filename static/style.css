@@ -189,6 +189,21 @@ h3{ margin:0 0 14px; font-size:18px; font-weight:700; }
   transform:translateY(-1px);
 }
 
+[data-theme="dark"] .input{
+  background:#0f1d2b;
+  color:#e6edf3;
+  border-color:#304a62;
+}
+
+[data-theme="dark"] .input::placeholder{
+  color:#8ea4b8;
+}
+
+[data-theme="dark"] .input:focus{
+  border-color:rgba(29,182,171,.58);
+  box-shadow:0 0 0 4px rgba(29,182,171,.16);
+}
+
 .btn{
   display:inline-flex;
   align-items:center;
@@ -393,6 +408,12 @@ tbody tr:nth-child(even) td{
   border-radius:12px;
   padding:12px 14px;
   font-size:14px;
+}
+
+[data-theme="dark"] .empty-state{
+  border-color:#35506a;
+  background:#1c3145;
+  color:#c2d3e1;
 }
 tr:last-child td{ border-bottom:0; }
 
@@ -674,6 +695,12 @@ tr:last-child td{ border-bottom:0; }
 
 .password-toggle:hover{
   color:var(--text);
+}
+
+[data-theme="dark"] .password-toggle{
+  border-color:#335271;
+  background:#24384d;
+  color:#bfd0df;
 }
 
 .password-toggle:disabled{
