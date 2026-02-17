@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, redirect, url_for, session, Response, send_file, abort
 from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
+import click
 from datetime import datetime, date, timedelta, timezone
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -334,15 +335,24 @@ def add_months(d: date, months: int) -> date:
 def seed_admin():
     existing = User.query.filter_by(username="admin").first()
     if not existing:
+        default_admin_username = os.environ.get("ADMIN_DEFAULT_USERNAME", "admin")
+        default_admin_password = os.environ.get("ADMIN_DEFAULT_PASSWORD", "admin123")
         u = User(
-            username="admin",
-            password_hash=generate_password_hash("admin123"),
+            username=default_admin_username,
+            password_hash=generate_password_hash(default_admin_password),
             role="admin",
             client_id=None,
         )
         db.session.add(u)
         db.session.commit()
-        print("Created default admin: admin / admin123")
+        print(f"Created default admin: {default_admin_username} / {default_admin_password}")
+
+
+@app.cli.command("seed-admin")
+def seed_admin_command():
+    """Create default admin user if it doesn't exist."""
+    seed_admin()
+    click.echo("seed-admin complete")
 
 
 def get_current_plan(client_id: int):
