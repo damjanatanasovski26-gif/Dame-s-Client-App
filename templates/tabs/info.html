@@ -29,7 +29,10 @@
         <input class="input" name="username" required>
 
         <label class="label">Temporary Password</label>
-        <input class="input" name="password" type="password" required>
+        <div class="password-wrap">
+          <input id="createClientPassword" class="input" name="password" type="password" required>
+          <button class="password-toggle" type="button" data-password-target="createClientPassword" aria-label="Show password" aria-pressed="false">&#128065;</button>
+        </div>
 
         <button class="btn" type="submit">Create Login</button>
       </form>
@@ -52,7 +55,10 @@
       <form class="form" action="{{ url_for('admin_reset_client_password', client_id=client.id) }}" method="POST" style="max-width:700px;">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <label class="label">New temporary password</label>
-        <input class="input" name="new_password" type="password" required>
+        <div class="password-wrap">
+          <input id="resetClientPassword" class="input" name="new_password" type="password" required>
+          <button class="password-toggle" type="button" data-password-target="resetClientPassword" aria-label="Show password" aria-pressed="false">&#128065;</button>
+        </div>
         <button class="btn" type="submit">Reset Password</button>
       </form>
 
@@ -100,13 +106,22 @@
     <form class="form" action="{{ url_for('change_client_password', client_id=client.id) }}" method="POST" style="max-width:700px;">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <label class="label">Current password</label>
-      <input class="input" type="password" name="current_password" autocomplete="current-password" required>
+      <div class="password-wrap">
+        <input id="clientCurrentPassword" class="input" type="password" name="current_password" autocomplete="current-password" required>
+        <button class="password-toggle" type="button" data-password-target="clientCurrentPassword" aria-label="Show password" aria-pressed="false">&#128065;</button>
+      </div>
 
       <label class="label">New password</label>
-      <input class="input" type="password" name="new_password" autocomplete="new-password" required>
+      <div class="password-wrap">
+        <input id="clientNewPassword" class="input" type="password" name="new_password" autocomplete="new-password" required>
+        <button class="password-toggle" type="button" data-password-target="clientNewPassword" aria-label="Show password" aria-pressed="false">&#128065;</button>
+      </div>
 
       <label class="label">Confirm new password</label>
-      <input class="input" type="password" name="confirm_password" autocomplete="new-password" required>
+      <div class="password-wrap">
+        <input id="clientConfirmPassword" class="input" type="password" name="confirm_password" autocomplete="new-password" required>
+        <button class="password-toggle" type="button" data-password-target="clientConfirmPassword" aria-label="Show password" aria-pressed="false">&#128065;</button>
+      </div>
 
       <button class="btn" type="submit" style="margin-top:14px;">Update Password</button>
     </form>

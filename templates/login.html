@@ -15,6 +15,11 @@
         <div class="auth-chip">Progress</div>
         <div class="auth-chip">Consistency</div>
       </div>
+      <div class="auth-socials">
+        <a class="auth-social" href="https://instagram.com/" target="_blank" rel="noopener noreferrer">Instagram</a>
+        <a class="auth-social" href="https://tiktok.com/" target="_blank" rel="noopener noreferrer">TikTok</a>
+        <a class="auth-social" href="https://youtube.com/" target="_blank" rel="noopener noreferrer">YouTube</a>
+      </div>
     </div>
   </section>
 
@@ -41,7 +46,18 @@
           <input class="input" name="username" autocomplete="username" required {% if lock_seconds %}disabled{% endif %}>
 
           <label class="label">Password</label>
-          <input class="input" type="password" name="password" autocomplete="current-password" required {% if lock_seconds %}disabled{% endif %}>
+          <div class="password-wrap">
+            <input id="loginPassword" class="input" type="password" name="password" autocomplete="current-password" required {% if lock_seconds %}disabled{% endif %}>
+            <button
+              id="loginPasswordToggle"
+              class="password-toggle"
+              type="button"
+              data-password-target="loginPassword"
+              aria-label="Show password"
+              aria-pressed="false"
+              {% if lock_seconds %}disabled{% endif %}
+            >&#128065;</button>
+          </div>
 
           <button class="btn" type="submit" style="margin-top:6px;" {% if lock_seconds %}disabled{% endif %}>Log in</button>
         </form>
@@ -58,7 +74,7 @@
     const el = document.getElementById("lock-seconds");
     if (!el) return;
     const form = el.closest(".login-card")?.querySelector("form");
-    const fields = form ? form.querySelectorAll("input[name='username'], input[name='password'], button[type='submit']") : [];
+    const fields = form ? form.querySelectorAll("input[name='username'], input[name='password'], button[type='submit'], #loginPasswordToggle") : [];
     let seconds = Number(el.dataset.seconds || 0);
     if (!Number.isFinite(seconds) || seconds <= 0) return;
     const timer = setInterval(() => {

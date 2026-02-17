@@ -49,6 +49,36 @@
         });
       }
     })();
+
+    (function () {
+      const toggles = document.querySelectorAll("[data-password-target]");
+      toggles.forEach(function (toggle) {
+        const targetId = toggle.getAttribute("data-password-target");
+        if (!targetId) return;
+        const input = document.getElementById(targetId);
+        if (!input) return;
+
+        function setVisible(isVisible) {
+          if (toggle.disabled || input.disabled) return;
+          input.type = isVisible ? "text" : "password";
+          toggle.setAttribute("aria-pressed", isVisible ? "true" : "false");
+          toggle.setAttribute("aria-label", isVisible ? "Hide password" : "Show password");
+        }
+
+        toggle.addEventListener("mouseenter", function () { setVisible(true); });
+        toggle.addEventListener("mouseleave", function () {
+          if (toggle.getAttribute("aria-pressed") !== "true") setVisible(false);
+        });
+        toggle.addEventListener("focus", function () { setVisible(true); });
+        toggle.addEventListener("blur", function () {
+          if (toggle.getAttribute("aria-pressed") !== "true") setVisible(false);
+        });
+        toggle.addEventListener("click", function () {
+          const nowPressed = toggle.getAttribute("aria-pressed") === "true";
+          setVisible(!nowPressed);
+        });
+      });
+    })();
   </script>
 </body>
 </html>
