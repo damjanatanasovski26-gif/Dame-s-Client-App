@@ -221,6 +221,7 @@ class User(db.Model):
 
     # client users link to a Client profile
     client_id = db.Column(db.Integer, db.ForeignKey("client.id"), nullable=True)
+    must_change_password = db.Column(db.Boolean, nullable=False, default=False)
 
 
 class LoginThrottle(db.Model):
@@ -250,6 +251,13 @@ def is_admin():
 
 def current_client_id():
     return session.get("client_id")
+
+
+def current_user():
+    uid = session.get("user_id")
+    if not uid:
+        return None
+    return User.query.filter_by(id=uid).first()
 
 
 def parse_ddmmyyyy(s: str):
@@ -349,7 +357,7 @@ def get_current_plan(client_id: int):
 
     latest_payment = (
         Payment.query.filter_by(client_id=client_id)
-        .order_by(Payment.start_date.desc())
+        .order_by(Payment.start_date.desc(), Payment.paid_on.desc(), Payment.id.desc())
         .first()
     )
 
@@ -527,6 +535,13 @@ def login():
 
     if user.role == "admin":
         return redirect(url_for("index"))
+    if user.must_change_password:
+        return redirect(url_for(
+            "client_profile",
+            client_id=user.client_id,
+            tab="info",
+            err="You must set a new password before using other tabs."
+        ))
     return redirect(url_for("client_profile", client_id=user.client_id, tab="info"))
 
 
@@ -565,27 +580,52 @@ def client_profile(client_id):
     tab = request.args.get("tab", "info")
     err = request.args.get("err")
     msg = request.args.get("msg")
+    viewer = current_user()
     # Keep client navigation on allowed tabs only.
     if not is_admin() and tab == "payments":
         return redirect(url_for("client_profile", client_id=client.id, tab="info"))
+    if not is_admin() and viewer and viewer.must_change_password and tab != "info":
+        return redirect(url_for(
+            "client_profile",
+            client_id=client.id,
+            tab="info",
+            err="You must set a new password before using other tabs."
+        ))
 
     # Stats
-    measurements = (
+    all_measurements = (
         Measurement.query.filter_by(client_id=client.id)
         .order_by(Measurement.date.desc())
         .all()
     )
+
+    def has_body_measurements(m: Measurement) -> bool:
+        return any(
+            v is not None
+            for v in (
+                m.chest, m.waist, m.stomach, m.glutes,
+                m.arm_left, m.arm_right, m.quad_left, m.quad_right,
+                m.calf_left, m.calf_right,
+            )
+        )
+
+    measurements = [m for m in all_measurements if has_body_measurements(m)]
     latest = measurements[0] if measurements else None
 
-    # Weight graph data (only weight)
-    weight_points = (
+    # Weight-only/weight history data
+    weight_points_asc = (
         Measurement.query.filter_by(client_id=client.id)
         .filter(Measurement.weight.isnot(None))
         .order_by(Measurement.date.asc())
         .all()
     )
-    weight_labels = [m.date.strftime("%d/%m") for m in weight_points]
-    weight_values = [m.weight for m in weight_points]
+    weight_labels = [m.date.strftime("%d/%m") for m in weight_points_asc]
+    weight_values = [m.weight for m in weight_points_asc]
+    weight_latest = weight_points_asc[-1] if weight_points_asc else None
+    weight_measurements = list(reversed(weight_points_asc))
+    weight_change = None
+    if len(weight_points_asc) >= 2:
+        weight_change = round(weight_points_asc[-1].weight - weight_points_asc[0].weight, 1)
 
     # Sessions / Payments Plan
     sessions_per_week_from_payments, current_status = get_current_plan(client.id)
@@ -617,11 +657,12 @@ def client_profile(client_id):
         .limit(50)
         .all()
     )
+    total_sessions = SessionLog.query.filter_by(client_id=client.id).count()
 
     # Payments view
     payments = (
         Payment.query.filter_by(client_id=client.id)
-        .order_by(Payment.start_date.desc())
+        .order_by(Payment.start_date.desc(), Payment.paid_on.desc(), Payment.id.desc())
         .all()
     )
 
@@ -639,6 +680,16 @@ def client_profile(client_id):
         .order_by(User.id.desc())
         .first()
     )
+    must_change_password = bool(client_user.must_change_password) if client_user else False
+    milestones = []
+    if total_sessions >= 10:
+        milestones.append("10+ sessions completed")
+    if total_sessions >= 25:
+        milestones.append("25+ sessions consistency")
+    if weight_change is not None and weight_change <= -2:
+        milestones.append(f"Weight down {abs(weight_change):.1f} kg")
+    if not milestones:
+        milestones.append("First milestone pending")
 
     return render_template(
         "client.html",
@@ -651,11 +702,15 @@ def client_profile(client_id):
         # stats
         measurements=measurements,
         latest=latest,
+        weight_latest=weight_latest,
+        weight_measurements=weight_measurements,
+        weight_change=weight_change,
         weight_labels=weight_labels,
         weight_values=weight_values,
 
         # sessions
         sessions=sessions,
+        total_sessions=total_sessions,
         used_this_week=used_this_week,
         remaining=remaining,
         bonus=bonus,
@@ -668,6 +723,8 @@ def client_profile(client_id):
         payment_status_label=payment_status_label,
         payment_status_tone=payment_status_tone,
         client_user=client_user,
+        must_change_password=must_change_password,
+        milestones=milestones,
     )
 
 
@@ -946,6 +1003,7 @@ def change_client_password(client_id):
         return redirect(url_for("client_profile", client_id=client_id, tab="info", err="New password and confirmation do not match."))
 
     user.password_hash = generate_password_hash(new_password)
+    user.must_change_password = False
     db.session.commit()
 
     return redirect(url_for("client_profile", client_id=client_id, tab="info", msg="Password updated."))
@@ -1191,7 +1249,8 @@ def create_client_login(client_id):
         username=username,
         password_hash=generate_password_hash(password),
         role="client",
-        client_id=client.id
+        client_id=client.id,
+        must_change_password=True,
     )
     db.session.add(u)
     db.session.commit()
@@ -1221,6 +1280,7 @@ def admin_reset_client_password(client_id):
         return redirect(url_for("client_profile", client_id=client.id, tab="info", err="Temporary password must be at least 6 characters."))
 
     user.password_hash = generate_password_hash(new_password)
+    user.must_change_password = True
     db.session.commit()
     return redirect(url_for("client_profile", client_id=client.id, tab="info", msg="Client password reset."))
 

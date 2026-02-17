@@ -6,7 +6,7 @@
     (Remaining: <b>{{ remaining }}</b>)
   </div>
 
-  <form class="form" action="{{ url_for('add_session', client_id=client.id) }}" method="POST" style="max-width:520px;">
+  <form id="logSessionForm" class="form" action="{{ url_for('add_session', client_id=client.id) }}" method="POST" style="max-width:520px;">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input class="input" name="note" placeholder="Optional note (Push / Pull / Rehab)">
     <button class="btn" type="submit">Log Session</button>

@@ -1,7 +1,7 @@
 <div class="card">
   <h3>Body Measurements</h3>
 
-  <form class="form" action="{{ url_for('add_measurement', client_id=client.id) }}" method="POST" style="max-width:900px;">
+  <form id="statsEntryForm" class="form" action="{{ url_for('add_measurement', client_id=client.id) }}" method="POST" style="max-width:900px;">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="grid-2">
       <input class="input" name="weight" placeholder="Weight (kg)">
@@ -36,7 +36,7 @@
 
   {# Build a CSV string safely (Jinja loop scope-safe) #}
 {% set ns = namespace(csv="") %}
-{% for m in measurements|reverse %}
+{% for m in weight_measurements|reverse %}
   {% if m.weight is not none %}
     {% set ns.csv = ns.csv ~ m.date.strftime("%Y-%m-%d") ~ "," ~ m.weight ~ ";" %}
   {% endif %}
@@ -49,12 +49,49 @@
 </div>
 
   <div class="muted" style="margin-top:10px;">
-    {% if latest and latest.weight is not none %}
-      Latest weight: <b>{{ latest.weight }}</b> kg ({{ latest.date.strftime("%d/%m/%Y") }})
+    {% if weight_latest %}
+      Latest weight: <b>{{ weight_latest.weight }}</b> kg ({{ weight_latest.date.strftime("%d/%m/%Y") }})
     {% else %}
       No weight entries yet.
     {% endif %}
   </div>
+</div>
+
+<div class="card">
+  <h3>Weight History</h3>
+
+  {% if weight_measurements %}
+    <div class="table-wrap">
+      <table>
+        <tr>
+          <th>Date</th>
+          <th>Weight (kg)</th>
+          <th></th>
+        </tr>
+        {% for m in weight_measurements %}
+        <tr>
+          <td>{{ m.date.strftime("%d/%m/%Y") }}</td>
+          <td>{{ m.weight }}</td>
+          <td style="text-align:right;">
+            {% if is_admin %}
+              <form action="{{ url_for('delete_measurement', client_id=client.id, measurement_id=m.id) }}"
+                    method="POST"
+                    onsubmit="return confirm('Delete this weight entry?');"
+                    style="margin:0;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn danger" type="submit">Delete</button>
+              </form>
+            {% else %}
+              -
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </table>
+    </div>
+  {% else %}
+    <div class="empty-state">No weight history yet.</div>
+  {% endif %}
 </div>
 
 <div class="card">
@@ -80,7 +117,7 @@
       <div><b>Calf R:</b> {{ latest.calf_right or "-" }}</div>
     </div>
   {% else %}
-    <div class="empty-state">No measurements yet. Add one above to track progress.</div>
+    <div class="empty-state">No full-body measurements yet. Weight-only entries are shown above.</div>
   {% endif %}
 </div>
 
@@ -138,7 +175,7 @@
       </table>
     </div>
   {% else %}
-    <div class="empty-state">No history yet. Measurements will appear here.</div>
+    <div class="empty-state">No full-body history yet. Weight-only entries are shown above.</div>
   {% endif %}
 </div>
 

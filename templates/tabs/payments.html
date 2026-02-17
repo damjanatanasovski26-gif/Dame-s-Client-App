@@ -1,18 +1,18 @@
 <div class="card">
   <h3>Add Payment</h3>
 
-  <form class="form" action="{{ url_for('add_payment', client_id=client.id) }}" method="POST" style="max-width:700px;">
+  <form id="paymentEntryForm" class="form" action="{{ url_for('add_payment', client_id=client.id) }}" method="POST" style="max-width:700px;">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="grid-2">
       <div>
         <label class="label">Start date (DD/MM/YYYY)</label>
-        <input class="input" name="start_date" placeholder="09/02/2026" required>
+        <input id="paymentStartDate" class="input" name="start_date" placeholder="09/02/2026" required>
       </div>
 
       <div>
         <label class="label">Amount paid (MKD)</label>
         <!-- IMPORTANT: name MUST be amount_paid -->
-        <input class="input" name="amount_paid" type="number" min="0" step="1" placeholder="5000 / 7000 / multiple" required>
+        <input id="paymentAmount" class="input" name="amount_paid" type="number" min="0" step="1" placeholder="5000 / 7000 / multiple" required>
       </div>
 
       <div style="grid-column: 1 / -1;">
@@ -23,6 +23,10 @@
 
     <button class="btn" type="submit">Save Payment</button>
   </form>
+
+  <div id="paymentPreview" class="alert" style="margin-top:12px;">
+    Enter start date and amount to preview plan details.
+  </div>
 
   <p class="muted" style="margin-top:10px;">
     Rules: 5000 = 1 month / 3 sessions week, 7000 = 1 month / 5 sessions week. Multiples = multiple months.
@@ -84,3 +88,74 @@
     <div class="empty-state">No payments yet.</div>
   {% endif %}
 </div>
+
+<script>
+  (function () {
+    const startEl = document.getElementById("paymentStartDate");
+    const amountEl = document.getElementById("paymentAmount");
+    const previewEl = document.getElementById("paymentPreview");
+    if (!startEl || !amountEl || !previewEl) return;
+
+    function parseDate(value) {
+      const parts = (value || "").split("/");
+      if (parts.length !== 3) return null;
+      const d = Number(parts[0]);
+      const m = Number(parts[1]);
+      const y = Number(parts[2]);
+      if (!d || !m || !y) return null;
+      const date = new Date(y, m - 1, d);
+      if (date.getFullYear() !== y || date.getMonth() !== m - 1 || date.getDate() !== d) return null;
+      return date;
+    }
+
+    function addMonths(baseDate, months) {
+      const d = new Date(baseDate.getTime());
+      const day = d.getDate();
+      d.setDate(1);
+      d.setMonth(d.getMonth() + months);
+      const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+      d.setDate(Math.min(day, lastDay));
+      return d;
+    }
+
+    function fmtDate(d) {
+      const dd = String(d.getDate()).padStart(2, "0");
+      const mm = String(d.getMonth() + 1).padStart(2, "0");
+      const yy = d.getFullYear();
+      return dd + "/" + mm + "/" + yy;
+    }
+
+    function renderPreview() {
+      const amount = Number(amountEl.value || 0);
+      const startDate = parseDate(startEl.value);
+
+      if (!amount || !startDate) {
+        previewEl.className = "alert";
+        previewEl.textContent = "Enter start date and amount to preview plan details.";
+        return;
+      }
+
+      let months = 0;
+      let sessions = 0;
+      let monthlyPrice = 0;
+      if (amount % 5000 === 0 && amount % 7000 !== 0) {
+        monthlyPrice = 5000; sessions = 3; months = amount / 5000;
+      } else if (amount % 7000 === 0 && amount % 5000 !== 0) {
+        monthlyPrice = 7000; sessions = 5; months = amount / 7000;
+      } else if (amount % 5000 === 0 && amount % 7000 === 0) {
+        monthlyPrice = 7000; sessions = 5; months = amount / 7000;
+      } else {
+        previewEl.className = "alert error";
+        previewEl.textContent = "Invalid amount: must be divisible by 5000 or 7000.";
+        return;
+      }
+
+      const dueDate = addMonths(startDate, months);
+      previewEl.className = "alert success";
+      previewEl.textContent = "Preview: " + months + " month(s), " + sessions + "/week, monthly price " + monthlyPrice + " MKD, due on " + fmtDate(dueDate) + ".";
+    }
+
+    startEl.addEventListener("input", renderPreview);
+    amountEl.addEventListener("input", renderPreview);
+  })();
+</script>

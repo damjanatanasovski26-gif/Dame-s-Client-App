@@ -40,6 +40,31 @@
   {% endif %}
 </div>
 
+<div class="card">
+  <h3>Client Summary</h3>
+  <div class="stats-grid">
+    <div><b>Sessions Left</b><div class="muted">{{ remaining }} / {{ allowed }} this week</div></div>
+    <div><b>Total Sessions</b><div class="muted">{{ total_sessions }}</div></div>
+    <div><b>Weight Change</b><div class="muted">
+      {% if weight_change is not none %}
+        {{ weight_change }} kg
+      {% else %}
+        -
+      {% endif %}
+    </div></div>
+  </div>
+  <div class="muted" style="margin-top:10px;">
+    Milestones: {{ milestones|join(" | ") }}
+  </div>
+  <div class="actions" style="margin-top:12px;">
+    <a class="btn secondary" href="{{ url_for('client_profile', client_id=client.id, tab='sessions') }}#logSessionForm">Quick Log Session</a>
+    <a class="btn secondary" href="{{ url_for('client_profile', client_id=client.id, tab='stats') }}#statsEntryForm">Quick Add Weight</a>
+    {% if is_admin %}
+      <a class="btn secondary" href="{{ url_for('client_profile', client_id=client.id, tab='payments') }}#paymentEntryForm">Quick Add Payment</a>
+    {% endif %}
+  </div>
+</div>
+
 {% if err %}
   <div class="card alert error">
     <b style="color:var(--danger);">Error:</b> {{ err }}
@@ -49,6 +74,12 @@
 {% if msg %}
   <div class="card alert success">
     <b style="color:var(--success);">OK:</b> {{ msg }}
+  </div>
+{% endif %}
+
+{% if must_change_password and not is_admin %}
+  <div class="card alert error">
+    <b style="color:var(--danger);">Action required:</b> Set a new password in the Info tab before using other tabs.
   </div>
 {% endif %}
 
@@ -78,5 +109,18 @@
 {% elif tab == "payments" and is_admin %}
   {% include "tabs/payments.html" %}
 {% endif %}
+
+<script>
+  (function () {
+    if (localStorage.getItem("trainer_client_onboarding_seen") === "1") return;
+    const showOnTabs = ["info", "stats", "sessions"];
+    const current = "{{ tab }}";
+    if (showOnTabs.indexOf(current) === -1) return;
+    window.setTimeout(function () {
+      alert("Tip: Use Quick Add buttons for faster updates and keep Stats weight entries consistent for better graph tracking.");
+      localStorage.setItem("trainer_client_onboarding_seen", "1");
+    }, 350);
+  })();
+</script>
 
 {% endblock %}
