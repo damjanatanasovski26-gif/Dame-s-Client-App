@@ -329,6 +329,41 @@ def to_float(value):
         return None
 
 
+MEASUREMENT_FIELDS = [
+    "weight",
+    "chest",
+    "waist",
+    "stomach",
+    "glutes",
+    "arm_left",
+    "arm_right",
+    "quad_left",
+    "quad_right",
+    "calf_left",
+    "calf_right",
+]
+
+
+def parse_measurement_form(form_data):
+    parsed = {}
+    invalid_fields = []
+    for field in MEASUREMENT_FIELDS:
+        raw = (form_data.get(field) or "").strip().replace(",", ".")
+        if raw == "":
+            parsed[field] = None
+            continue
+        try:
+            parsed[field] = float(raw)
+        except ValueError:
+            invalid_fields.append(field.replace("_", " "))
+
+    if invalid_fields:
+        return None, f"Invalid number for: {', '.join(invalid_fields)}."
+    if all(v is None for v in parsed.values()):
+        return None, "Enter at least one measurement value."
+    return parsed, None
+
+
 def to_int(value, default=0):
     value = (value or "").strip()
     if value == "":
@@ -811,10 +846,15 @@ def client_profile(client_id):
 
     today = date.today()
     payments_view = []
-    for p in payments:
+    for idx, p in enumerate(payments):
         due = add_months(p.start_date, p.months)
         days_left = (due - today).days
-        payments_view.append({"p": p, "due": due, "days_left": days_left})
+        payments_view.append({
+            "p": p,
+            "due": due,
+            "days_left": days_left,
+            "is_current": idx == 0,
+        })
 
     client_user = (
         User.query
@@ -1395,24 +1435,37 @@ def add_measurement(client_id):
 
     client = get_or_404(Client, client_id)
 
-    m = Measurement(
-        client_id=client.id,
-        weight=to_float(request.form.get("weight")),
-        chest=to_float(request.form.get("chest")),
-        waist=to_float(request.form.get("waist")),
-        stomach=to_float(request.form.get("stomach")),
-        glutes=to_float(request.form.get("glutes")),
-        arm_left=to_float(request.form.get("arm_left")),
-        arm_right=to_float(request.form.get("arm_right")),
-        quad_left=to_float(request.form.get("quad_left")),
-        quad_right=to_float(request.form.get("quad_right")),
-        calf_left=to_float(request.form.get("calf_left")),
-        calf_right=to_float(request.form.get("calf_right")),
-    )
+    parsed_values, err = parse_measurement_form(request.form)
+    if err:
+        return redirect(url_for("client_profile", client_id=client.id, tab="stats", err=err))
+
+    m = Measurement(client_id=client.id, **parsed_values)
 
     db.session.add(m)
     db.session.commit()
     return redirect(url_for("client_profile", client_id=client.id, tab="stats"))
+
+
+@app.route("/client/<int:client_id>/stats/update/<int:measurement_id>", methods=["POST"], endpoint="update_measurement")
+@login_required
+def update_measurement(client_id, measurement_id):
+    if not is_admin() and current_client_id() != client_id:
+        return "Forbidden", 403
+
+    client = get_or_404(Client, client_id)
+    m = get_or_404(Measurement, measurement_id)
+    if m.client_id != client.id:
+        abort(404)
+
+    parsed_values, err = parse_measurement_form(request.form)
+    if err:
+        return redirect(url_for("client_profile", client_id=client.id, tab="stats", err=err))
+
+    for field, value in parsed_values.items():
+        setattr(m, field, value)
+
+    db.session.commit()
+    return redirect(url_for("client_profile", client_id=client.id, tab="stats", msg="Measurement updated."))
 
 
 @app.route("/client/<int:client_id>/stats/delete/<int:measurement_id>", methods=["POST"], endpoint="delete_measurement")

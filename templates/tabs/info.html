@@ -142,11 +142,11 @@
       <div class="grid-2">
         <div>
           <label class="label">Target value (optional)</label>
-          <input class="input" name="target_value" type="number" step="0.1" placeholder="e.g. 75">
+          <input class="input" name="target_value" type="number" step="0.1" placeholder="e.g. 75 kg">
         </div>
         <div>
           <label class="label">Current value (optional)</label>
-          <input class="input" name="current_value" type="number" step="0.1" placeholder="e.g. 81">
+          <input class="input" name="current_value" type="number" step="0.1" placeholder="e.g. 81 kg">
         </div>
       </div>
 
@@ -185,7 +185,7 @@
               {% if is_admin %}
                 <form action="{{ url_for('update_client_goal', client_id=client.id, goal_id=g.id) }}" method="POST" style="display:flex; gap:6px; align-items:center; margin:0 0 6px 0;">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                  <input class="input" type="number" step="0.1" name="current_value" placeholder="Current" style="max-width:96px;">
+                  <input class="input" type="number" step="0.1" name="current_value" placeholder="Current (kg/cm)" style="max-width:140px;">
                   <select class="input" name="status" style="max-width:120px;">
                     <option value="active" {% if g.status=='active' %}selected{% endif %}>active</option>
                     <option value="completed" {% if g.status=='completed' %}selected{% endif %}>completed</option>

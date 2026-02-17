@@ -4,21 +4,21 @@
   <form id="statsEntryForm" class="form" action="{{ url_for('add_measurement', client_id=client.id) }}" method="POST" style="max-width:900px;">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="grid-2">
-      <input class="input" name="weight" placeholder="Weight (kg)">
+      <input class="input" name="weight" type="number" step="0.1" inputmode="decimal" placeholder="Weight (kg)">
 
-      <input class="input" name="chest" placeholder="Chest (cm)">
-      <input class="input" name="waist" placeholder="Waist (cm)">
-      <input class="input" name="stomach" placeholder="Stomach (cm)">
-      <input class="input" name="glutes" placeholder="Glutes (cm)">
+      <input class="input" name="chest" type="number" step="0.1" inputmode="decimal" placeholder="Chest (cm)">
+      <input class="input" name="waist" type="number" step="0.1" inputmode="decimal" placeholder="Waist (cm)">
+      <input class="input" name="stomach" type="number" step="0.1" inputmode="decimal" placeholder="Stomach (cm)">
+      <input class="input" name="glutes" type="number" step="0.1" inputmode="decimal" placeholder="Glutes (cm)">
 
-      <input class="input" name="arm_left" placeholder="Arm Left (cm)">
-      <input class="input" name="arm_right" placeholder="Arm Right (cm)">
+      <input class="input" name="arm_left" type="number" step="0.1" inputmode="decimal" placeholder="Arm Left (cm)">
+      <input class="input" name="arm_right" type="number" step="0.1" inputmode="decimal" placeholder="Arm Right (cm)">
 
-      <input class="input" name="quad_left" placeholder="Quad Left (cm)">
-      <input class="input" name="quad_right" placeholder="Quad Right (cm)">
+      <input class="input" name="quad_left" type="number" step="0.1" inputmode="decimal" placeholder="Quad Left (cm)">
+      <input class="input" name="quad_right" type="number" step="0.1" inputmode="decimal" placeholder="Quad Right (cm)">
 
-      <input class="input" name="calf_left" placeholder="Calf Left (cm)">
-      <input class="input" name="calf_right" placeholder="Calf Right (cm)">
+      <input class="input" name="calf_left" type="number" step="0.1" inputmode="decimal" placeholder="Calf Left (cm)">
+      <input class="input" name="calf_right" type="number" step="0.1" inputmode="decimal" placeholder="Calf Right (cm)">
     </div>
 
     <button class="btn" type="submit">Add Measurement</button>
@@ -105,17 +105,34 @@
           <td>{{ m.date.strftime("%d/%m/%Y") }}</td>
           <td>{{ m.weight }}</td>
           <td style="text-align:right;">
-            {% if is_admin %}
-              <form action="{{ url_for('delete_measurement', client_id=client.id, measurement_id=m.id) }}"
+            <div class="actions" style="justify-content:flex-end;">
+              <form action="{{ url_for('update_measurement', client_id=client.id, measurement_id=m.id) }}"
                     method="POST"
-                    onsubmit="return confirm('Delete this weight entry?');"
-                    style="margin:0;">
+                    style="margin:0; display:flex; gap:6px; align-items:center;">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button class="btn danger" type="submit">Delete</button>
+                <input class="input" type="number" step="0.1" inputmode="decimal" name="weight" value="{{ m.weight if m.weight is not none else '' }}" placeholder="Weight" style="max-width:110px;">
+                <input type="hidden" name="chest" value="{{ m.chest if m.chest is not none else '' }}">
+                <input type="hidden" name="waist" value="{{ m.waist if m.waist is not none else '' }}">
+                <input type="hidden" name="stomach" value="{{ m.stomach if m.stomach is not none else '' }}">
+                <input type="hidden" name="glutes" value="{{ m.glutes if m.glutes is not none else '' }}">
+                <input type="hidden" name="arm_left" value="{{ m.arm_left if m.arm_left is not none else '' }}">
+                <input type="hidden" name="arm_right" value="{{ m.arm_right if m.arm_right is not none else '' }}">
+                <input type="hidden" name="quad_left" value="{{ m.quad_left if m.quad_left is not none else '' }}">
+                <input type="hidden" name="quad_right" value="{{ m.quad_right if m.quad_right is not none else '' }}">
+                <input type="hidden" name="calf_left" value="{{ m.calf_left if m.calf_left is not none else '' }}">
+                <input type="hidden" name="calf_right" value="{{ m.calf_right if m.calf_right is not none else '' }}">
+                <button class="btn secondary" type="submit">Save</button>
               </form>
-            {% else %}
-              -
-            {% endif %}
+              {% if is_admin %}
+                <form action="{{ url_for('delete_measurement', client_id=client.id, measurement_id=m.id) }}"
+                      method="POST"
+                      onsubmit="return confirm('Delete this weight entry?');"
+                      style="margin:0;">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button class="btn danger" type="submit">Delete</button>
+                </form>
+              {% endif %}
+            </div>
           </td>
         </tr>
         {% endfor %}
@@ -189,19 +206,42 @@
           <td>{{ m.quad_right or "-" }}</td>
           <td>{{ m.calf_left or "-" }}</td>
           <td>{{ m.calf_right or "-" }}</td>
-          <td style="text-align:right;">
-            {% if is_admin %}
-              <form action="{{ url_for('delete_measurement', client_id=client.id, measurement_id=m.id) }}"
-                    method="POST"
-                    onsubmit="return confirm('Delete this measurement?');"
-                    style="margin:0;">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button class="btn danger" type="submit">Delete</button>
-              </form>
-            {% else %}
-              -
-            {% endif %}
-          </td>
+            <td style="text-align:right;">
+              <details>
+                <summary class="btn secondary" style="cursor:pointer; list-style:none;">Edit</summary>
+                <form action="{{ url_for('update_measurement', client_id=client.id, measurement_id=m.id) }}"
+                      method="POST"
+                      class="form"
+                      style="margin-top:8px; min-width:340px;">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <div class="grid-2">
+                    <input class="input" name="weight" type="number" step="0.1" inputmode="decimal" value="{{ m.weight if m.weight is not none else '' }}" placeholder="Weight (kg)">
+                    <input class="input" name="chest" type="number" step="0.1" inputmode="decimal" value="{{ m.chest if m.chest is not none else '' }}" placeholder="Chest (cm)">
+                    <input class="input" name="waist" type="number" step="0.1" inputmode="decimal" value="{{ m.waist if m.waist is not none else '' }}" placeholder="Waist (cm)">
+                    <input class="input" name="stomach" type="number" step="0.1" inputmode="decimal" value="{{ m.stomach if m.stomach is not none else '' }}" placeholder="Stomach (cm)">
+                    <input class="input" name="glutes" type="number" step="0.1" inputmode="decimal" value="{{ m.glutes if m.glutes is not none else '' }}" placeholder="Glutes (cm)">
+                    <input class="input" name="arm_left" type="number" step="0.1" inputmode="decimal" value="{{ m.arm_left if m.arm_left is not none else '' }}" placeholder="Arm Left (cm)">
+                    <input class="input" name="arm_right" type="number" step="0.1" inputmode="decimal" value="{{ m.arm_right if m.arm_right is not none else '' }}" placeholder="Arm Right (cm)">
+                    <input class="input" name="quad_left" type="number" step="0.1" inputmode="decimal" value="{{ m.quad_left if m.quad_left is not none else '' }}" placeholder="Quad Left (cm)">
+                    <input class="input" name="quad_right" type="number" step="0.1" inputmode="decimal" value="{{ m.quad_right if m.quad_right is not none else '' }}" placeholder="Quad Right (cm)">
+                    <input class="input" name="calf_left" type="number" step="0.1" inputmode="decimal" value="{{ m.calf_left if m.calf_left is not none else '' }}" placeholder="Calf Left (cm)">
+                    <input class="input" name="calf_right" type="number" step="0.1" inputmode="decimal" value="{{ m.calf_right if m.calf_right is not none else '' }}" placeholder="Calf Right (cm)">
+                  </div>
+                  <div class="actions">
+                    <button class="btn secondary" type="submit">Save</button>
+                  </div>
+                </form>
+                {% if is_admin %}
+                  <form action="{{ url_for('delete_measurement', client_id=client.id, measurement_id=m.id) }}"
+                        method="POST"
+                        onsubmit="return confirm('Delete this measurement?');"
+                        style="margin-top:8px;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn danger" type="submit">Delete</button>
+                  </form>
+                {% endif %}
+              </details>
+            </td>
         </tr>
         {% endfor %}
       </table>

@@ -60,12 +60,16 @@
             <td>{{ row.due.strftime("%d/%m/%Y") }}</td>
 
             <td>
-              {% if row.days_left >= 0 %}
-                {{ row.days_left }}
+              {% if row.is_current %}
+                {% if row.days_left >= 0 %}
+                  {{ row.days_left }}
+                {% else %}
+                  <span style="color:var(--danger); font-weight:800;">
+                    OVERDUE {{ (-row.days_left) }}
+                  </span>
+                {% endif %}
               {% else %}
-                <span style="color:var(--danger); font-weight:800;">
-                  OVERDUE {{ (-row.days_left) }}
-                </span>
+                Past plan
               {% endif %}
             </td>
 
