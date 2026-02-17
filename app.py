@@ -1521,6 +1521,16 @@ def respond_appointment(client_id, appointment_id):
     if a.status != "requested":
         return redirect(url_for("client_profile", client_id=client_id, tab="info", err="Appointment is not awaiting response."))
 
+    cancel_reason = (request.form.get("cancel_reason") or "").strip()
+    if status == "cancelled":
+        if not cancel_reason:
+            return redirect(url_for("client_profile", client_id=client_id, tab="info", err="Please provide a cancellation reason."))
+        reason_note = f"Client cancellation reason: {cancel_reason}"
+        if a.note:
+            a.note = f"{a.note} | {reason_note}"
+        else:
+            a.note = reason_note
+
     a.status = status
     db.session.commit()
     return redirect(url_for("client_profile", client_id=client_id, tab="info", msg=f"Appointment {status}."))

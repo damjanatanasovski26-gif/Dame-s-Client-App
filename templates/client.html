@@ -175,12 +175,48 @@
             <input type="hidden" name="status" value="confirmed">
             <button class="btn" type="submit">Confirm</button>
           </form>
-          <form action="{{ url_for('respond_appointment', client_id=client.id, appointment_id=a.id) }}" method="POST" style="margin:0;">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="hidden" name="status" value="cancelled">
-            <button class="btn danger" type="submit">Deny</button>
-          </form>
+          <button
+            class="btn danger"
+            type="button"
+            data-show-cancel-reason
+            data-target-id="cancel-reason-{{ a.id }}"
+          >
+            Cancel
+          </button>
         </div>
+        <form
+          id="cancel-reason-{{ a.id }}"
+          action="{{ url_for('respond_appointment', client_id=client.id, appointment_id=a.id) }}"
+          method="POST"
+          style="margin-top:10px; display:none;"
+        >
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="status" value="cancelled">
+          <label class="muted" for="cancel_reason_{{ a.id }}" style="display:block; margin-bottom:6px;">
+            Why are you cancelling?
+          </label>
+          <textarea
+            id="cancel_reason_{{ a.id }}"
+            name="cancel_reason"
+            rows="3"
+            required
+            maxlength="500"
+            placeholder="Write your reason..."
+            style="width:100%; margin-bottom:10px;"
+          ></textarea>
+          <button class="btn danger" type="submit">Confirm cancellation</button>
+        </form>
+        <script>
+          (function () {
+            const btn = document.querySelector('[data-target-id="cancel-reason-{{ a.id }}"]');
+            const form = document.getElementById("cancel-reason-{{ a.id }}");
+            if (!btn || !form) return;
+            btn.addEventListener("click", function () {
+              form.style.display = "block";
+              btn.style.display = "none";
+            });
+          })();
+        </script>
       </div>
     {% endfor %}
   </div>
