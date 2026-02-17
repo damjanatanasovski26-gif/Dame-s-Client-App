@@ -8,7 +8,7 @@
       <input class="input" name="name" value="{{ client.name }}" required>
 
       <label class="label" style="margin-top:12px;">Phone</label>
-      <input class="input" name="phone" value="{{ client.phone or '' }}">
+      <input class="input" name="phone" value="{{ client.phone or '' }}" inputmode="tel" pattern="\+?\d*" title="Use only digits and optional leading +">
 
       <label class="label" style="margin-top:12px;">Plan</label>
       <input class="input" name="plan" value="{{ client.plan or '' }}">
@@ -83,7 +83,7 @@
       <input class="input" value="{{ client.name }}" disabled>
 
       <label class="label" style="margin-top:12px;">Phone</label>
-      <input class="input" name="phone" value="{{ client.phone or '' }}" required>
+      <input class="input" name="phone" value="{{ client.phone or '' }}" inputmode="tel" pattern="\+?\d+" title="Use only digits and optional leading +" required>
 
       <label class="label" style="margin-top:12px;">Plan</label>
       <input class="input" value="{{ client.plan or '-' }}" disabled>

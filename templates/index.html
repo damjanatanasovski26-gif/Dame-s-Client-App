@@ -7,6 +7,18 @@
   <a href="{{ url_for('logout') }}" class="btn danger">Log out</a>
 </div>
 
+{% if err %}
+  <div class="alert error" style="margin-bottom:14px;">
+    <b style="color:var(--danger);">Error:</b> {{ err }}
+  </div>
+{% endif %}
+
+{% if msg %}
+  <div class="alert success" style="margin-bottom:14px;">
+    <b style="color:var(--success);">OK:</b> {{ msg }}
+  </div>
+{% endif %}
+
 <div class="card">
   <h3>Data Tools</h3>
   <div class="actions">
@@ -29,7 +41,7 @@
 
       <div>
         <label class="label">Phone</label>
-        <input class="input" name="phone" placeholder="+389 ...">
+        <input class="input" name="phone" placeholder="+389..." inputmode="tel" pattern="\+?\d*" title="Use only digits and optional leading +">
       </div>
 
       <div>

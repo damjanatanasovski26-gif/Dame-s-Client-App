@@ -14,6 +14,7 @@ import os
 import secrets
 import threading
 import time
+import re
 
 app = Flask(__name__)
 APP_ENV = os.environ.get("TRAINER_APP_ENV", os.environ.get("FLASK_ENV", "development")).lower()
@@ -303,6 +304,15 @@ def to_int(value, default=0):
         return default
 
 
+def parse_phone(value):
+    phone = (value or "").strip()
+    if phone == "":
+        return ""
+    if not re.fullmatch(r"\+?\d+", phone):
+        return None
+    return phone
+
+
 def week_start(d: date) -> date:
     # Monday start
     return d - timedelta(days=d.weekday())
@@ -493,7 +503,9 @@ def index():
         return redirect(url_for("client_profile", client_id=cid, tab="info"))
 
     clients = Client.query.order_by(Client.created_at.desc()).all()
-    return render_template("index.html", clients=clients)
+    err = request.args.get("err")
+    msg = request.args.get("msg")
+    return render_template("index.html", clients=clients, err=err, msg=msg)
 
 
 @app.route("/client/<int:client_id>")
@@ -741,7 +753,9 @@ def add_client():
         return "Forbidden", 403
 
     name = request.form["name"].strip()
-    phone = request.form.get("phone", "").strip()
+    phone = parse_phone(request.form.get("phone", ""))
+    if phone is None:
+        return redirect(url_for("index", err="Phone can contain only digits and an optional leading +."))
     plan = request.form.get("plan", "").strip()
 
     new_client = Client(name=name, phone=phone, plan=plan, weekly_sessions=0)
@@ -773,7 +787,10 @@ def update_client_admin(client_id):
 
     client = get_or_404(Client, client_id)
     client.name = request.form.get("name", client.name).strip()
-    client.phone = request.form.get("phone", client.phone or "").strip()
+    phone = parse_phone(request.form.get("phone", client.phone or ""))
+    if phone is None:
+        return redirect(url_for("client_profile", client_id=client.id, tab="info", err="Phone can contain only digits and an optional leading +."))
+    client.phone = phone
     client.plan = request.form.get("plan", client.plan or "").strip()
     client.weekly_sessions = to_int(request.form.get("weekly"), default=0)
 
@@ -789,7 +806,10 @@ def update_client_phone(client_id):
         return "Forbidden", 403
 
     client = get_or_404(Client, client_id)
-    client.phone = (request.form.get("phone") or "").strip()
+    phone = parse_phone(request.form.get("phone"))
+    if phone is None:
+        return redirect(url_for("client_profile", client_id=client.id, tab="info", err="Phone can contain only digits and an optional leading +."))
+    client.phone = phone
     db.session.commit()
     return redirect(url_for("client_profile", client_id=client.id, tab="info", msg="Phone updated"))
 
