@@ -1,0 +1,228 @@
+<div class="card">
+  <h3>Body Measurements</h3>
+
+  <form class="form" action="{{ url_for('add_measurement', client_id=client.id) }}" method="POST" style="max-width:900px;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="grid-2">
+      <input class="input" name="weight" placeholder="Weight (kg)">
+
+      <input class="input" name="chest" placeholder="Chest (cm)">
+      <input class="input" name="waist" placeholder="Waist (cm)">
+      <input class="input" name="stomach" placeholder="Stomach (cm)">
+      <input class="input" name="glutes" placeholder="Glutes (cm)">
+
+      <input class="input" name="arm_left" placeholder="Arm Left (cm)">
+      <input class="input" name="arm_right" placeholder="Arm Right (cm)">
+
+      <input class="input" name="quad_left" placeholder="Quad Left (cm)">
+      <input class="input" name="quad_right" placeholder="Quad Right (cm)">
+
+      <input class="input" name="calf_left" placeholder="Calf Left (cm)">
+      <input class="input" name="calf_right" placeholder="Calf Right (cm)">
+    </div>
+
+    <button class="btn" type="submit">Add Measurement</button>
+  </form>
+</div>
+
+<!-- =========================
+     WEIGHT GRAPH (ONLY)
+     ========================= -->
+<div class="card">
+  <h3>Weight Progress</h3>
+  <p class="muted" style="margin-top:-6px;">
+    Graph updates automatically when you add a new measurement.
+  </p>
+
+  {# Build a CSV string safely (Jinja loop scope-safe) #}
+{% set ns = namespace(csv="") %}
+{% for m in measurements|reverse %}
+  {% if m.weight is not none %}
+    {% set ns.csv = ns.csv ~ m.date.strftime("%Y-%m-%d") ~ "," ~ m.weight ~ ";" %}
+  {% endif %}
+{% endfor %}
+
+<div id="weightChart"
+     data-points="{{ ns.csv|e }}"
+     style="width:100%; overflow:auto;">
+  <!-- JS will render an SVG chart here -->
+</div>
+
+  <div class="muted" style="margin-top:10px;">
+    {% if latest and latest.weight is not none %}
+      Latest weight: <b>{{ latest.weight }}</b> kg ({{ latest.date.strftime("%d/%m/%Y") }})
+    {% else %}
+      No weight entries yet.
+    {% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <h3>Latest</h3>
+  {% if latest %}
+    <div class="muted">Recorded: {{ latest.date.strftime("%d/%m/%Y %H:%M") }}</div>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-top:10px;">
+      <div><b>Weight:</b> {{ latest.weight or "-" }}</div>
+      <div><b>Chest:</b> {{ latest.chest or "-" }}</div>
+      <div><b>Waist:</b> {{ latest.waist or "-" }}</div>
+
+      <div><b>Stomach:</b> {{ latest.stomach or "-" }}</div>
+      <div><b>Glutes:</b> {{ latest.glutes or "-" }}</div>
+
+      <div><b>Arm L:</b> {{ latest.arm_left or "-" }}</div>
+      <div><b>Arm R:</b> {{ latest.arm_right or "-" }}</div>
+
+      <div><b>Quad L:</b> {{ latest.quad_left or "-" }}</div>
+      <div><b>Quad R:</b> {{ latest.quad_right or "-" }}</div>
+
+      <div><b>Calf L:</b> {{ latest.calf_left or "-" }}</div>
+      <div><b>Calf R:</b> {{ latest.calf_right or "-" }}</div>
+    </div>
+  {% else %}
+    <div class="empty-state">No measurements yet. Add one above to track progress.</div>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h3>History</h3>
+
+  {% if measurements %}
+    <div class="table-wrap">
+      <table>
+        <tr>
+          <th>Date</th>
+          <th>Weight</th>
+          <th>Chest</th>
+          <th>Waist</th>
+          <th>Stomach</th>
+          <th>Glutes</th>
+          <th>Arm L</th>
+          <th>Arm R</th>
+          <th>Quad L</th>
+          <th>Quad R</th>
+          <th>Calf L</th>
+          <th>Calf R</th>
+          <th></th>
+        </tr>
+
+        {% for m in measurements %}
+        <tr>
+          <td>{{ m.date.strftime("%d/%m/%Y") }}</td>
+          <td>{{ m.weight or "-" }}</td>
+          <td>{{ m.chest or "-" }}</td>
+          <td>{{ m.waist or "-" }}</td>
+          <td>{{ m.stomach or "-" }}</td>
+          <td>{{ m.glutes or "-" }}</td>
+          <td>{{ m.arm_left or "-" }}</td>
+          <td>{{ m.arm_right or "-" }}</td>
+          <td>{{ m.quad_left or "-" }}</td>
+          <td>{{ m.quad_right or "-" }}</td>
+          <td>{{ m.calf_left or "-" }}</td>
+          <td>{{ m.calf_right or "-" }}</td>
+          <td style="text-align:right;">
+            {% if is_admin %}
+              <form action="{{ url_for('delete_measurement', client_id=client.id, measurement_id=m.id) }}"
+                    method="POST"
+                    onsubmit="return confirm('Delete this measurement?');"
+                    style="margin:0;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn danger" type="submit">Delete</button>
+              </form>
+            {% else %}
+              -
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </table>
+    </div>
+  {% else %}
+    <div class="empty-state">No history yet. Measurements will appear here.</div>
+  {% endif %}
+</div>
+
+<script>
+(function () {
+  const holder = document.getElementById("weightChart");
+  if (!holder) return;
+
+  const raw = holder.dataset.points || "";
+  // raw format: "YYYY-MM-DD,85.2;YYYY-MM-DD,84.6;..."
+  const items = raw.split(";").map(s => s.trim()).filter(Boolean);
+
+  const points = items.map(s => {
+    const parts = s.split(",");
+    return { date: parts[0], value: Number(parts[1]) };
+  }).filter(p => !Number.isNaN(p.value));
+
+  if (points.length < 2) {
+    holder.innerHTML = '<div class="empty-state">Add at least 2 weight entries to show the graph.</div>';
+    return;
+  }
+
+  const w = 900;           // internal SVG width
+  const h = 260;           // internal SVG height
+  const pad = 40;
+
+  const values = points.map(p => p.value);
+  let minV = Math.min(...values);
+  let maxV = Math.max(...values);
+
+  // add small padding so flat lines still show
+  if (minV === maxV) { minV -= 1; maxV += 1; }
+  const range = maxV - minV;
+
+  const xStep = (w - pad * 2) / (points.length - 1);
+
+  function x(i) { return pad + i * xStep; }
+  function y(v) { return (h - pad) - ((v - minV) / range) * (h - pad * 2); }
+
+  // grid lines
+  const gridLines = [];
+  for (let i = 0; i <= 4; i++) {
+    const yy = pad + i * ((h - pad * 2) / 4);
+    gridLines.push(`<line x1="${pad}" y1="${yy}" x2="${w-pad}" y2="${yy}" stroke="#e6eaf2" />`);
+  }
+
+  // path
+  const d = points.map((p, i) => `${i===0 ? "M" : "L"} ${x(i)} ${y(p.value)}`).join(" ");
+
+  // dots + labels (last point)
+  const last = points.length - 1;
+  const lastX = x(last), lastY = y(points[last].value);
+
+  const svg = `
+    <svg viewBox="0 0 ${w} ${h}" width="100%" style="max-width:900px; display:block;">
+      <rect x="0" y="0" width="${w}" height="${h}" rx="14" fill="#ffffff" />
+      ${gridLines.join("")}
+
+      <!-- axes -->
+      <line x1="${pad}" y1="${pad}" x2="${pad}" y2="${h-pad}" stroke="#cfd6e4" />
+      <line x1="${pad}" y1="${h-pad}" x2="${w-pad}" y2="${h-pad}" stroke="#cfd6e4" />
+
+      <!-- line -->
+      <path d="${d}" fill="none" stroke="#2563eb" stroke-width="3" />
+
+      <!-- dots -->
+      ${points.map((p,i)=>`<circle cx="${x(i)}" cy="${y(p.value)}" r="4" fill="#2563eb" />`).join("")}
+
+      <!-- last value label -->
+      <rect x="${lastX+10}" y="${lastY-18}" width="92" height="26" rx="8" fill="#2563eb" opacity="0.95"></rect>
+      <text x="${lastX+18}" y="${lastY}" font-size="14" fill="#fff" font-family="Arial" dominant-baseline="middle">
+        ${points[last].value.toFixed(1)} kg
+      </text>
+
+      <!-- min/max labels -->
+      <text x="${pad}" y="${pad-10}" font-size="12" fill="#667085" font-family="Arial">
+        max: ${maxV.toFixed(1)}
+      </text>
+      <text x="${pad}" y="${h-10}" font-size="12" fill="#667085" font-family="Arial">
+        min: ${minV.toFixed(1)}
+      </text>
+    </svg>
+  `;
+
+  holder.innerHTML = svg;
+})();
+</script>

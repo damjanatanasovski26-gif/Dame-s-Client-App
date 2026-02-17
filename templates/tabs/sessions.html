@@ -1,0 +1,51 @@
+<div class="card">
+  <h3>Sessions</h3>
+
+  <div class="muted" style="margin-bottom:10px;">
+    This week: <b>{{ used_this_week }}</b> / <b>{{ allowed }}</b>
+    (Remaining: <b>{{ remaining }}</b>)
+  </div>
+
+  <form class="form" action="{{ url_for('add_session', client_id=client.id) }}" method="POST" style="max-width:520px;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input class="input" name="note" placeholder="Optional note (Push / Pull / Rehab)">
+    <button class="btn" type="submit">Log Session</button>
+  </form>
+</div>
+
+<div class="card">
+  <h3>Recent Sessions</h3>
+
+  {% if sessions %}
+    <div class="table-wrap">
+      <table>
+        <tr>
+          <th>Date</th>
+          <th>Note</th>
+          <th></th>
+        </tr>
+        {% for s in sessions %}
+        <tr>
+          <td>{{ s.date.strftime("%d/%m/%Y %H:%M") }}</td>
+          <td>{{ s.note or "-" }}</td>
+          <td style="text-align:right;">
+            {% if is_admin %}
+              <form action="{{ url_for('delete_session', client_id=client.id, session_id=s.id) }}"
+                    method="POST"
+                    onsubmit="return confirm('Delete this session?');"
+                    style="margin:0;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn danger" type="submit">Delete</button>
+              </form>
+            {% else %}
+              -
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </table>
+    </div>
+  {% else %}
+    <div class="empty-state">No sessions logged yet.</div>
+  {% endif %}
+</div>

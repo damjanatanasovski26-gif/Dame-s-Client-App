@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ title or "Trainer App" }}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="{{ page_class or '' }}">
+  <button id="themeToggle" class="theme-toggle" type="button" aria-label="Toggle dark mode">
+    <span class="theme-icon sun" aria-hidden="true">&#9728;</span>
+    <span class="theme-icon moon" aria-hidden="true">&#9790;</span>
+  </button>
+  <div class="container">
+    {% block content %}{% endblock %}
+  </div>
+  <script>
+    (function () {
+      const key = "trainer_theme";
+      const root = document.documentElement;
+      const toggle = document.getElementById("themeToggle");
+
+      function getPreferredTheme() {
+        const stored = localStorage.getItem(key);
+        if (stored === "light" || stored === "dark") return stored;
+        return "dark";
+      }
+
+      function applyTheme(theme) {
+        root.classList.add("theme-transition");
+        root.setAttribute("data-theme", theme);
+        window.setTimeout(function () {
+          root.classList.remove("theme-transition");
+        }, 280);
+        if (toggle) {
+          toggle.setAttribute("title", theme === "dark" ? "Switch to light mode" : "Switch to dark mode");
+          toggle.setAttribute("aria-label", theme === "dark" ? "Switch to light mode" : "Switch to dark mode");
+        }
+      }
+
+      const initial = getPreferredTheme();
+      applyTheme(initial);
+
+      if (toggle) {
+        toggle.addEventListener("click", function () {
+          const next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
+          localStorage.setItem(key, next);
+          applyTheme(next);
+        });
+      }
+    })();
+  </script>
+</body>
+</html>

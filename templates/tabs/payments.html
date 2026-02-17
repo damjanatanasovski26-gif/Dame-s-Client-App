@@ -1,0 +1,86 @@
+<div class="card">
+  <h3>Add Payment</h3>
+
+  <form class="form" action="{{ url_for('add_payment', client_id=client.id) }}" method="POST" style="max-width:700px;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="grid-2">
+      <div>
+        <label class="label">Start date (DD/MM/YYYY)</label>
+        <input class="input" name="start_date" placeholder="09/02/2026" required>
+      </div>
+
+      <div>
+        <label class="label">Amount paid (MKD)</label>
+        <!-- IMPORTANT: name MUST be amount_paid -->
+        <input class="input" name="amount_paid" type="number" min="0" step="1" placeholder="5000 / 7000 / multiple" required>
+      </div>
+
+      <div style="grid-column: 1 / -1;">
+        <label class="label">Optional note</label>
+        <input class="input" name="note" placeholder="e.g. cash, bank transfer">
+      </div>
+    </div>
+
+    <button class="btn" type="submit">Save Payment</button>
+  </form>
+
+  <p class="muted" style="margin-top:10px;">
+    Rules: 5000 = 1 month / 3 sessions week, 7000 = 1 month / 5 sessions week. Multiples = multiple months.
+  </p>
+</div>
+
+<div class="card">
+  <h3>Payment History</h3>
+
+  {% if payments_view %}
+    <div class="table-wrap">
+      <table>
+        <tr>
+          <th>Start</th>
+          <th>Months</th>
+          <th>Sessions/week</th>
+          <th>Amount</th>
+          <th>Paid Until</th>
+          <th>Days Left</th>
+          <th>Note</th>
+          <th></th>
+        </tr>
+
+        {% for row in payments_view %}
+          {% set p = row.p %}
+          <tr>
+            <td>{{ p.start_date.strftime("%d/%m/%Y") }}</td>
+            <td>{{ p.months }}</td>
+            <td>{{ p.sessions_per_week }}</td>
+            <td>{{ p.amount_paid }}</td>
+            <td>{{ row.due.strftime("%d/%m/%Y") }}</td>
+
+            <td>
+              {% if row.days_left >= 0 %}
+                {{ row.days_left }}
+              {% else %}
+                <span style="color:var(--danger); font-weight:800;">
+                  OVERDUE {{ (-row.days_left) }}
+                </span>
+              {% endif %}
+            </td>
+
+            <td>{{ p.note or "-" }}</td>
+
+            <td style="text-align:right;">
+              <form action="{{ url_for('delete_payment', client_id=client.id, payment_id=p.id) }}"
+                    method="POST"
+                    onsubmit="return confirm('Delete this payment?');"
+                    style="margin:0;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn danger" type="submit">Delete</button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+      </table>
+    </div>
+  {% else %}
+    <div class="empty-state">No payments yet.</div>
+  {% endif %}
+</div>

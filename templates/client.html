@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% set title = client.name %}
+
+{% block content %}
+
+<div class="topbar">
+  <h1>Trainer App</h1>
+  <div class="actions">
+    <a href="{{ url_for('index') }}" class="btn secondary">Back to Dashboard</a>
+    <a href="{{ url_for('logout') }}" class="btn danger">Log out</a>
+  </div>
+</div>
+
+<div class="card">
+  <h2 style="margin:0 0 6px 0;">{{ client.name }}</h2>
+
+  <div class="muted">
+    Phone: {{ client.phone or "-" }}
+    | Plan: {{ client.plan or "-" }}
+    | {{ sessions_per_week or 0 }}/week
+    {% if bonus and bonus > 0 %} | rollover: {{ bonus }} {% endif %}
+  </div>
+
+  {% if current_status %}
+    <div class="muted" style="margin-top:8px;">
+      Status:
+      <span class="payment-badge payment-badge-{{ payment_status_tone }}">{{ payment_status_label }}</span>
+      |
+      Paid: {{ current_status.amount_paid }} MKD
+      | Start: {{ current_status.start_date.strftime("%d/%m/%Y") }}
+      | Months: {{ current_status.months }}
+      | Paid until: {{ current_status.paid_until.strftime("%d/%m/%Y") }}
+      | Days left:
+      {% if current_status.days_left >= 0 %}
+        <b style="color:var(--success);">{{ current_status.days_left }}</b>
+      {% else %}
+        <b style="color:var(--danger);">OVERDUE {{ (-current_status.days_left) }}</b>
+      {% endif %}
+    </div>
+  {% endif %}
+</div>
+
+{% if err %}
+  <div class="card alert error">
+    <b style="color:var(--danger);">Error:</b> {{ err }}
+  </div>
+{% endif %}
+
+{% if msg %}
+  <div class="card alert success">
+    <b style="color:var(--success);">OK:</b> {{ msg }}
+  </div>
+{% endif %}
+
+<div class="tabs">
+  <a class="tab {% if tab=='info' %}active{% endif %}" href="{{ url_for('client_profile', client_id=client.id, tab='info') }}">
+     Info
+  </a>
+  <a class="tab {% if tab=='stats' %}active{% endif %}" href="{{ url_for('client_profile', client_id=client.id, tab='stats') }}">
+     Stats
+  </a>
+  <a class="tab {% if tab=='sessions' %}active{% endif %}" href="{{ url_for('client_profile', client_id=client.id, tab='sessions') }}">
+     Sessions
+  </a>
+  {% if is_admin %}
+    <a class="tab {% if tab=='payments' %}active{% endif %}" href="{{ url_for('client_profile', client_id=client.id, tab='payments') }}">
+       Payments
+    </a>
+  {% endif %}
+</div>
+
+{% if tab == "info" %}
+  {% include "tabs/info.html" %}
+{% elif tab == "stats" %}
+  {% include "tabs/stats.html" %}
+{% elif tab == "sessions" %}
+  {% include "tabs/sessions.html" %}
+{% elif tab == "payments" and is_admin %}
+  {% include "tabs/payments.html" %}
+{% endif %}
+
+{% endblock %}

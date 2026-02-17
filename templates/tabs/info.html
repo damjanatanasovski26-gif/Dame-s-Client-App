@@ -1,0 +1,114 @@
+<div class="card">
+  <h3>Client Info</h3>
+
+  {% if is_admin %}
+    <form class="form" action="{{ url_for('update_client_admin', client_id=client.id) }}" method="POST" style="max-width:700px;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label class="label">Name</label>
+      <input class="input" name="name" value="{{ client.name }}" required>
+
+      <label class="label" style="margin-top:12px;">Phone</label>
+      <input class="input" name="phone" value="{{ client.phone or '' }}">
+
+      <label class="label" style="margin-top:12px;">Plan</label>
+      <input class="input" name="plan" value="{{ client.plan or '' }}">
+
+      <label class="label" style="margin-top:12px;">Sessions per week</label>
+      <input class="input" type="number" name="weekly" min="0" value="{{ client.weekly_sessions or 0 }}">
+
+      <button class="btn" type="submit" style="margin-top:14px;">Save Info</button>
+    </form>
+
+    <hr class="sep">
+
+    {% if not client_user %}
+      <h3>Create Client Login</h3>
+      <form class="form" action="{{ url_for('create_client_login', client_id=client.id) }}" method="POST" style="max-width:700px;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label class="label">Username</label>
+        <input class="input" name="username" required>
+
+        <label class="label">Temporary Password</label>
+        <input class="input" name="password" type="password" required>
+
+        <button class="btn" type="submit">Create Login</button>
+      </form>
+
+      <p class="muted" style="margin-top:10px;">
+        Give these credentials to the client. They can log in at <b>/login</b>.
+      </p>
+    {% else %}
+      <h3>Client Login</h3>
+      <div class="muted">
+        Username: <b>{{ client_user.username }}</b> |
+        Status:
+        {% if client_user.role == "disabled" %}
+          <b style="color:var(--danger);">Deactivated</b>
+        {% else %}
+          <b style="color:var(--success);">Active</b>
+        {% endif %}
+      </div>
+
+      <form class="form" action="{{ url_for('admin_reset_client_password', client_id=client.id) }}" method="POST" style="max-width:700px;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label class="label">New temporary password</label>
+        <input class="input" name="new_password" type="password" required>
+        <button class="btn" type="submit">Reset Password</button>
+      </form>
+
+      <div class="actions" style="margin-top:8px;">
+        {% if client_user.role == "disabled" %}
+          <form action="{{ url_for('reactivate_client_login', client_id=client.id) }}" method="POST" style="margin:0;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn" type="submit">Reactivate Login</button>
+          </form>
+        {% else %}
+          <form action="{{ url_for('deactivate_client_login', client_id=client.id) }}" method="POST" style="margin:0;"
+                onsubmit="return confirm('Deactivate this client login?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn danger" type="submit">Deactivate Login</button>
+          </form>
+        {% endif %}
+      </div>
+    {% endif %}
+
+  {% else %}
+    <div class="muted" style="margin-bottom:10px;">
+      You can only edit your phone number. Contact your coach for other changes.
+    </div>
+
+    <form class="form" action="{{ url_for('update_client_phone', client_id=client.id) }}" method="POST" style="max-width:700px;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label class="label">Name</label>
+      <input class="input" value="{{ client.name }}" disabled>
+
+      <label class="label" style="margin-top:12px;">Phone</label>
+      <input class="input" name="phone" value="{{ client.phone or '' }}" required>
+
+      <label class="label" style="margin-top:12px;">Plan</label>
+      <input class="input" value="{{ client.plan or '-' }}" disabled>
+
+      <label class="label" style="margin-top:12px;">Sessions per week</label>
+      <input class="input" value="{{ sessions_per_week or 0 }}" disabled>
+
+      <button class="btn" type="submit" style="margin-top:14px;">Save Phone</button>
+    </form>
+
+    <hr class="sep">
+
+    <h3>Change Password</h3>
+    <form class="form" action="{{ url_for('change_client_password', client_id=client.id) }}" method="POST" style="max-width:700px;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label class="label">Current password</label>
+      <input class="input" type="password" name="current_password" autocomplete="current-password" required>
+
+      <label class="label">New password</label>
+      <input class="input" type="password" name="new_password" autocomplete="new-password" required>
+
+      <label class="label">Confirm new password</label>
+      <input class="input" type="password" name="confirm_password" autocomplete="new-password" required>
+
+      <button class="btn" type="submit" style="margin-top:14px;">Update Password</button>
+    </form>
+  {% endif %}
+</div>

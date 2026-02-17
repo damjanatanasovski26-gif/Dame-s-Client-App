@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% set title = "Login | Trainer App" %}
+{% set page_class = "page-login" %}
+
+{% block content %}
+<div class="login-split">
+  <section class="auth-visual auth-visual-full" style="--auth-photo:url('{{ url_for('static', filename='images/coach.png') }}');">
+    <div class="auth-visual-inner">
+      <h2 class="auth-title">Train. Track. Improve.</h2>
+      <p class="muted" style="max-width:30ch;">
+        Keep progress, sessions, and payment status in one clean system.
+      </p>
+      <div class="auth-metrics">
+        <div class="auth-chip">Sessions</div>
+        <div class="auth-chip">Progress</div>
+        <div class="auth-chip">Consistency</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="login-panel">
+    <div class="login-panel-inner">
+      <div class="login-card">
+        <h2 class="auth-title">Client Login</h2>
+        <p class="muted" style="margin-top:0;">Enter your username and password.</p>
+
+        {% if err %}
+          <div class="alert error" style="margin-top:12px;">
+            <b style="color:var(--danger);">Error:</b> {{ err }}
+          </div>
+        {% endif %}
+
+        <form class="form" action="{{ url_for('login') }}" method="POST">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <label class="label">Username</label>
+          <input class="input" name="username" autocomplete="username" required>
+
+          <label class="label">Password</label>
+          <input class="input" type="password" name="password" autocomplete="current-password" required>
+
+          <button class="btn" type="submit" style="margin-top:6px;">Log in</button>
+        </form>
+
+        <div class="muted auth-foot">
+          If you do not have credentials, ask your coach.
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+{% endblock %}

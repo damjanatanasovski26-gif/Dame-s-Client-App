@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% set title = "Dashboard" %}
+
+{% block content %}
+<div class="topbar">
+  <h1>Dame's Client App</h1>
+  <a href="{{ url_for('logout') }}" class="btn danger">Log out</a>
+</div>
+
+<div class="card">
+  <h3>Data Tools</h3>
+  <div class="actions">
+    <a class="btn secondary" href="{{ url_for('export_clients_csv') }}">Export Clients CSV</a>
+    <a class="btn secondary" href="{{ url_for('export_sessions_csv') }}">Export Sessions CSV</a>
+    <a class="btn secondary" href="{{ url_for('export_payments_csv') }}">Export Payments CSV</a>
+    <a class="btn" href="{{ url_for('backup_database') }}">Download DB Backup</a>
+  </div>
+</div>
+
+<div class="card">
+  <h3>Add Client</h3>
+  <form class="form add-client-form" action="{{ url_for('add_client') }}" method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="add-client-grid">
+      <div class="field-span-2">
+        <label class="label">Client Name</label>
+        <input class="input" name="name" placeholder="e.g. John Doe" required>
+      </div>
+
+      <div>
+        <label class="label">Phone</label>
+        <input class="input" name="phone" placeholder="+389 ...">
+      </div>
+
+      <div>
+        <label class="label">Training Plan</label>
+        <input class="input" name="plan" placeholder="e.g. Arnold Split">
+      </div>
+    </div>
+    <button class="btn add-client-btn" type="submit">Add Client</button>
+  </form>
+</div>
+
+<div class="card">
+  <h3>Your Clients</h3>
+
+  {% if clients %}
+    {% for c in clients %}
+      <div class="client-row">
+        <div>
+          <div class="client-name">{{ c.name }}</div>
+          <div class="muted">
+            Phone: {{ c.phone or "-" }} | Plan: {{ c.plan or "-" }}
+          </div>
+        </div>
+
+        <div style="display:flex; gap:10px; align-items:center;">
+          <a href="{{ url_for('client_profile', client_id=c.id) }}" class="btn">Open Profile</a>
+          <form action="{{ url_for('delete_client', client_id=c.id) }}" method="POST"
+                onsubmit="return confirm('Delete {{ c.name }}?');" style="margin:0;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn danger" type="submit">Delete</button>
+          </form>
+        </div>
+      </div>
+    {% endfor %}
+  {% else %}
+    <div class="empty-state">No clients yet. Add your first client above.</div>
+  {% endif %}
+</div>
+{% endblock %}
