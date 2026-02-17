@@ -59,7 +59,8 @@ migrate = Migrate(app, db)
 
 
 def utc_now():
-    return datetime.now(timezone.utc)
+    # Use naive UTC timestamps because DB DateTime columns are timezone-naive.
+    return datetime.utcnow()
 
 
 def get_csrf_token():
@@ -439,13 +440,19 @@ def login_throttle_status(keys: list[str]):
         if not state:
             continue
 
-        if state.lock_until and state.lock_until > now:
-            seconds_left = ceil((state.lock_until - now).total_seconds())
+        lock_until = state.lock_until
+        if lock_until and lock_until.tzinfo is not None:
+            lock_until = lock_until.astimezone(timezone.utc).replace(tzinfo=None)
+        if lock_until and lock_until > now:
+            seconds_left = ceil((lock_until - now).total_seconds())
             if seconds_left > max_seconds_left:
                 max_seconds_left = seconds_left
             continue
 
-        if (now - state.first_ts).total_seconds() > window_seconds:
+        first_ts = state.first_ts
+        if first_ts.tzinfo is not None:
+            first_ts = first_ts.astimezone(timezone.utc).replace(tzinfo=None)
+        if (now - first_ts).total_seconds() > window_seconds:
             db.session.delete(state)
 
     if db.session.deleted:
@@ -465,10 +472,14 @@ def login_throttle_failed(keys: list[str]):
         if not state:
             state = LoginThrottle(key=key, count=0, first_ts=now, lock_until=None)
             db.session.add(state)
-        elif (now - state.first_ts).total_seconds() > window_seconds:
-            state.count = 0
-            state.first_ts = now
-            state.lock_until = None
+        else:
+            first_ts = state.first_ts
+            if first_ts.tzinfo is not None:
+                first_ts = first_ts.astimezone(timezone.utc).replace(tzinfo=None)
+            if (now - first_ts).total_seconds() > window_seconds:
+                state.count = 0
+                state.first_ts = now
+                state.lock_until = None
 
         state.count += 1
         if state.count >= max_attempts:
@@ -492,22 +503,22 @@ def login_throttle_success(keys: list[str]):
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "GET":
-        return render_template("login.html", err=None)
+        return render_template("login.html", err=None, lock_seconds=None)
 
     username = (request.form.get("username") or "").strip()
     password = request.form.get("password") or ""
     throttle_keys = login_throttle_keys(username)
     locked, seconds_left = login_throttle_status(throttle_keys)
     if locked:
-        return render_template("login.html", err=f"Too many attempts. Try again in {seconds_left}s.")
+        return render_template("login.html", err="Too many attempts.", lock_seconds=seconds_left)
 
     user = User.query.filter_by(username=username).first()
     if not user or not check_password_hash(user.password_hash, password):
         login_throttle_failed(throttle_keys)
-        return render_template("login.html", err="Invalid username or password.")
+        return render_template("login.html", err="Invalid username or password.", lock_seconds=None)
     if user.role == "disabled":
         login_throttle_failed(throttle_keys)
-        return render_template("login.html", err="Account is deactivated. Please contact your coach.")
+        return render_template("login.html", err="Account is deactivated. Please contact your coach.", lock_seconds=None)
     login_throttle_success(throttle_keys)
 
     session["user_id"] = user.id
