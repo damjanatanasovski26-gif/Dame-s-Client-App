@@ -157,4 +157,34 @@
   </div>
 </div>
 
+{% if not is_admin and pending_today_appointments %}
+<div id="appointmentModal" class="modal-backdrop show" aria-hidden="false">
+  <div class="modal-card">
+    <h3 style="margin-bottom:8px;">Appointment Request Today</h3>
+    <div class="muted" style="margin-bottom:8px;">
+      You have appointment request(s) for today. Please confirm or deny.
+    </div>
+
+    {% for a in pending_today_appointments %}
+      <div class="card" style="margin-bottom:10px; padding:12px;">
+        <div><b>{{ a.scheduled_for.strftime("%d/%m/%Y %H:%M") }}</b></div>
+        <div class="muted" style="margin-top:4px;">{{ a.note or "-" }}</div>
+        <div class="actions" style="margin-top:10px;">
+          <form action="{{ url_for('respond_appointment', client_id=client.id, appointment_id=a.id) }}" method="POST" style="margin:0;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="status" value="confirmed">
+            <button class="btn" type="submit">Confirm</button>
+          </form>
+          <form action="{{ url_for('respond_appointment', client_id=client.id, appointment_id=a.id) }}" method="POST" style="margin:0;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="status" value="cancelled">
+            <button class="btn danger" type="submit">Deny</button>
+          </form>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
 {% endblock %}

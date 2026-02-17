@@ -828,6 +828,13 @@ def client_profile(client_id):
         .order_by(Appointment.scheduled_for.asc(), Appointment.id.asc())
         .all()
     )
+    pending_today_appointments = []
+    today = date.today()
+    if not is_admin():
+        pending_today_appointments = [
+            a for a in appointments
+            if a.status == "requested" and a.scheduled_for.date() == today
+        ]
     photos = (
         ProgressPhoto.query.filter_by(client_id=client.id)
         .order_by(ProgressPhoto.created_at.desc(), ProgressPhoto.id.desc())
@@ -899,6 +906,7 @@ def client_profile(client_id):
         payment_status_tone=payment_status_tone,
         notes=notes,
         appointments=appointments,
+        pending_today_appointments=pending_today_appointments,
         photos=photos,
         goals=goals,
         client_user=client_user,
@@ -1488,13 +1496,34 @@ def add_appointment(client_id):
     a = Appointment(
         client_id=client.id,
         scheduled_for=dt,
-        status="confirmed" if is_admin() else "requested",
+        status="requested",
         note=note,
         created_by_role="admin" if is_admin() else "client",
     )
     db.session.add(a)
     db.session.commit()
     return redirect(url_for("client_profile", client_id=client.id, tab="sessions", msg="Appointment saved."))
+
+
+@app.route("/client/<int:client_id>/appointments/respond/<int:appointment_id>", methods=["POST"])
+@login_required
+def respond_appointment(client_id, appointment_id):
+    if is_admin() or current_client_id() != client_id:
+        return "Forbidden", 403
+
+    a = get_or_404(Appointment, appointment_id)
+    if a.client_id != client_id:
+        abort(404)
+
+    status = (request.form.get("status") or "").strip().lower()
+    if status not in ("confirmed", "cancelled"):
+        return redirect(url_for("client_profile", client_id=client_id, tab="info", err="Invalid appointment response."))
+    if a.status != "requested":
+        return redirect(url_for("client_profile", client_id=client_id, tab="info", err="Appointment is not awaiting response."))
+
+    a.status = status
+    db.session.commit()
+    return redirect(url_for("client_profile", client_id=client_id, tab="info", msg=f"Appointment {status}."))
 
 
 @app.route("/client/<int:client_id>/appointments/status/<int:appointment_id>", methods=["POST"])
