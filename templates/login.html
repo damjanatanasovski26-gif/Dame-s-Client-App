@@ -16,10 +16,24 @@
         <div class="auth-chip">Consistency</div>
       </div>
       <div class="auth-socials">
-        <a class="auth-social" href="https://instagram.com/" target="_blank" rel="noopener noreferrer">Instagram</a>
-        <a class="auth-social" href="https://tiktok.com/" target="_blank" rel="noopener noreferrer">TikTok</a>
-        <a class="auth-social" href="https://youtube.com/" target="_blank" rel="noopener noreferrer">YouTube</a>
+        <a class="auth-social auth-social-icon" href="https://www.instagram.com/dame.17/?hl=en" target="_blank" rel="noopener noreferrer" aria-label="Instagram" title="Instagram">
+          <img src="{{ url_for('static', filename='images/social/instagram.png') }}" alt="Instagram">
+        </a>
+        <a class="auth-social auth-social-icon" href="https://www.facebook.com/damjan.atanasovski.96/" target="_blank" rel="noopener noreferrer" aria-label="Facebook" title="Facebook">
+          <img src="{{ url_for('static', filename='images/social/facebook.png') }}" alt="Facebook">
+        </a>
+        <button
+          class="auth-social auth-social-icon"
+          type="button"
+          id="viberCopyButton"
+          data-copy-number="+38979249666"
+          aria-label="Copy Viber number"
+          title="Copy Viber number"
+        >
+          <img src="{{ url_for('static', filename='images/social/viber.png') }}" alt="Viber">
+        </button>
       </div>
+      <div id="copyToast" class="copy-toast" role="status" aria-live="polite"></div>
     </div>
   </section>
 
@@ -71,6 +85,26 @@
 </div>
 <script>
   (function () {
+    const copyBtn = document.getElementById("viberCopyButton");
+    const copyToast = document.getElementById("copyToast");
+    if (copyBtn && copyToast) {
+      const number = copyBtn.dataset.copyNumber || "";
+      function showToast(message) {
+        copyToast.textContent = message;
+        copyToast.classList.add("show");
+        window.setTimeout(() => copyToast.classList.remove("show"), 1800);
+      }
+      copyBtn.addEventListener("click", async function () {
+        if (!number) return;
+        try {
+          await navigator.clipboard.writeText(number);
+          showToast("Viber copied: " + number);
+        } catch (e) {
+          showToast("Copy failed. Number: " + number);
+        }
+      });
+    }
+
     const el = document.getElementById("lock-seconds");
     if (!el) return;
     const form = el.closest(".login-card")?.querySelector("form");
