@@ -132,6 +132,85 @@
 
   <hr class="sep">
 
+  <h3>Goals</h3>
+  {% if is_admin %}
+    <form class="form" action="{{ url_for('add_client_goal', client_id=client.id) }}" method="POST" style="max-width:700px;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label class="label">Goal title</label>
+      <input class="input" name="title" maxlength="120" placeholder="e.g. Lose 4kg by summer" required>
+
+      <div class="grid-2">
+        <div>
+          <label class="label">Target value (optional)</label>
+          <input class="input" name="target_value" type="number" step="0.1" placeholder="e.g. 75">
+        </div>
+        <div>
+          <label class="label">Current value (optional)</label>
+          <input class="input" name="current_value" type="number" step="0.1" placeholder="e.g. 81">
+        </div>
+      </div>
+
+      <label class="label">Target date (optional)</label>
+      <input class="input" name="target_date" type="date">
+
+      <label class="label">Note</label>
+      <input class="input" name="note" maxlength="300" placeholder="Optional details...">
+      <button class="btn" type="submit">Add Goal</button>
+    </form>
+  {% endif %}
+
+  {% if goals %}
+    <div class="table-wrap" style="margin-top:10px;">
+      <table>
+        <tr>
+          <th>Goal</th>
+          <th>Progress</th>
+          <th>Target Date</th>
+          <th>Status</th>
+          <th>Note</th>
+          <th></th>
+        </tr>
+        {% for g in goals %}
+          <tr>
+            <td>{{ g.title }}</td>
+            <td>
+              {{ g.current_value if g.current_value is not none else "-" }}
+              /
+              {{ g.target_value if g.target_value is not none else "-" }}
+            </td>
+            <td>{{ g.target_date.strftime("%d/%m/%Y") if g.target_date else "-" }}</td>
+            <td>{{ g.status }}</td>
+            <td>{{ g.note or "-" }}</td>
+            <td style="text-align:right;">
+              {% if is_admin %}
+                <form action="{{ url_for('update_client_goal', client_id=client.id, goal_id=g.id) }}" method="POST" style="display:flex; gap:6px; align-items:center; margin:0 0 6px 0;">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <input class="input" type="number" step="0.1" name="current_value" placeholder="Current" style="max-width:96px;">
+                  <select class="input" name="status" style="max-width:120px;">
+                    <option value="active" {% if g.status=='active' %}selected{% endif %}>active</option>
+                    <option value="completed" {% if g.status=='completed' %}selected{% endif %}>completed</option>
+                    <option value="paused" {% if g.status=='paused' %}selected{% endif %}>paused</option>
+                  </select>
+                  <button class="btn secondary" type="submit">Update</button>
+                </form>
+                <form action="{{ url_for('delete_client_goal', client_id=client.id, goal_id=g.id) }}" method="POST" onsubmit="return confirm('Delete this goal?');" style="margin:0;">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button class="btn danger" type="submit">Delete</button>
+                </form>
+              {% else %}
+                -
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </table>
+    </div>
+  {% else %}
+    <div class="empty-state" style="margin-top:10px;">No goals set yet.</div>
+  {% endif %}
+
+  <hr class="sep">
+
   <h3>Notes Timeline</h3>
   <form class="form" action="{{ url_for('add_client_note', client_id=client.id) }}" method="POST" style="max-width:700px;">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

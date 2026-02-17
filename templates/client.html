@@ -56,6 +56,17 @@
   <div class="muted" style="margin-top:10px;">
     Milestones: {{ milestones|join(" | ") }}
   </div>
+  <div class="stats-grid" style="margin-top:10px;">
+    <div><b>30-Day Sessions</b><div class="muted">{{ sessions_30d }}</div></div>
+    <div><b>30-Day Adherence</b><div class="muted">{{ adherence_30d }}%</div></div>
+    <div><b>30-Day Weight Change</b><div class="muted">
+      {% if weight_change_30d is not none %}
+        {{ weight_change_30d }} kg
+      {% else %}
+        -
+      {% endif %}
+    </div></div>
+  </div>
   <div class="actions" style="margin-top:12px;">
     <a class="btn secondary" href="{{ url_for('client_profile', client_id=client.id, tab='sessions') }}#logSessionForm">Quick Log Session</a>
     <a class="btn secondary" href="{{ url_for('client_profile', client_id=client.id, tab='stats') }}#statsEntryForm">Quick Add Weight</a>

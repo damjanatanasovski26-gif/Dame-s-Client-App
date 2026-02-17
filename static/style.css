@@ -796,6 +796,28 @@ tr:last-child td{ border-bottom:0; }
   color:var(--muted);
 }
 
+.photo-grid{
+  display:grid;
+  grid-template-columns:repeat(3, minmax(0, 1fr));
+  gap:12px;
+  margin-top:12px;
+}
+
+.photo-card{
+  border:1px solid var(--line);
+  border-radius:12px;
+  padding:10px;
+  background:color-mix(in srgb, var(--surface-soft) 65%, transparent 35%);
+}
+
+.photo-card img{
+  width:100%;
+  aspect-ratio:1 / 1;
+  object-fit:cover;
+  border-radius:10px;
+  border:1px solid var(--line);
+}
+
 @keyframes rise{
   from{ opacity:0; transform:translateY(8px); }
   to{ opacity:1; transform:translateY(0); }
@@ -937,6 +959,9 @@ tr:last-child td{ border-bottom:0; }
   .session-calendar-empty{
     font-size:11px;
   }
+  .photo-grid{
+    grid-template-columns:1fr 1fr;
+  }
 }
 
 @media (max-width: 420px){
@@ -953,5 +978,8 @@ tr:last-child td{ border-bottom:0; }
   .auth-social-icon{
     width:36px;
     height:36px;
+  }
+  .photo-grid{
+    grid-template-columns:1fr;
   }
 }

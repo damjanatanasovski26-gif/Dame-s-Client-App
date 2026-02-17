@@ -30,6 +30,28 @@
 </div>
 
 <div class="card">
+  <h3>Payment Alerts</h3>
+  {% if payment_alerts %}
+    {% for alert in payment_alerts %}
+      <div class="client-row">
+        <div>
+          <div class="client-name">{{ alert.client.name }}</div>
+          <div class="muted">
+            Status:
+            <span class="payment-badge payment-badge-{{ alert.tone }}">{{ alert.label }}</span>
+          </div>
+        </div>
+        <div style="display:flex; gap:10px; align-items:center;">
+          <a class="btn secondary" href="{{ url_for('client_profile', client_id=alert.client.id, tab='payments') }}">Open Payments</a>
+        </div>
+      </div>
+    {% endfor %}
+  {% else %}
+    <div class="empty-state">No due-soon or overdue payments right now.</div>
+  {% endif %}
+</div>
+
+<div class="card">
   <h3>Admin Credentials</h3>
   <form class="form" action="{{ url_for('change_admin_credentials') }}" method="POST" style="max-width:720px;">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

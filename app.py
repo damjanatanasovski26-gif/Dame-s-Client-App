@@ -15,6 +15,8 @@ import os
 import secrets
 import re
 from math import ceil
+from werkzeug.utils import secure_filename
+import uuid
 
 app = Flask(__name__)
 APP_ENV = os.environ.get("TRAINER_APP_ENV", os.environ.get("FLASK_ENV", "development")).lower()
@@ -51,6 +53,12 @@ app.config["ENABLE_SECURITY_HEADERS"] = True
 app.config["LOGIN_MAX_ATTEMPTS"] = int(os.environ.get("LOGIN_MAX_ATTEMPTS", "5"))
 app.config["LOGIN_WINDOW_SECONDS"] = int(os.environ.get("LOGIN_WINDOW_SECONDS", "300"))
 app.config["LOGIN_LOCK_SECONDS"] = int(os.environ.get("LOGIN_LOCK_SECONDS", "600"))
+app.config["UPLOAD_PROGRESS_DIR"] = os.environ.get(
+    "UPLOAD_PROGRESS_DIR",
+    os.path.join(app.root_path, "static", "uploads", "progress")
+)
+
+os.makedirs(app.config["UPLOAD_PROGRESS_DIR"], exist_ok=True)
 
 if os.environ.get("TRUST_PROXY", "1").lower() in ("1", "true", "yes", "on"):
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
@@ -199,6 +207,37 @@ class ClientNote(db.Model):
     created_by_role = db.Column(db.String(20), nullable=False, default="admin")
 
 
+class Appointment(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    client_id = db.Column(db.Integer, db.ForeignKey("client.id"), nullable=False, index=True)
+    scheduled_for = db.Column(db.DateTime, nullable=False)
+    status = db.Column(db.String(20), nullable=False, default="requested")  # requested/confirmed/completed/cancelled
+    note = db.Column(db.String(200))
+    created_at = db.Column(db.DateTime, default=utc_now, nullable=False)
+    created_by_role = db.Column(db.String(20), nullable=False, default="client")
+
+
+class ProgressPhoto(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    client_id = db.Column(db.Integer, db.ForeignKey("client.id"), nullable=False, index=True)
+    created_at = db.Column(db.DateTime, default=utc_now, nullable=False)
+    file_name = db.Column(db.String(255), nullable=False)
+    note = db.Column(db.String(200))
+    uploaded_by_role = db.Column(db.String(20), nullable=False, default="client")
+
+
+class ClientGoal(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    client_id = db.Column(db.Integer, db.ForeignKey("client.id"), nullable=False, index=True)
+    title = db.Column(db.String(120), nullable=False)
+    target_value = db.Column(db.Float, nullable=True)
+    current_value = db.Column(db.Float, nullable=True)
+    target_date = db.Column(db.Date, nullable=True)
+    status = db.Column(db.String(20), nullable=False, default="active")  # active/completed/paused
+    created_at = db.Column(db.DateTime, default=utc_now, nullable=False)
+    note = db.Column(db.String(300))
+
+
 class Payment(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     client_id = db.Column(db.Integer, db.ForeignKey("client.id"), nullable=False)
@@ -298,6 +337,23 @@ def to_int(value, default=0):
         return int(value)
     except ValueError:
         return default
+
+
+def parse_datetime_local(value: str):
+    value = (value or "").strip()
+    if not value:
+        return None
+    for fmt in ("%Y-%m-%dT%H:%M", "%Y-%m-%d %H:%M"):
+        try:
+            return datetime.strptime(value, fmt)
+        except Exception:
+            continue
+    return None
+
+
+def allowed_photo_file(filename: str):
+    name = (filename or "").lower()
+    return name.endswith(".jpg") or name.endswith(".jpeg") or name.endswith(".png") or name.endswith(".webp")
 
 
 def parse_phone(value):
@@ -610,9 +666,30 @@ def index():
         return redirect(url_for("client_profile", client_id=cid, tab="info"))
 
     clients = Client.query.order_by(Client.created_at.desc()).all()
+    payment_alerts = []
+    for c in clients:
+        _spw, status = get_current_plan(c.id)
+        if not status:
+            continue
+        days_left = status["days_left"]
+        if days_left < 0:
+            payment_alerts.append({
+                "client": c,
+                "tone": "overdue",
+                "label": f"Overdue by {abs(days_left)} day(s)",
+                "days_left": days_left,
+            })
+        elif days_left <= 7:
+            payment_alerts.append({
+                "client": c,
+                "tone": "due-soon",
+                "label": f"Due in {days_left} day(s)",
+                "days_left": days_left,
+            })
+    payment_alerts.sort(key=lambda x: x["days_left"])
     err = request.args.get("err")
     msg = request.args.get("msg")
-    return render_template("index.html", clients=clients, err=err, msg=msg)
+    return render_template("index.html", clients=clients, err=err, msg=msg, payment_alerts=payment_alerts)
 
 
 @app.route("/client/<int:client_id>")
@@ -706,6 +783,24 @@ def client_profile(client_id):
     )
     session_calendar = build_session_calendar(sessions)
     total_sessions = SessionLog.query.filter_by(client_id=client.id).count()
+    thirty_days_ago_dt = utc_now() - timedelta(days=30)
+    sessions_30d = (
+        SessionLog.query.filter_by(client_id=client.id)
+        .filter(SessionLog.date >= thirty_days_ago_dt)
+        .count()
+    )
+    target_30d = max((sessions_per_week or 0) * 4, 1)
+    adherence_30d = min(int((sessions_30d / target_30d) * 100), 100)
+    weight_30d_points = (
+        Measurement.query.filter_by(client_id=client.id)
+        .filter(Measurement.weight.isnot(None))
+        .filter(Measurement.date >= thirty_days_ago_dt)
+        .order_by(Measurement.date.asc())
+        .all()
+    )
+    weight_change_30d = None
+    if len(weight_30d_points) >= 2:
+        weight_change_30d = round(weight_30d_points[-1].weight - weight_30d_points[0].weight, 1)
 
     # Payments view
     payments = (
@@ -727,6 +822,21 @@ def client_profile(client_id):
         .filter(User.role != "admin")
         .order_by(User.id.desc())
         .first()
+    )
+    appointments = (
+        Appointment.query.filter_by(client_id=client.id)
+        .order_by(Appointment.scheduled_for.asc(), Appointment.id.asc())
+        .all()
+    )
+    photos = (
+        ProgressPhoto.query.filter_by(client_id=client.id)
+        .order_by(ProgressPhoto.created_at.desc(), ProgressPhoto.id.desc())
+        .all()
+    )
+    goals = (
+        ClientGoal.query.filter_by(client_id=client.id)
+        .order_by(ClientGoal.created_at.desc(), ClientGoal.id.desc())
+        .all()
     )
     if is_admin():
         notes = (
@@ -773,6 +883,9 @@ def client_profile(client_id):
         sessions=sessions,
         session_calendar=session_calendar,
         total_sessions=total_sessions,
+        sessions_30d=sessions_30d,
+        adherence_30d=adherence_30d,
+        weight_change_30d=weight_change_30d,
         used_this_week=used_this_week,
         remaining=remaining,
         bonus=bonus,
@@ -785,6 +898,9 @@ def client_profile(client_id):
         payment_status_label=payment_status_label,
         payment_status_tone=payment_status_tone,
         notes=notes,
+        appointments=appointments,
+        photos=photos,
+        goals=goals,
         client_user=client_user,
         must_change_password=must_change_password,
         milestones=milestones,
@@ -1154,6 +1270,70 @@ def delete_client_note(client_id, note_id):
     return redirect(url_for("client_profile", client_id=client_id, tab="info", msg="Note deleted."))
 
 
+@app.route("/client/<int:client_id>/goals/add", methods=["POST"])
+@login_required
+def add_client_goal(client_id):
+    if not is_admin():
+        return "Forbidden", 403
+    client = get_or_404(Client, client_id)
+    title = (request.form.get("title") or "").strip()
+    if not title:
+        return redirect(url_for("client_profile", client_id=client.id, tab="info", err="Goal title is required."))
+    target_value = to_float(request.form.get("target_value"))
+    current_value = to_float(request.form.get("current_value"))
+    target_date = None
+    target_date_raw = (request.form.get("target_date") or "").strip()
+    if target_date_raw:
+        try:
+            target_date = datetime.strptime(target_date_raw, "%Y-%m-%d").date()
+        except Exception:
+            return redirect(url_for("client_profile", client_id=client.id, tab="info", err="Invalid goal target date."))
+    note = (request.form.get("note") or "").strip()
+    g = ClientGoal(
+        client_id=client.id,
+        title=title,
+        target_value=target_value,
+        current_value=current_value,
+        target_date=target_date,
+        status="active",
+        note=note,
+    )
+    db.session.add(g)
+    db.session.commit()
+    return redirect(url_for("client_profile", client_id=client.id, tab="info", msg="Goal added."))
+
+
+@app.route("/client/<int:client_id>/goals/update/<int:goal_id>", methods=["POST"])
+@login_required
+def update_client_goal(client_id, goal_id):
+    if not is_admin():
+        return "Forbidden", 403
+    g = get_or_404(ClientGoal, goal_id)
+    if g.client_id != client_id:
+        abort(404)
+    g.current_value = to_float(request.form.get("current_value"))
+    status = (request.form.get("status") or "active").strip().lower()
+    if status not in ("active", "completed", "paused"):
+        status = "active"
+    g.status = status
+    g.note = (request.form.get("note") or "").strip()
+    db.session.commit()
+    return redirect(url_for("client_profile", client_id=client_id, tab="info", msg="Goal updated."))
+
+
+@app.route("/client/<int:client_id>/goals/delete/<int:goal_id>", methods=["POST"])
+@login_required
+def delete_client_goal(client_id, goal_id):
+    if not is_admin():
+        return "Forbidden", 403
+    g = get_or_404(ClientGoal, goal_id)
+    if g.client_id != client_id:
+        abort(404)
+    db.session.delete(g)
+    db.session.commit()
+    return redirect(url_for("client_profile", client_id=client_id, tab="info", msg="Goal deleted."))
+
+
 @app.route("/client/<int:client_id>/change-password", methods=["POST"], endpoint="change_client_password")
 @login_required
 def change_client_password(client_id):
@@ -1241,9 +1421,111 @@ def delete_measurement(client_id, measurement_id):
     return redirect(url_for("client_profile", client_id=client_id, tab="stats"))
 
 
+@app.route("/client/<int:client_id>/photos/upload", methods=["POST"])
+@login_required
+def upload_progress_photo(client_id):
+    if not is_admin() and current_client_id() != client_id:
+        return "Forbidden", 403
+    client = get_or_404(Client, client_id)
+    f = request.files.get("photo")
+    if not f or not f.filename:
+        return redirect(url_for("client_profile", client_id=client.id, tab="stats", err="Please choose a photo file."))
+    if not allowed_photo_file(f.filename):
+        return redirect(url_for("client_profile", client_id=client.id, tab="stats", err="Allowed formats: .jpg, .jpeg, .png, .webp"))
+    ext = os.path.splitext(f.filename)[1].lower()
+    safe_name = secure_filename(f.filename)
+    unique_name = f"{client.id}_{uuid.uuid4().hex}_{safe_name}"
+    if ext and not unique_name.lower().endswith(ext):
+        unique_name += ext
+    target_path = os.path.join(app.config["UPLOAD_PROGRESS_DIR"], unique_name)
+    f.save(target_path)
+    note = (request.form.get("note") or "").strip()
+    p = ProgressPhoto(
+        client_id=client.id,
+        file_name=unique_name,
+        note=note,
+        uploaded_by_role="admin" if is_admin() else "client",
+    )
+    db.session.add(p)
+    db.session.commit()
+    return redirect(url_for("client_profile", client_id=client.id, tab="stats", msg="Photo uploaded."))
+
+
+@app.route("/client/<int:client_id>/photos/delete/<int:photo_id>", methods=["POST"])
+@login_required
+def delete_progress_photo(client_id, photo_id):
+    if not is_admin() and current_client_id() != client_id:
+        return "Forbidden", 403
+    photo = get_or_404(ProgressPhoto, photo_id)
+    if photo.client_id != client_id:
+        abort(404)
+    if not is_admin() and photo.uploaded_by_role != "client":
+        return "Forbidden", 403
+    path = os.path.join(app.config["UPLOAD_PROGRESS_DIR"], photo.file_name)
+    if os.path.exists(path):
+        try:
+            os.remove(path)
+        except Exception:
+            pass
+    db.session.delete(photo)
+    db.session.commit()
+    return redirect(url_for("client_profile", client_id=client_id, tab="stats", msg="Photo deleted."))
+
+
 # =========================
 # Sessions
 # =========================
+@app.route("/client/<int:client_id>/appointments/add", methods=["POST"])
+@login_required
+def add_appointment(client_id):
+    if not is_admin() and current_client_id() != client_id:
+        return "Forbidden", 403
+    client = get_or_404(Client, client_id)
+    dt = parse_datetime_local(request.form.get("scheduled_for"))
+    if not dt:
+        return redirect(url_for("client_profile", client_id=client.id, tab="sessions", err="Invalid appointment date/time."))
+    note = (request.form.get("note") or "").strip()
+    a = Appointment(
+        client_id=client.id,
+        scheduled_for=dt,
+        status="confirmed" if is_admin() else "requested",
+        note=note,
+        created_by_role="admin" if is_admin() else "client",
+    )
+    db.session.add(a)
+    db.session.commit()
+    return redirect(url_for("client_profile", client_id=client.id, tab="sessions", msg="Appointment saved."))
+
+
+@app.route("/client/<int:client_id>/appointments/status/<int:appointment_id>", methods=["POST"])
+@login_required
+def update_appointment_status(client_id, appointment_id):
+    if not is_admin():
+        return "Forbidden", 403
+    a = get_or_404(Appointment, appointment_id)
+    if a.client_id != client_id:
+        abort(404)
+    status = (request.form.get("status") or "").strip().lower()
+    if status not in ("requested", "confirmed", "completed", "cancelled"):
+        return redirect(url_for("client_profile", client_id=client_id, tab="sessions", err="Invalid appointment status."))
+    a.status = status
+    db.session.commit()
+    return redirect(url_for("client_profile", client_id=client_id, tab="sessions", msg="Appointment status updated."))
+
+
+@app.route("/client/<int:client_id>/appointments/delete/<int:appointment_id>", methods=["POST"])
+@login_required
+def delete_appointment(client_id, appointment_id):
+    if not is_admin():
+        return "Forbidden", 403
+    a = get_or_404(Appointment, appointment_id)
+    if a.client_id != client_id:
+        abort(404)
+    db.session.delete(a)
+    db.session.commit()
+    return redirect(url_for("client_profile", client_id=client_id, tab="sessions", msg="Appointment deleted."))
+
+
 @app.route("/client/<int:client_id>/sessions/add", methods=["POST"], endpoint="add_session")
 @login_required
 def add_session(client_id):

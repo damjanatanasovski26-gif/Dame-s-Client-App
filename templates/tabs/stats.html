@@ -25,6 +25,38 @@
   </form>
 </div>
 
+<div class="card">
+  <h3>Progress Photos</h3>
+  <form class="form" action="{{ url_for('upload_progress_photo', client_id=client.id) }}" method="POST" enctype="multipart/form-data" style="max-width:700px;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label class="label">Photo file</label>
+    <input class="input" type="file" name="photo" accept=".jpg,.jpeg,.png,.webp" required>
+    <label class="label">Note</label>
+    <input class="input" name="note" maxlength="200" placeholder="Optional note (front/side/back, lighting, etc.)">
+    <button class="btn" type="submit">Upload Photo</button>
+  </form>
+
+  {% if photos %}
+    <div class="photo-grid">
+      {% for p in photos %}
+        <div class="photo-card">
+          <img src="{{ url_for('static', filename='uploads/progress/' ~ p.file_name) }}" alt="Progress photo">
+          <div class="muted" style="margin-top:8px;">{{ p.created_at.strftime("%d/%m/%Y %H:%M") }}</div>
+          <div class="muted">{{ p.note or "-" }}</div>
+          {% if is_admin %}
+            <form action="{{ url_for('delete_progress_photo', client_id=client.id, photo_id=p.id) }}" method="POST" style="margin-top:8px;">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn danger" type="submit">Delete</button>
+            </form>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="empty-state" style="margin-top:10px;">No progress photos yet.</div>
+  {% endif %}
+</div>
+
 <!-- =========================
      WEIGHT GRAPH (ONLY)
      ========================= -->

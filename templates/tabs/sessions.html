@@ -35,6 +35,62 @@
 </div>
 
 <div class="card">
+  <h3>Appointments</h3>
+  <form class="form" action="{{ url_for('add_appointment', client_id=client.id) }}" method="POST" style="max-width:620px;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label class="label">Date & time</label>
+    <input class="input" type="datetime-local" name="scheduled_for" required>
+    <label class="label">Note</label>
+    <input class="input" name="note" maxlength="200" placeholder="Optional appointment note">
+    <button class="btn" type="submit">{% if is_admin %}Add Appointment{% else %}Request Appointment{% endif %}</button>
+  </form>
+
+  {% if appointments %}
+    <div class="table-wrap" style="margin-top:10px;">
+      <table>
+        <tr>
+          <th>Date</th>
+          <th>Status</th>
+          <th>Note</th>
+          <th>Created By</th>
+          <th></th>
+        </tr>
+        {% for a in appointments %}
+          <tr>
+            <td>{{ a.scheduled_for.strftime("%d/%m/%Y %H:%M") }}</td>
+            <td>{{ a.status }}</td>
+            <td>{{ a.note or "-" }}</td>
+            <td>{{ a.created_by_role }}</td>
+            <td style="text-align:right;">
+              {% if is_admin %}
+                <form action="{{ url_for('update_appointment_status', client_id=client.id, appointment_id=a.id) }}" method="POST" style="display:flex; gap:6px; align-items:center; margin:0 0 6px 0;">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <select class="input" name="status" style="max-width:130px;">
+                    <option value="requested" {% if a.status=='requested' %}selected{% endif %}>requested</option>
+                    <option value="confirmed" {% if a.status=='confirmed' %}selected{% endif %}>confirmed</option>
+                    <option value="completed" {% if a.status=='completed' %}selected{% endif %}>completed</option>
+                    <option value="cancelled" {% if a.status=='cancelled' %}selected{% endif %}>cancelled</option>
+                  </select>
+                  <button class="btn secondary" type="submit">Save</button>
+                </form>
+                <form action="{{ url_for('delete_appointment', client_id=client.id, appointment_id=a.id) }}" method="POST" onsubmit="return confirm('Delete this appointment?');" style="margin:0;">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button class="btn danger" type="submit">Delete</button>
+                </form>
+              {% else %}
+                -
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </table>
+    </div>
+  {% else %}
+    <div class="empty-state" style="margin-top:10px;">No appointments yet.</div>
+  {% endif %}
+</div>
+
+<div class="card">
   <h3>Recent Sessions</h3>
 
   {% if sessions %}
