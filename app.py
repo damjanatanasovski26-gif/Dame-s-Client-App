@@ -3,6 +3,7 @@ from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
 import click
 from datetime import datetime, date, timedelta, timezone
+import calendar
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.middleware.proxy_fix import ProxyFix
 from functools import wraps
@@ -189,6 +190,15 @@ class SessionLog(db.Model):
     note = db.Column(db.String(200))
 
 
+class ClientNote(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    client_id = db.Column(db.Integer, db.ForeignKey("client.id"), nullable=False, index=True)
+    created_at = db.Column(db.DateTime, default=utc_now, nullable=False)
+    text = db.Column(db.String(500), nullable=False)
+    is_private = db.Column(db.Boolean, nullable=False, default=False)
+    created_by_role = db.Column(db.String(20), nullable=False, default="admin")
+
+
 class Payment(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     client_id = db.Column(db.Integer, db.ForeignKey("client.id"), nullable=False)
@@ -297,6 +307,43 @@ def parse_phone(value):
     if not re.fullmatch(r"\+?\d+", phone):
         return None
     return phone
+
+
+def build_session_calendar(sessions: list[SessionLog], target_date: date | None = None):
+    target = target_date or date.today()
+    year = target.year
+    month = target.month
+    month_name = calendar.month_name[month]
+
+    first_weekday, days_in_month = calendar.monthrange(year, month)  # Mon=0
+    offset = first_weekday
+
+    session_counts = {}
+    for s in sessions:
+        d = s.date.date()
+        if d.year == year and d.month == month:
+            session_counts[d.day] = session_counts.get(d.day, 0) + 1
+
+    cells = []
+    for _ in range(offset):
+        cells.append({"day": None, "count": 0, "is_today": False})
+    for day_num in range(1, days_in_month + 1):
+        today = date.today()
+        cells.append({
+            "day": day_num,
+            "count": session_counts.get(day_num, 0),
+            "is_today": today.year == year and today.month == month and today.day == day_num,
+        })
+    while len(cells) % 7 != 0:
+        cells.append({"day": None, "count": 0, "is_today": False})
+
+    return {
+        "year": year,
+        "month": month,
+        "month_name": month_name,
+        "weekday_labels": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+        "cells": cells,
+    }
 
 
 def week_start(d: date) -> date:
@@ -657,6 +704,7 @@ def client_profile(client_id):
         .limit(50)
         .all()
     )
+    session_calendar = build_session_calendar(sessions)
     total_sessions = SessionLog.query.filter_by(client_id=client.id).count()
 
     # Payments view
@@ -680,6 +728,19 @@ def client_profile(client_id):
         .order_by(User.id.desc())
         .first()
     )
+    if is_admin():
+        notes = (
+            ClientNote.query.filter_by(client_id=client.id)
+            .order_by(ClientNote.created_at.desc(), ClientNote.id.desc())
+            .all()
+        )
+    else:
+        notes = (
+            ClientNote.query.filter_by(client_id=client.id, is_private=False)
+            .order_by(ClientNote.created_at.desc(), ClientNote.id.desc())
+            .all()
+        )
+
     must_change_password = bool(client_user.must_change_password) if client_user else False
     milestones = []
     if total_sessions >= 10:
@@ -710,6 +771,7 @@ def client_profile(client_id):
 
         # sessions
         sessions=sessions,
+        session_calendar=session_calendar,
         total_sessions=total_sessions,
         used_this_week=used_this_week,
         remaining=remaining,
@@ -722,6 +784,7 @@ def client_profile(client_id):
         current_status=current_status,
         payment_status_label=payment_status_label,
         payment_status_tone=payment_status_tone,
+        notes=notes,
         client_user=client_user,
         must_change_password=must_change_password,
         milestones=milestones,
@@ -842,6 +905,88 @@ def backup_database():
         as_attachment=True,
         download_name=f"trainer_backup_{timestamp}.db",
         mimetype="application/octet-stream",
+    )
+
+
+@app.route("/client/<int:client_id>/report.pdf")
+@login_required
+def export_client_report_pdf(client_id):
+    if not is_admin() and current_client_id() != client_id:
+        return "Forbidden", 403
+
+    client = get_or_404(Client, client_id)
+    sessions_per_week_from_payments, current_status = get_current_plan(client.id)
+    sessions_per_week = (
+        sessions_per_week_from_payments
+        if sessions_per_week_from_payments is not None
+        else (client.weekly_sessions or 0)
+    )
+    used_this_week, remaining, bonus, allowed = compute_sessions(client, sessions_per_week)
+
+    latest_weight = (
+        Measurement.query.filter_by(client_id=client.id)
+        .filter(Measurement.weight.isnot(None))
+        .order_by(Measurement.date.desc())
+        .first()
+    )
+    total_sessions = SessionLog.query.filter_by(client_id=client.id).count()
+
+    try:
+        from reportlab.lib.pagesizes import A4
+        from reportlab.pdfgen import canvas
+    except Exception:
+        return "PDF export requires reportlab package.", 500
+
+    buffer = io.BytesIO()
+    c = canvas.Canvas(buffer, pagesize=A4)
+    width, height = A4
+    y = height - 40
+
+    def line(text, dy=20):
+        nonlocal y
+        c.drawString(40, y, text)
+        y -= dy
+        if y < 60:
+            c.showPage()
+            y = height - 40
+
+    c.setFont("Helvetica-Bold", 15)
+    line(f"Client Report - {client.name}", 26)
+    c.setFont("Helvetica", 11)
+    line(f"Phone: {client.phone or '-'}")
+    line(f"Plan: {client.plan or '-'}")
+    line(f"Sessions/week: {sessions_per_week} | Used this week: {used_this_week}/{allowed} | Remaining: {remaining}")
+    line(f"Total sessions logged: {total_sessions}")
+    if latest_weight:
+        line(f"Latest weight: {latest_weight.weight} kg ({latest_weight.date.strftime('%d/%m/%Y')})")
+    else:
+        line("Latest weight: -")
+
+    if current_status:
+        line(
+            f"Payment status: paid {current_status['amount_paid']} MKD | start {current_status['start_date'].strftime('%d/%m/%Y')} | due {current_status['paid_until'].strftime('%d/%m/%Y')} | days left {current_status['days_left']}"
+        )
+    else:
+        line("Payment status: no active payment")
+
+    notes = (
+        ClientNote.query.filter_by(client_id=client.id)
+        .order_by(ClientNote.created_at.desc())
+        .limit(8)
+        .all()
+    )
+    line("Recent notes:", 24)
+    for n in notes:
+        privacy = "Private" if n.is_private else "Shared"
+        line(f"- [{privacy}] {n.created_at.strftime('%d/%m/%Y %H:%M')} - {n.text}", 16)
+
+    c.save()
+    buffer.seek(0)
+    return send_file(
+        buffer,
+        as_attachment=True,
+        download_name=f"client_report_{client.id}.pdf",
+        mimetype="application/pdf",
     )
 
 
@@ -967,6 +1112,46 @@ def update_client_alias(client_id):
     if is_admin():
         return update_client_admin(client_id)
     return update_client_phone(client_id)
+
+
+@app.route("/client/<int:client_id>/notes/add", methods=["POST"])
+@login_required
+def add_client_note(client_id):
+    if not is_admin() and current_client_id() != client_id:
+        return "Forbidden", 403
+
+    client = get_or_404(Client, client_id)
+    text = (request.form.get("text") or "").strip()
+    is_private = truthy(request.form.get("is_private", "0"))
+    if not text:
+        return redirect(url_for("client_profile", client_id=client.id, tab="info", err="Note cannot be empty."))
+    if len(text) > 500:
+        return redirect(url_for("client_profile", client_id=client.id, tab="info", err="Note is too long (max 500 chars)."))
+    if not is_admin():
+        is_private = False
+
+    note = ClientNote(
+        client_id=client.id,
+        text=text,
+        is_private=is_private,
+        created_by_role="admin" if is_admin() else "client",
+    )
+    db.session.add(note)
+    db.session.commit()
+    return redirect(url_for("client_profile", client_id=client.id, tab="info", msg="Note added."))
+
+
+@app.route("/client/<int:client_id>/notes/delete/<int:note_id>", methods=["POST"])
+@login_required
+def delete_client_note(client_id, note_id):
+    if not is_admin():
+        return "Forbidden", 403
+    note = get_or_404(ClientNote, note_id)
+    if note.client_id != client_id:
+        abort(404)
+    db.session.delete(note)
+    db.session.commit()
+    return redirect(url_for("client_profile", client_id=client_id, tab="info", msg="Note deleted."))
 
 
 @app.route("/client/<int:client_id>/change-password", methods=["POST"], endpoint="change_client_password")

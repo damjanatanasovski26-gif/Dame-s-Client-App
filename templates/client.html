@@ -62,6 +62,7 @@
     {% if is_admin %}
       <a class="btn secondary" href="{{ url_for('client_profile', client_id=client.id, tab='payments') }}#paymentEntryForm">Quick Add Payment</a>
     {% endif %}
+    <a class="btn secondary" href="{{ url_for('export_client_report_pdf', client_id=client.id) }}">Download Report PDF</a>
   </div>
 </div>
 
@@ -116,11 +117,33 @@
     const showOnTabs = ["info", "stats", "sessions"];
     const current = "{{ tab }}";
     if (showOnTabs.indexOf(current) === -1) return;
+    const modal = document.getElementById("onboardingModal");
+    if (!modal) return;
     window.setTimeout(function () {
-      alert("Tip: Use Quick Add buttons for faster updates and keep Stats weight entries consistent for better graph tracking.");
-      localStorage.setItem("trainer_client_onboarding_seen", "1");
+      modal.classList.add("show");
     }, 350);
+
+    const closeButtons = modal.querySelectorAll("[data-close-onboarding]");
+    closeButtons.forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        modal.classList.remove("show");
+        localStorage.setItem("trainer_client_onboarding_seen", "1");
+      });
+    });
   })();
 </script>
+
+<div id="onboardingModal" class="modal-backdrop" aria-hidden="true">
+  <div class="modal-card">
+    <h3 style="margin-bottom:8px;">Quick Tips</h3>
+    <div class="muted">
+      Use Quick Add buttons for faster updates. Keep weight entries consistent for better graph tracking.
+    </div>
+    <div class="actions" style="margin-top:14px;">
+      <button class="btn" type="button" data-close-onboarding>Got it</button>
+      <button class="btn secondary" type="button" data-close-onboarding>Close</button>
+    </div>
+  </div>
+</div>
 
 {% endblock %}

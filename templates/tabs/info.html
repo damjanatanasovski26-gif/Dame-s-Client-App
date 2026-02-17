@@ -129,4 +129,59 @@
       <button class="btn" type="submit" style="margin-top:14px;">Update Password</button>
     </form>
   {% endif %}
+
+  <hr class="sep">
+
+  <h3>Notes Timeline</h3>
+  <form class="form" action="{{ url_for('add_client_note', client_id=client.id) }}" method="POST" style="max-width:700px;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label class="label">New note</label>
+    <input class="input" name="text" maxlength="500" placeholder="Session focus, injury note, or reminder..." required>
+
+    {% if is_admin %}
+      <label class="label" style="display:flex; align-items:center; gap:8px;">
+        <input type="checkbox" name="is_private" value="1">
+        Private note (coach only)
+      </label>
+    {% endif %}
+
+    <button class="btn" type="submit">Add Note</button>
+  </form>
+
+  {% if notes %}
+    <div class="table-wrap" style="margin-top:10px;">
+      <table>
+        <tr>
+          <th>Date</th>
+          <th>By</th>
+          <th>Visibility</th>
+          <th>Note</th>
+          <th></th>
+        </tr>
+        {% for n in notes %}
+          <tr>
+            <td>{{ n.created_at.strftime("%d/%m/%Y %H:%M") }}</td>
+            <td>{{ n.created_by_role }}</td>
+            <td>{% if n.is_private %}Private{% else %}Shared{% endif %}</td>
+            <td>{{ n.text }}</td>
+            <td style="text-align:right;">
+              {% if is_admin %}
+                <form action="{{ url_for('delete_client_note', client_id=client.id, note_id=n.id) }}"
+                      method="POST"
+                      onsubmit="return confirm('Delete this note?');"
+                      style="margin:0;">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button class="btn danger" type="submit">Delete</button>
+                </form>
+              {% else %}
+                -
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </table>
+    </div>
+  {% else %}
+    <div class="empty-state" style="margin-top:10px;">No notes yet.</div>
+  {% endif %}
 </div>

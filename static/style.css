@@ -725,6 +725,77 @@ tr:last-child td{ border-bottom:0; }
   transform:scale(1) rotate(0deg);
 }
 
+.modal-backdrop{
+  position:fixed;
+  inset:0;
+  display:none;
+  align-items:center;
+  justify-content:center;
+  padding:18px;
+  background:rgba(4, 12, 20, .58);
+  z-index:50;
+}
+
+.modal-backdrop.show{
+  display:flex;
+}
+
+.modal-card{
+  width:min(460px, 100%);
+  border-radius:16px;
+  border:1px solid color-mix(in srgb, var(--line) 72%, transparent 28%);
+  background:linear-gradient(180deg, color-mix(in srgb, var(--surface) 96%, #ffffff 4%), var(--surface));
+  box-shadow:var(--shadow);
+  padding:18px;
+}
+
+.session-calendar{
+  display:grid;
+  grid-template-columns:repeat(7, minmax(0, 1fr));
+  gap:8px;
+}
+
+.session-calendar-head{
+  text-align:center;
+  font-weight:700;
+  font-size:12px;
+  color:var(--muted);
+  text-transform:uppercase;
+}
+
+.session-calendar-cell{
+  border:1px solid var(--line);
+  border-radius:10px;
+  min-height:72px;
+  padding:7px;
+  background:color-mix(in srgb, var(--surface-soft) 58%, transparent 42%);
+}
+
+.session-calendar-cell.today{
+  border-color:color-mix(in srgb, var(--primary) 54%, var(--line) 46%);
+}
+
+.session-calendar-cell.has-session{
+  background:color-mix(in srgb, var(--success) 16%, var(--surface) 84%);
+}
+
+.session-calendar-day{
+  font-weight:700;
+  font-size:13px;
+}
+
+.session-calendar-count{
+  margin-top:6px;
+  font-size:12px;
+  color:var(--text);
+}
+
+.session-calendar-empty{
+  margin-top:6px;
+  font-size:12px;
+  color:var(--muted);
+}
+
 @keyframes rise{
   from{ opacity:0; transform:translateY(8px); }
   to{ opacity:1; transform:translateY(0); }
@@ -854,6 +925,17 @@ tr:last-child td{ border-bottom:0; }
   }
   .actions .btn{
     flex:1 1 auto;
+  }
+  .session-calendar{
+    gap:6px;
+  }
+  .session-calendar-cell{
+    min-height:58px;
+    padding:6px;
+  }
+  .session-calendar-count,
+  .session-calendar-empty{
+    font-size:11px;
   }
 }
 

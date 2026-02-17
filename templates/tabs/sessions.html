@@ -14,6 +14,27 @@
 </div>
 
 <div class="card">
+  <h3>Session Calendar - {{ session_calendar.month_name }} {{ session_calendar.year }}</h3>
+  <div class="session-calendar">
+    {% for label in session_calendar.weekday_labels %}
+      <div class="session-calendar-head">{{ label }}</div>
+    {% endfor %}
+    {% for cell in session_calendar.cells %}
+      <div class="session-calendar-cell {% if cell.is_today %}today{% endif %} {% if cell.count > 0 %}has-session{% endif %}">
+        {% if cell.day %}
+          <div class="session-calendar-day">{{ cell.day }}</div>
+          {% if cell.count > 0 %}
+            <div class="session-calendar-count">{{ cell.count }} session{% if cell.count != 1 %}s{% endif %}</div>
+          {% else %}
+            <div class="session-calendar-empty">-</div>
+          {% endif %}
+        {% endif %}
+      </div>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="card">
   <h3>Recent Sessions</h3>
 
   {% if sessions %}
