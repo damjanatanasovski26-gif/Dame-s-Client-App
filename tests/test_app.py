@@ -183,6 +183,29 @@ class TrainerAppTests(unittest.TestCase):
         finally:
             app.config["CSRF_ENABLED"] = False
 
+    def test_login_is_locked_after_repeated_failures(self):
+        self._create_user("admin", "admin123", role="admin")
+        app.config["LOGIN_MAX_ATTEMPTS"] = 3
+        app.config["LOGIN_WINDOW_SECONDS"] = 300
+        app.config["LOGIN_LOCK_SECONDS"] = 600
+
+        for _ in range(3):
+            resp = self.client.post(
+                "/login",
+                data={"username": "admin", "password": "wrong-password"},
+                follow_redirects=True,
+            )
+            self.assertEqual(resp.status_code, 200)
+            self.assertIn(b"Invalid username or password", resp.data)
+
+        blocked = self.client.post(
+            "/login",
+            data={"username": "admin", "password": "wrong-password"},
+            follow_redirects=True,
+        )
+        self.assertEqual(blocked.status_code, 200)
+        self.assertIn(b"Too many attempts", blocked.data)
+
 
 if __name__ == "__main__":
     unittest.main()

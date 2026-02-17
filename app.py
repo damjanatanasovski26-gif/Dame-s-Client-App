@@ -12,9 +12,8 @@ import io
 import json
 import os
 import secrets
-import threading
-import time
 import re
+from math import ceil
 
 app = Flask(__name__)
 APP_ENV = os.environ.get("TRAINER_APP_ENV", os.environ.get("FLASK_ENV", "development")).lower()
@@ -57,8 +56,6 @@ if os.environ.get("TRUST_PROXY", "1").lower() in ("1", "true", "yes", "on"):
 
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
-failed_login_state = {}
-failed_login_lock = threading.Lock()
 
 
 def utc_now():
@@ -83,39 +80,10 @@ def log_security_event(action: str, details: str = ""):
     app.logger.info("[security] action=%s user_id=%s role=%s ip=%s details=%s", action, user, role, request.remote_addr, details)
 
 
-def login_throttle_key(username: str):
-    return f"{(request.remote_addr or 'unknown').strip()}::{(username or '').strip().lower()}"
-
-
-def login_throttle_status(key: str):
-    now = time.time()
-    with failed_login_lock:
-        state = failed_login_state.get(key)
-        if not state:
-            return False, 0
-        lock_until = state.get("lock_until", 0)
-        if lock_until > now:
-            return True, int(lock_until - now)
-        if now - state.get("first_ts", now) > app.config["LOGIN_WINDOW_SECONDS"]:
-            failed_login_state.pop(key, None)
-    return False, 0
-
-
-def login_throttle_failed(key: str):
-    now = time.time()
-    with failed_login_lock:
-        state = failed_login_state.get(key)
-        if not state or now - state.get("first_ts", now) > app.config["LOGIN_WINDOW_SECONDS"]:
-            state = {"count": 0, "first_ts": now, "lock_until": 0}
-            failed_login_state[key] = state
-        state["count"] += 1
-        if state["count"] >= app.config["LOGIN_MAX_ATTEMPTS"]:
-            state["lock_until"] = now + app.config["LOGIN_LOCK_SECONDS"]
-
-
-def login_throttle_success(key: str):
-    with failed_login_lock:
-        failed_login_state.pop(key, None)
+def login_throttle_keys(username: str):
+    ip = (request.remote_addr or "unknown").strip()
+    normalized_username = (username or "").strip().lower() or "*"
+    return [f"{ip}::{normalized_username}", f"{ip}::*"]
 
 
 @app.context_processor
@@ -252,6 +220,15 @@ class User(db.Model):
 
     # client users link to a Client profile
     client_id = db.Column(db.Integer, db.ForeignKey("client.id"), nullable=True)
+
+
+class LoginThrottle(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    key = db.Column(db.String(255), unique=True, nullable=False, index=True)
+    count = db.Column(db.Integer, nullable=False, default=0)
+    first_ts = db.Column(db.DateTime, nullable=False, default=utc_now)
+    lock_until = db.Column(db.DateTime, nullable=True)
+    updated_at = db.Column(db.DateTime, nullable=False, default=utc_now, onupdate=utc_now)
 
 
 # =========================
@@ -452,6 +429,63 @@ def get_or_404(model, object_id):
     return obj
 
 
+def login_throttle_status(keys: list[str]):
+    now = utc_now()
+    max_seconds_left = 0
+    window_seconds = app.config["LOGIN_WINDOW_SECONDS"]
+
+    for key in keys:
+        state = LoginThrottle.query.filter_by(key=key).first()
+        if not state:
+            continue
+
+        if state.lock_until and state.lock_until > now:
+            seconds_left = ceil((state.lock_until - now).total_seconds())
+            if seconds_left > max_seconds_left:
+                max_seconds_left = seconds_left
+            continue
+
+        if (now - state.first_ts).total_seconds() > window_seconds:
+            db.session.delete(state)
+
+    if db.session.deleted:
+        db.session.commit()
+
+    return max_seconds_left > 0, max_seconds_left
+
+
+def login_throttle_failed(keys: list[str]):
+    now = utc_now()
+    window_seconds = app.config["LOGIN_WINDOW_SECONDS"]
+    max_attempts = app.config["LOGIN_MAX_ATTEMPTS"]
+    lock_seconds = app.config["LOGIN_LOCK_SECONDS"]
+
+    for key in keys:
+        state = LoginThrottle.query.filter_by(key=key).first()
+        if not state:
+            state = LoginThrottle(key=key, count=0, first_ts=now, lock_until=None)
+            db.session.add(state)
+        elif (now - state.first_ts).total_seconds() > window_seconds:
+            state.count = 0
+            state.first_ts = now
+            state.lock_until = None
+
+        state.count += 1
+        if state.count >= max_attempts:
+            state.lock_until = now + timedelta(seconds=lock_seconds)
+
+    db.session.commit()
+
+
+def login_throttle_success(keys: list[str]):
+    states = LoginThrottle.query.filter(LoginThrottle.key.in_(keys)).all()
+    if not states:
+        return
+    for state in states:
+        db.session.delete(state)
+    db.session.commit()
+
+
 # =========================
 # Auth Routes
 # =========================
@@ -462,19 +496,19 @@ def login():
 
     username = (request.form.get("username") or "").strip()
     password = request.form.get("password") or ""
-    throttle_key = login_throttle_key(username)
-    locked, seconds_left = login_throttle_status(throttle_key)
+    throttle_keys = login_throttle_keys(username)
+    locked, seconds_left = login_throttle_status(throttle_keys)
     if locked:
         return render_template("login.html", err=f"Too many attempts. Try again in {seconds_left}s.")
 
     user = User.query.filter_by(username=username).first()
     if not user or not check_password_hash(user.password_hash, password):
-        login_throttle_failed(throttle_key)
+        login_throttle_failed(throttle_keys)
         return render_template("login.html", err="Invalid username or password.")
     if user.role == "disabled":
-        login_throttle_failed(throttle_key)
+        login_throttle_failed(throttle_keys)
         return render_template("login.html", err="Account is deactivated. Please contact your coach.")
-    login_throttle_success(throttle_key)
+    login_throttle_success(throttle_keys)
 
     session["user_id"] = user.id
     session["role"] = user.role
