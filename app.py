@@ -791,6 +791,49 @@ def backup_database():
 # =========================
 # Admin: Add/Delete Client
 # =========================
+@app.route("/admin/change-credentials", methods=["POST"])
+@login_required
+def change_admin_credentials():
+    if not is_admin():
+        return "Forbidden", 403
+
+    admin_user = User.query.filter_by(id=session.get("user_id"), role="admin").first()
+    if not admin_user:
+        return redirect(url_for("index", err="Admin user not found."))
+
+    current_password = request.form.get("current_password") or ""
+    new_username = (request.form.get("new_username") or "").strip()
+    new_password = request.form.get("new_password") or ""
+    confirm_password = request.form.get("confirm_password") or ""
+
+    if not check_password_hash(admin_user.password_hash, current_password):
+        return redirect(url_for("index", err="Current password is incorrect."))
+
+    if not new_username:
+        return redirect(url_for("index", err="New username is required."))
+    if len(new_username) > 80:
+        return redirect(url_for("index", err="Username is too long."))
+    if not re.fullmatch(r"[A-Za-z0-9._-]+", new_username):
+        return redirect(url_for("index", err="Username can only contain letters, numbers, dot, underscore, and hyphen."))
+
+    existing_username = User.query.filter_by(username=new_username).first()
+    if existing_username and existing_username.id != admin_user.id:
+        return redirect(url_for("index", err="Username is already taken."))
+
+    changing_password = bool(new_password or confirm_password)
+    if changing_password:
+        if len(new_password) < 6:
+            return redirect(url_for("index", err="New password must be at least 6 characters."))
+        if new_password != confirm_password:
+            return redirect(url_for("index", err="New password and confirmation do not match."))
+        admin_user.password_hash = generate_password_hash(new_password)
+
+    admin_user.username = new_username
+    db.session.commit()
+
+    return redirect(url_for("index", msg="Admin credentials updated."))
+
+
 @app.route("/add", methods=["POST"])
 @login_required
 def add_client():
