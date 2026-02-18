@@ -20,7 +20,12 @@
       <div class="session-calendar-head">{{ label }}</div>
     {% endfor %}
     {% for cell in session_calendar.cells %}
-      <div class="session-calendar-cell {% if cell.is_today %}today{% endif %} {% if cell.count > 0 %}has-session{% endif %}">
+      <div
+        class="session-calendar-cell {% if cell.is_today %}today{% endif %} {% if cell.count > 0 %}has-session{% endif %} {% if cell.day %}clickable{% endif %}"
+        {% if cell.day %}
+          data-calendar-day="{{ '%04d-%02d-%02d'|format(session_calendar.year, session_calendar.month, cell.day) }}"
+        {% endif %}
+      >
         {% if cell.day %}
           <div class="session-calendar-day">{{ cell.day }}</div>
           {% if cell.count > 0 %}
@@ -36,6 +41,10 @@
 
 <div class="card">
   <h3>Appointments</h3>
+  <div class="actions" style="margin-bottom:10px;">
+    <button id="openAppointmentModalBtn" class="btn secondary" type="button">Schedule Appointment</button>
+  </div>
+
   <form class="form" action="{{ url_for('add_appointment', client_id=client.id) }}" method="POST" style="max-width:620px;">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label class="label">Date & time</label>
@@ -89,6 +98,73 @@
     <div class="empty-state" style="margin-top:10px;">No appointments yet.</div>
   {% endif %}
 </div>
+
+<div id="calendarAppointmentModal" class="modal-backdrop" aria-hidden="true">
+  <div class="modal-card">
+    <h3 style="margin-bottom:8px;">Schedule Appointment</h3>
+    <form class="form" action="{{ url_for('add_appointment', client_id=client.id) }}" method="POST">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label class="label">Date & time</label>
+      <input id="calendarAppointmentDatetime" class="input" type="datetime-local" name="scheduled_for" required>
+      <label class="label">Note</label>
+      <input class="input" name="note" maxlength="200" placeholder="Optional appointment note">
+      <div class="actions">
+        <button class="btn" type="submit">{% if is_admin %}Add Appointment{% else %}Request Appointment{% endif %}</button>
+        <button id="closeAppointmentModalBtn" class="btn secondary" type="button">Close</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+  (function () {
+    const modal = document.getElementById("calendarAppointmentModal");
+    const datetimeInput = document.getElementById("calendarAppointmentDatetime");
+    const closeBtn = document.getElementById("closeAppointmentModalBtn");
+    const openBtn = document.getElementById("openAppointmentModalBtn");
+    if (!modal || !datetimeInput || !closeBtn || !openBtn) return;
+
+    function openModal(dateStr) {
+      if (dateStr) {
+        // Keep existing time if user already picked one, otherwise default 09:00
+        const current = datetimeInput.value || "";
+        const existingTime = current.includes("T") ? current.split("T")[1] : "";
+        const timePart = existingTime || "09:00";
+        datetimeInput.value = dateStr + "T" + timePart;
+      } else if (!datetimeInput.value) {
+        const now = new Date();
+        const y = now.getFullYear();
+        const m = String(now.getMonth() + 1).padStart(2, "0");
+        const d = String(now.getDate()).padStart(2, "0");
+        datetimeInput.value = y + "-" + m + "-" + d + "T09:00";
+      }
+      modal.classList.add("show");
+      modal.setAttribute("aria-hidden", "false");
+      datetimeInput.focus();
+    }
+
+    function closeModal() {
+      modal.classList.remove("show");
+      modal.setAttribute("aria-hidden", "true");
+    }
+
+    openBtn.addEventListener("click", function () {
+      openModal("");
+    });
+
+    closeBtn.addEventListener("click", closeModal);
+
+    modal.addEventListener("click", function (e) {
+      if (e.target === modal) closeModal();
+    });
+
+    document.querySelectorAll("[data-calendar-day]").forEach(function (cell) {
+      cell.addEventListener("click", function () {
+        openModal(cell.getAttribute("data-calendar-day"));
+      });
+    });
+  })();
+</script>
 
 <div class="card">
   <h3>Recent Sessions</h3>
