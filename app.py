@@ -367,6 +367,42 @@ def parse_measurement_form(form_data):
     return parsed, None
 
 
+def is_weight_goal(goal: ClientGoal) -> bool:
+    text = f"{goal.title or ''} {goal.note or ''}".lower()
+    markers = ("kg", "kilo", "weight", "tezina", "тежина")
+    return any(marker in text for marker in markers)
+
+
+def get_latest_weight_value(client_id: int):
+    latest_weight = (
+        Measurement.query.filter_by(client_id=client_id)
+        .filter(Measurement.weight.isnot(None))
+        .order_by(Measurement.date.desc(), Measurement.id.desc())
+        .first()
+    )
+    return latest_weight.weight if latest_weight else None
+
+
+def sync_weight_goal_progress(client_id: int):
+    latest_weight = get_latest_weight_value(client_id)
+    if latest_weight is None:
+        return 0
+
+    goals = (
+        ClientGoal.query.filter_by(client_id=client_id)
+        .filter(ClientGoal.status != "completed")
+        .all()
+    )
+    updated = 0
+    for goal in goals:
+        if not is_weight_goal(goal):
+            continue
+        if goal.current_value != latest_weight:
+            goal.current_value = latest_weight
+            updated += 1
+    return updated
+
+
 def to_int(value, default=0):
     value = (value or "").strip()
     if value == "":
@@ -1340,6 +1376,10 @@ def add_client_goal(client_id):
         except Exception:
             return redirect(url_for("client_profile", client_id=client.id, tab="info", err="Invalid goal target date."))
     note = (request.form.get("note") or "").strip()
+    if current_value is None:
+        temp_goal = ClientGoal(title=title, note=note)
+        if is_weight_goal(temp_goal):
+            current_value = get_latest_weight_value(client.id)
     g = ClientGoal(
         client_id=client.id,
         title=title,
@@ -1446,7 +1486,16 @@ def add_measurement(client_id):
 
     db.session.add(m)
     db.session.commit()
-    return redirect(url_for("client_profile", client_id=client.id, tab="stats"))
+    updated_goals = 0
+    if parsed_values.get("weight") is not None:
+        updated_goals = sync_weight_goal_progress(client.id)
+        if updated_goals:
+            db.session.commit()
+
+    msg = "Measurement saved."
+    if updated_goals:
+        msg += f" Goal progress updated ({updated_goals})."
+    return redirect(url_for("client_profile", client_id=client.id, tab="stats", msg=msg))
 
 
 @app.route("/client/<int:client_id>/stats/update/<int:measurement_id>", methods=["POST"], endpoint="update_measurement")
@@ -1468,7 +1517,16 @@ def update_measurement(client_id, measurement_id):
         setattr(m, field, value)
 
     db.session.commit()
-    return redirect(url_for("client_profile", client_id=client.id, tab="stats", msg="Measurement updated."))
+    updated_goals = 0
+    if parsed_values.get("weight") is not None:
+        updated_goals = sync_weight_goal_progress(client.id)
+        if updated_goals:
+            db.session.commit()
+
+    msg = "Measurement updated."
+    if updated_goals:
+        msg += f" Goal progress updated ({updated_goals})."
+    return redirect(url_for("client_profile", client_id=client.id, tab="stats", msg=msg))
 
 
 @app.route("/client/<int:client_id>/stats/delete/<int:measurement_id>", methods=["POST"], endpoint="delete_measurement")
