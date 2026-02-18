@@ -54,6 +54,16 @@
           <b style="color:var(--success);">Active</b>
         {% endif %}
       </div>
+      <div class="muted" style="margin-top:6px;">
+        Activity:
+        {% if client_online_now %}
+          <b style="color:var(--success);">Online now</b>
+        {% else %}
+          <b>Offline</b>
+        {% endif %}
+        | Last seen: <b>{{ client_last_seen_display }}</b>
+        | Last login: <b>{{ client_last_login_display }}</b>
+      </div>
 
       <form class="form" action="{{ url_for('admin_reset_client_password', client_id=client.id) }}" method="POST" style="max-width:700px;">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

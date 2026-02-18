@@ -93,6 +93,28 @@ def log_security_event(action: str, details: str = ""):
     app.logger.info("[security] action=%s user_id=%s role=%s ip=%s details=%s", action, user, role, request.remote_addr, details)
 
 
+def humanize_last_seen(ts: datetime | None):
+    if not ts:
+        return "-"
+    dt = ts
+    if dt.tzinfo is not None:
+        dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+    delta = utc_now() - dt
+    seconds = int(max(delta.total_seconds(), 0))
+    if seconds < 60:
+        return "just now"
+    if seconds < 3600:
+        mins = seconds // 60
+        return f"{mins} min ago"
+    if seconds < 86400:
+        hours = seconds // 3600
+        return f"{hours}h ago"
+    if seconds < 604800:
+        days = seconds // 86400
+        return f"{days}d ago"
+    return dt.strftime("%d/%m/%Y %H:%M UTC")
+
+
 def login_throttle_keys(username: str):
     ip = (request.remote_addr or "unknown").strip()
     normalized_username = (username or "").strip().lower() or "*"
@@ -102,6 +124,23 @@ def login_throttle_keys(username: str):
 @app.context_processor
 def inject_csrf_token():
     return {"csrf_token": get_csrf_token}
+
+
+@app.before_request
+def touch_last_seen():
+    uid = session.get("user_id")
+    if not uid:
+        return
+    if request.endpoint == "static":
+        return
+    user = db.session.get(User, uid)
+    if not user:
+        return
+    now = utc_now()
+    if user.last_seen_at and (now - user.last_seen_at).total_seconds() < 60:
+        return
+    user.last_seen_at = now
+    db.session.commit()
 
 
 @app.before_request
@@ -274,6 +313,8 @@ class User(db.Model):
     # client users link to a Client profile
     client_id = db.Column(db.Integer, db.ForeignKey("client.id"), nullable=True)
     must_change_password = db.Column(db.Boolean, nullable=False, default=False)
+    last_login_at = db.Column(db.DateTime, nullable=True)
+    last_seen_at = db.Column(db.DateTime, nullable=True)
 
 
 class LoginThrottle(db.Model):
@@ -706,6 +747,11 @@ def login():
         return render_template("login.html", err="Account is deactivated. Please contact your coach.", lock_seconds=None)
     login_throttle_success(throttle_keys)
 
+    now = utc_now()
+    user.last_login_at = now
+    user.last_seen_at = now
+    db.session.commit()
+
     session["user_id"] = user.id
     session["role"] = user.role
     session["client_id"] = user.client_id
@@ -902,6 +948,18 @@ def client_profile(client_id):
         .order_by(User.id.desc())
         .first()
     )
+    client_online_now = False
+    client_last_seen_display = "-"
+    client_last_login_display = "-"
+    if client_user:
+        client_last_seen_display = humanize_last_seen(client_user.last_seen_at)
+        if client_user.last_login_at:
+            client_last_login_display = client_user.last_login_at.strftime("%d/%m/%Y %H:%M UTC")
+        if client_user.last_seen_at and client_user.role != "disabled":
+            seen_at = client_user.last_seen_at
+            if seen_at.tzinfo is not None:
+                seen_at = seen_at.astimezone(timezone.utc).replace(tzinfo=None)
+            client_online_now = (utc_now() - seen_at).total_seconds() <= 300
     appointments = (
         Appointment.query.filter_by(client_id=client.id)
         .order_by(Appointment.scheduled_for.asc(), Appointment.id.asc())
@@ -989,6 +1047,9 @@ def client_profile(client_id):
         photos=photos,
         goals=goals,
         client_user=client_user,
+        client_online_now=client_online_now,
+        client_last_seen_display=client_last_seen_display,
+        client_last_login_display=client_last_login_display,
         must_change_password=must_change_password,
         milestones=milestones,
     )
