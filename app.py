@@ -35,6 +35,9 @@ database_uri = (
 # Railway Postgres URLs can use postgres://, but SQLAlchemy expects postgresql://.
 if database_uri.startswith("postgres://"):
     database_uri = database_uri.replace("postgres://", "postgresql://", 1)
+# Prefer psycopg v3 driver on PostgreSQL to avoid psycopg2/libpq runtime issues.
+if database_uri.startswith("postgresql://"):
+    database_uri = database_uri.replace("postgresql://", "postgresql+psycopg://", 1)
 app.config["SQLALCHEMY_DATABASE_URI"] = database_uri
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["CSRF_ENABLED"] = True
