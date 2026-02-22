@@ -49,6 +49,9 @@ app.config["SESSION_COOKIE_NAME"] = os.environ.get("SESSION_COOKIE_NAME", "train
 app.config["SESSION_COOKIE_SECURE"] = (
     os.environ.get("SESSION_COOKIE_SECURE", "1" if IS_PROD else "0").lower() in ("1", "true", "yes", "on")
 )
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(
+    days=int(os.environ.get("REMEMBER_ME_DAYS", "30"))
+)
 app.config["FORCE_HTTPS"] = (
     os.environ.get("FORCE_HTTPS", "1" if IS_PROD else "0").lower() in ("1", "true", "yes", "on")
 )
@@ -733,6 +736,7 @@ def login():
 
     username = (request.form.get("username") or "").strip()
     password = request.form.get("password") or ""
+    remember_me = truthy(request.form.get("remember_me", "0"))
     throttle_keys = login_throttle_keys(username)
     locked, seconds_left = login_throttle_status(throttle_keys)
     if locked:
@@ -755,6 +759,7 @@ def login():
     session["user_id"] = user.id
     session["role"] = user.role
     session["client_id"] = user.client_id
+    session.permanent = remember_me
 
     if user.role == "admin":
         return redirect(url_for("index"))

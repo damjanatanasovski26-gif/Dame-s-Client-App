@@ -73,6 +73,11 @@
             >&#128065;</button>
           </div>
 
+          <label class="muted" style="display:flex; align-items:center; gap:8px; margin-top:2px;">
+            <input type="checkbox" name="remember_me" value="1" {% if lock_seconds %}disabled{% endif %}>
+            Keep me signed in
+          </label>
+
           <button class="btn" type="submit" style="margin-top:6px;" {% if lock_seconds %}disabled{% endif %}>Log in</button>
         </form>
 
