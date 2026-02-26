@@ -4,21 +4,21 @@
   <form id="statsEntryForm" class="form" action="{{ url_for('add_measurement', client_id=client.id) }}" method="POST" style="max-width:900px;">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div class="grid-2">
-      <input class="input" name="weight" type="number" step="0.1" inputmode="decimal" placeholder="Weight (kg)">
+      <input class="input" name="weight" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Weight (kg)">
 
-      <input class="input" name="chest" type="number" step="0.1" inputmode="decimal" placeholder="Chest (cm)">
-      <input class="input" name="waist" type="number" step="0.1" inputmode="decimal" placeholder="Waist (cm)">
-      <input class="input" name="stomach" type="number" step="0.1" inputmode="decimal" placeholder="Stomach (cm)">
-      <input class="input" name="glutes" type="number" step="0.1" inputmode="decimal" placeholder="Glutes (cm)">
+      <input class="input" name="chest" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Chest (cm)">
+      <input class="input" name="waist" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Waist (cm)">
+      <input class="input" name="stomach" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Stomach (cm)">
+      <input class="input" name="glutes" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Glutes (cm)">
 
-      <input class="input" name="arm_left" type="number" step="0.1" inputmode="decimal" placeholder="Arm Left (cm)">
-      <input class="input" name="arm_right" type="number" step="0.1" inputmode="decimal" placeholder="Arm Right (cm)">
+      <input class="input" name="arm_left" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Arm Left (cm)">
+      <input class="input" name="arm_right" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Arm Right (cm)">
 
-      <input class="input" name="quad_left" type="number" step="0.1" inputmode="decimal" placeholder="Quad Left (cm)">
-      <input class="input" name="quad_right" type="number" step="0.1" inputmode="decimal" placeholder="Quad Right (cm)">
+      <input class="input" name="quad_left" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Quad Left (cm)">
+      <input class="input" name="quad_right" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Quad Right (cm)">
 
-      <input class="input" name="calf_left" type="number" step="0.1" inputmode="decimal" placeholder="Calf Left (cm)">
-      <input class="input" name="calf_right" type="number" step="0.1" inputmode="decimal" placeholder="Calf Right (cm)">
+      <input class="input" name="calf_left" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Calf Left (cm)">
+      <input class="input" name="calf_right" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Calf Right (cm)">
     </div>
 
     <button class="btn" type="submit">Add Measurement</button>
@@ -110,7 +110,7 @@
                     method="POST"
                     style="margin:0; display:flex; gap:6px; align-items:center;">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <input class="input" type="number" step="0.1" inputmode="decimal" name="weight" value="{{ m.weight if m.weight is not none else '' }}" placeholder="Weight" style="max-width:110px;">
+                <input class="input" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" name="weight" value="{{ m.weight if m.weight is not none else '' }}" placeholder="Weight" style="max-width:110px;">
                 <input type="hidden" name="chest" value="{{ m.chest if m.chest is not none else '' }}">
                 <input type="hidden" name="waist" value="{{ m.waist if m.waist is not none else '' }}">
                 <input type="hidden" name="stomach" value="{{ m.stomach if m.stomach is not none else '' }}">
@@ -215,17 +215,17 @@
                       style="margin-top:8px; min-width:340px;">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                   <div class="grid-2">
-                    <input class="input" name="weight" type="number" step="0.1" inputmode="decimal" value="{{ m.weight if m.weight is not none else '' }}" placeholder="Weight (kg)">
-                    <input class="input" name="chest" type="number" step="0.1" inputmode="decimal" value="{{ m.chest if m.chest is not none else '' }}" placeholder="Chest (cm)">
-                    <input class="input" name="waist" type="number" step="0.1" inputmode="decimal" value="{{ m.waist if m.waist is not none else '' }}" placeholder="Waist (cm)">
-                    <input class="input" name="stomach" type="number" step="0.1" inputmode="decimal" value="{{ m.stomach if m.stomach is not none else '' }}" placeholder="Stomach (cm)">
-                    <input class="input" name="glutes" type="number" step="0.1" inputmode="decimal" value="{{ m.glutes if m.glutes is not none else '' }}" placeholder="Glutes (cm)">
-                    <input class="input" name="arm_left" type="number" step="0.1" inputmode="decimal" value="{{ m.arm_left if m.arm_left is not none else '' }}" placeholder="Arm Left (cm)">
-                    <input class="input" name="arm_right" type="number" step="0.1" inputmode="decimal" value="{{ m.arm_right if m.arm_right is not none else '' }}" placeholder="Arm Right (cm)">
-                    <input class="input" name="quad_left" type="number" step="0.1" inputmode="decimal" value="{{ m.quad_left if m.quad_left is not none else '' }}" placeholder="Quad Left (cm)">
-                    <input class="input" name="quad_right" type="number" step="0.1" inputmode="decimal" value="{{ m.quad_right if m.quad_right is not none else '' }}" placeholder="Quad Right (cm)">
-                    <input class="input" name="calf_left" type="number" step="0.1" inputmode="decimal" value="{{ m.calf_left if m.calf_left is not none else '' }}" placeholder="Calf Left (cm)">
-                    <input class="input" name="calf_right" type="number" step="0.1" inputmode="decimal" value="{{ m.calf_right if m.calf_right is not none else '' }}" placeholder="Calf Right (cm)">
+                    <input class="input" name="weight" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" value="{{ m.weight if m.weight is not none else '' }}" placeholder="Weight (kg)">
+                    <input class="input" name="chest" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" value="{{ m.chest if m.chest is not none else '' }}" placeholder="Chest (cm)">
+                    <input class="input" name="waist" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" value="{{ m.waist if m.waist is not none else '' }}" placeholder="Waist (cm)">
+                    <input class="input" name="stomach" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" value="{{ m.stomach if m.stomach is not none else '' }}" placeholder="Stomach (cm)">
+                    <input class="input" name="glutes" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" value="{{ m.glutes if m.glutes is not none else '' }}" placeholder="Glutes (cm)">
+                    <input class="input" name="arm_left" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" value="{{ m.arm_left if m.arm_left is not none else '' }}" placeholder="Arm Left (cm)">
+                    <input class="input" name="arm_right" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" value="{{ m.arm_right if m.arm_right is not none else '' }}" placeholder="Arm Right (cm)">
+                    <input class="input" name="quad_left" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" value="{{ m.quad_left if m.quad_left is not none else '' }}" placeholder="Quad Left (cm)">
+                    <input class="input" name="quad_right" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" value="{{ m.quad_right if m.quad_right is not none else '' }}" placeholder="Quad Right (cm)">
+                    <input class="input" name="calf_left" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" value="{{ m.calf_left if m.calf_left is not none else '' }}" placeholder="Calf Left (cm)">
+                    <input class="input" name="calf_right" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" value="{{ m.calf_right if m.calf_right is not none else '' }}" placeholder="Calf Right (cm)">
                   </div>
                   <div class="actions">
                     <button class="btn secondary" type="submit">Save</button>
