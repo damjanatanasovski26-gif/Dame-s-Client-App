@@ -103,7 +103,22 @@
 
 <div id="calendarAppointmentModal" class="modal-backdrop" aria-hidden="true">
   <div class="modal-card">
-    <h3 style="margin-bottom:8px;">Schedule Appointment</h3>
+    <h3 style="margin-bottom:8px;">Calendar Actions</h3>
+    <div id="calendarActionDateLabel" class="muted" style="margin-bottom:10px;">Select a day</div>
+
+    <div class="card" style="margin:0 0 10px 0; padding:12px;">
+      <h3 style="margin-bottom:8px; font-size:16px;">Log Session</h3>
+      <form class="form" action="{{ url_for('add_session', client_id=client.id) }}" method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input id="calendarSessionDate" type="hidden" name="session_date">
+        <label class="label">Note (optional)</label>
+        <input class="input" name="note" maxlength="200" placeholder="Optional note (Push / Pull / Rehab)">
+        <button class="btn secondary" type="submit">Log Session For Selected Day</button>
+      </form>
+    </div>
+
+    <div class="card" style="margin:0; padding:12px;">
+      <h3 style="margin-bottom:8px; font-size:16px;">Appointment</h3>
     <form class="form" action="{{ url_for('add_appointment', client_id=client.id) }}" method="POST">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <label class="label">Date & time</label>
@@ -115,6 +130,7 @@
         <button id="closeAppointmentModalBtn" class="btn secondary" type="button">Close</button>
       </div>
     </form>
+    </div>
   </div>
 </div>
 
@@ -122,11 +138,21 @@
   (function () {
     const modal = document.getElementById("calendarAppointmentModal");
     const datetimeInput = document.getElementById("calendarAppointmentDatetime");
+    const sessionDateInput = document.getElementById("calendarSessionDate");
+    const dateLabel = document.getElementById("calendarActionDateLabel");
     const closeBtn = document.getElementById("closeAppointmentModalBtn");
     const openBtn = document.getElementById("openAppointmentModalBtn");
-    if (!modal || !datetimeInput || !closeBtn || !openBtn) return;
+    if (!modal || !datetimeInput || !sessionDateInput || !dateLabel || !closeBtn || !openBtn) return;
+
+    function displayDate(dateStr) {
+      if (!dateStr) return "today";
+      const parts = dateStr.split("-");
+      if (parts.length !== 3) return dateStr;
+      return parts[2] + "/" + parts[1] + "/" + parts[0];
+    }
 
     function openModal(dateStr) {
+      let selectedDate = dateStr;
       if (dateStr) {
         // Keep existing time if user already picked one, otherwise default 09:00
         const current = datetimeInput.value || "";
@@ -138,8 +164,13 @@
         const y = now.getFullYear();
         const m = String(now.getMonth() + 1).padStart(2, "0");
         const d = String(now.getDate()).padStart(2, "0");
-        datetimeInput.value = y + "-" + m + "-" + d + "T09:00";
+        selectedDate = y + "-" + m + "-" + d;
+        datetimeInput.value = selectedDate + "T09:00";
+      } else {
+        selectedDate = datetimeInput.value.split("T")[0];
       }
+      sessionDateInput.value = selectedDate || "";
+      dateLabel.textContent = "Selected day: " + displayDate(selectedDate);
       modal.classList.add("show");
       modal.setAttribute("aria-hidden", "false");
       datetimeInput.focus();
