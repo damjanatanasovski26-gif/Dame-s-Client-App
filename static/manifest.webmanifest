@@ -18,13 +18,13 @@
   ],
   "icons": [
     {
-      "src": "/static/images/barbell.png",
+      "src": "/static/images/barbell.png?v=2",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/static/images/coach.png",
+      "src": "/static/images/coach.png?v=2",
       "sizes": "1536x1024",
       "type": "image/png",
       "purpose": "any"
