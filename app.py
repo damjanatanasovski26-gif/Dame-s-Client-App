@@ -288,6 +288,8 @@ class ClientGoal(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     client_id = db.Column(db.Integer, db.ForeignKey("client.id"), nullable=False, index=True)
     title = db.Column(db.String(120), nullable=False)
+    goal_type = db.Column(db.String(20), nullable=False, default="custom")
+    unit = db.Column(db.String(20), nullable=True)
     target_value = db.Column(db.Float, nullable=True)
     current_value = db.Column(db.Float, nullable=True)
     target_date = db.Column(db.Date, nullable=True)
@@ -424,7 +426,29 @@ def parse_measurement_form(form_data):
     return parsed, None
 
 
+def normalize_goal_type(value: str | None):
+    v = (value or "").strip().lower()
+    if v not in ("weight", "measurement", "habit", "performance", "custom"):
+        return "custom"
+    return v
+
+
+def normalize_goal_unit(value: str | None):
+    unit = (value or "").strip()
+    if not unit:
+        return None
+    return unit[:20]
+
+
+def default_goal_unit(goal_type: str):
+    if goal_type == "weight":
+        return "kg"
+    return None
+
+
 def is_weight_goal(goal: ClientGoal) -> bool:
+    if normalize_goal_type(getattr(goal, "goal_type", None)) == "weight":
+        return True
     text = f"{goal.title or ''} {goal.note or ''}".lower()
     markers = ("kg", "kilo", "weight", "tezina", "тежина")
     return any(marker in text for marker in markers)
@@ -1457,6 +1481,10 @@ def add_client_goal(client_id):
         return redirect(url_for("client_profile", client_id=client.id, tab="info", err="Goal title is required."))
     target_value = to_float(request.form.get("target_value"))
     current_value = to_float(request.form.get("current_value"))
+    goal_type = normalize_goal_type(request.form.get("goal_type"))
+    unit = normalize_goal_unit(request.form.get("unit"))
+    if not unit:
+        unit = default_goal_unit(goal_type)
     target_date = None
     target_date_raw = (request.form.get("target_date") or "").strip()
     if target_date_raw:
@@ -1466,12 +1494,14 @@ def add_client_goal(client_id):
             return redirect(url_for("client_profile", client_id=client.id, tab="info", err="Invalid goal target date."))
     note = (request.form.get("note") or "").strip()
     if current_value is None:
-        temp_goal = ClientGoal(title=title, note=note)
+        temp_goal = ClientGoal(title=title, note=note, goal_type=goal_type, unit=unit)
         if is_weight_goal(temp_goal):
             current_value = get_latest_weight_value(client.id)
     g = ClientGoal(
         client_id=client.id,
         title=title,
+        goal_type=goal_type,
+        unit=unit,
         target_value=target_value,
         current_value=current_value,
         target_date=target_date,
@@ -1492,11 +1522,15 @@ def update_client_goal(client_id, goal_id):
     if g.client_id != client_id:
         abort(404)
     g.current_value = to_float(request.form.get("current_value"))
+    g.goal_type = normalize_goal_type(request.form.get("goal_type") or g.goal_type)
+    if request.form.get("unit") is not None:
+        g.unit = normalize_goal_unit(request.form.get("unit")) or default_goal_unit(g.goal_type)
     status = (request.form.get("status") or "active").strip().lower()
     if status not in ("active", "completed", "paused"):
         status = "active"
     g.status = status
-    g.note = (request.form.get("note") or "").strip()
+    if "note" in request.form:
+        g.note = (request.form.get("note") or "").strip()
     db.session.commit()
     return redirect(url_for("client_profile", client_id=client_id, tab="info", msg="Goal updated."))
 

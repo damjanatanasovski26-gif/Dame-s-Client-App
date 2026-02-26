@@ -2,11 +2,20 @@
   "name": "Dame's Client App",
   "short_name": "Trainer App",
   "description": "Client training tracker for sessions, stats, appointments, and payments.",
-  "start_url": "/login",
+  "start_url": "/login?source=pwa",
   "scope": "/",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui", "browser"],
   "background_color": "#0d1520",
   "theme_color": "#0f1f33",
+  "categories": ["health", "fitness", "productivity"],
+  "shortcuts": [
+    {
+      "name": "Login",
+      "short_name": "Login",
+      "url": "/login"
+    }
+  ],
   "icons": [
     {
       "src": "/static/images/social/instagram.png",

@@ -151,6 +151,23 @@
 
       <div class="grid-2">
         <div>
+          <label class="label">Goal type</label>
+          <select class="input" name="goal_type">
+            <option value="weight">Weight</option>
+            <option value="measurement">Measurement</option>
+            <option value="habit">Habit</option>
+            <option value="performance">Performance</option>
+            <option value="custom">Custom</option>
+          </select>
+        </div>
+        <div>
+          <label class="label">Unit (optional)</label>
+          <input class="input" name="unit" maxlength="20" placeholder="kg / cm / reps">
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div>
           <label class="label">Target value (optional)</label>
           <input class="input" name="target_value" type="number" step="0.1" placeholder="e.g. 75 kg">
         </div>
@@ -187,15 +204,27 @@
               {{ g.current_value if g.current_value is not none else "-" }}
               /
               {{ g.target_value if g.target_value is not none else "-" }}
+              {% if g.unit %} {{ g.unit }}{% endif %}
             </td>
             <td>{{ g.target_date.strftime("%d/%m/%Y") if g.target_date else "-" }}</td>
             <td>{{ g.status }}</td>
-            <td>{{ g.note or "-" }}</td>
+            <td>
+              {% if g.goal_type %}<span class="muted">{{ g.goal_type }}</span>{% if g.note %} | {% endif %}{% endif %}
+              {{ g.note or "-" }}
+            </td>
             <td style="text-align:right;">
               {% if is_admin %}
                 <form action="{{ url_for('update_client_goal', client_id=client.id, goal_id=g.id) }}" method="POST" style="display:flex; gap:6px; align-items:center; margin:0 0 6px 0;">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                   <input class="input" type="number" step="0.1" name="current_value" placeholder="Current (kg/cm)" style="max-width:140px;">
+                  <select class="input" name="goal_type" style="max-width:132px;">
+                    <option value="weight" {% if g.goal_type=='weight' %}selected{% endif %}>weight</option>
+                    <option value="measurement" {% if g.goal_type=='measurement' %}selected{% endif %}>measurement</option>
+                    <option value="habit" {% if g.goal_type=='habit' %}selected{% endif %}>habit</option>
+                    <option value="performance" {% if g.goal_type=='performance' %}selected{% endif %}>performance</option>
+                    <option value="custom" {% if g.goal_type=='custom' or not g.goal_type %}selected{% endif %}>custom</option>
+                  </select>
+                  <input class="input" name="unit" maxlength="20" placeholder="unit" value="{{ g.unit or '' }}" style="max-width:84px;">
                   <select class="input" name="status" style="max-width:120px;">
                     <option value="active" {% if g.status=='active' %}selected{% endif %}>active</option>
                     <option value="completed" {% if g.status=='completed' %}selected{% endif %}>completed</option>
