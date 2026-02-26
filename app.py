@@ -469,6 +469,16 @@ def parse_datetime_local(value: str):
     return None
 
 
+def parse_iso_date(value: str):
+    value = (value or "").strip()
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value, "%Y-%m-%d").date()
+    except Exception:
+        return None
+
+
 def allowed_photo_file(filename: str):
     name = (filename or "").lower()
     return name.endswith(".jpg") or name.endswith(".jpeg") or name.endswith(".png") or name.endswith(".webp")
@@ -1761,22 +1771,58 @@ def add_session(client_id):
         else (client.weekly_sessions or 0)
     )
 
-    used_this_week, remaining, bonus, allowed = compute_sessions(client, sessions_per_week)
+    session_date_raw = (request.form.get("session_date") or "").strip()
+    session_day = parse_iso_date(session_date_raw) if session_date_raw else date.today()
+    if not session_day:
+        return redirect(url_for(
+            "client_profile",
+            client_id=client.id,
+            tab="sessions",
+            err="Invalid session date."
+        ))
+    if session_day > date.today():
+        return redirect(url_for(
+            "client_profile",
+            client_id=client.id,
+            tab="sessions",
+            err="Session date cannot be in the future."
+        ))
+
+    target_week_start = week_start(session_day)
+    used_this_week = (
+        SessionLog.query.filter_by(client_id=client.id)
+        .filter(SessionLog.date >= datetime(target_week_start.year, target_week_start.month, target_week_start.day))
+        .filter(SessionLog.date < datetime(target_week_start.year, target_week_start.month, target_week_start.day) + timedelta(days=7))
+        .count()
+    )
+    bonus = 0
+    if client.rollover_for_week == target_week_start and (client.rollover_bonus or 0) > 0:
+        bonus = client.rollover_bonus
+    allowed = max((sessions_per_week or 0) + bonus, 0)
+    remaining = max(allowed - used_this_week, 0)
 
     if remaining <= 0:
         return redirect(url_for(
             "client_profile",
             client_id=client.id,
             tab="sessions",
-            err=f"Weekly limit reached ({used_this_week}/{allowed})."
+            err=f"Weekly limit reached for week of {target_week_start.strftime('%d/%m/%Y')} ({used_this_week}/{allowed})."
         ))
 
     note = (request.form.get("note") or "").strip()
-    s = SessionLog(client_id=client.id, note=note)
+    session_dt = datetime(session_day.year, session_day.month, session_day.day, 12, 0, 0)
+    s = SessionLog(client_id=client.id, note=note, date=session_dt)
     db.session.add(s)
     db.session.commit()
 
-    return redirect(url_for("client_profile", client_id=client.id, tab="sessions", msg="Session logged"))
+    return redirect(
+        url_for(
+            "client_profile",
+            client_id=client.id,
+            tab="sessions",
+            msg=f"Session logged for {session_day.strftime('%d/%m/%Y')}"
+        )
+    )
 
 
 @app.route("/client/<int:client_id>/sessions/delete/<int:session_id>", methods=["POST"], endpoint="delete_session")
