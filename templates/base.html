@@ -3,7 +3,14 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#0f1f33" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Trainer App" />
   <title>{{ title or "Trainer App" }}</title>
+  <link rel="manifest" href="{{ url_for('pwa_manifest') }}">
+  <link rel="icon" href="{{ url_for('static', filename='images/social/instagram.png') }}">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='images/social/instagram.png') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body class="{{ page_class or '' }}">
@@ -76,6 +83,15 @@
         toggle.addEventListener("click", function () {
           const nowPressed = toggle.getAttribute("aria-pressed") === "true";
           setVisible(!nowPressed);
+        });
+      });
+    })();
+
+    (function () {
+      if (!("serviceWorker" in navigator)) return;
+      window.addEventListener("load", function () {
+        navigator.serviceWorker.register("{{ url_for('pwa_service_worker') }}").catch(function () {
+          // SW registration is optional; ignore failures.
         });
       });
     })();

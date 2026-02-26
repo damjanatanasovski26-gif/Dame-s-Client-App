@@ -73,6 +73,19 @@ db = SQLAlchemy(app)
 migrate = Migrate(app, db)
 
 
+@app.route("/manifest.webmanifest")
+def pwa_manifest():
+    return app.send_static_file("manifest.webmanifest")
+
+
+@app.route("/service-worker.js")
+def pwa_service_worker():
+    resp = app.send_static_file("service-worker.js")
+    resp.headers["Content-Type"] = "application/javascript; charset=utf-8"
+    resp.headers["Cache-Control"] = "no-cache"
+    return resp
+
+
 def utc_now():
     # Use naive UTC timestamps because DB DateTime columns are timezone-naive.
     return datetime.utcnow()

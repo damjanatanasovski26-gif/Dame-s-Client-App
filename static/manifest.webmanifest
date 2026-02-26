@@ -1,0 +1,24 @@
+{
+  "name": "Dame's Client App",
+  "short_name": "Trainer App",
+  "description": "Client training tracker for sessions, stats, appointments, and payments.",
+  "start_url": "/login",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0d1520",
+  "theme_color": "#0f1f33",
+  "icons": [
+    {
+      "src": "/static/images/social/instagram.png",
+      "sizes": "800x800",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/images/coach.png",
+      "sizes": "1536x1024",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
