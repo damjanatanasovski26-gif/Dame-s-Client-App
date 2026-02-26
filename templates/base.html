@@ -18,6 +18,8 @@
     <span class="theme-icon sun" aria-hidden="true">&#9728;</span>
     <span class="theme-icon moon" aria-hidden="true">&#9790;</span>
   </button>
+  <button id="installAppBtn" class="install-app-btn" type="button" hidden>Install App</button>
+  <div id="installHelpToast" class="install-help-toast" hidden></div>
   <div class="container">
     {% block content %}{% endblock %}
   </div>
@@ -93,6 +95,60 @@
         navigator.serviceWorker.register("{{ url_for('pwa_service_worker') }}").catch(function () {
           // SW registration is optional; ignore failures.
         });
+      });
+    })();
+
+    (function () {
+      const btn = document.getElementById("installAppBtn");
+      const toast = document.getElementById("installHelpToast");
+      if (!btn || !toast) return;
+
+      let deferredPrompt = null;
+      const ua = navigator.userAgent || "";
+      const isIos = /iPad|iPhone|iPod/.test(ua);
+      const isSafari = isIos && /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS/.test(ua);
+      const isStandalone = window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
+        || window.navigator.standalone === true;
+
+      function showToast(message) {
+        toast.textContent = message;
+        toast.hidden = false;
+        toast.classList.add("show");
+        window.clearTimeout(showToast._t);
+        showToast._t = window.setTimeout(function () {
+          toast.classList.remove("show");
+          window.setTimeout(function () { toast.hidden = true; }, 180);
+        }, 2800);
+      }
+
+      function showButton() {
+        if (isStandalone) return;
+        btn.hidden = false;
+      }
+
+      window.addEventListener("beforeinstallprompt", function (e) {
+        e.preventDefault();
+        deferredPrompt = e;
+        showButton();
+      });
+
+      if (isSafari && !isStandalone) {
+        showButton();
+      }
+
+      btn.addEventListener("click", async function () {
+        if (deferredPrompt) {
+          deferredPrompt.prompt();
+          try { await deferredPrompt.userChoice; } catch (_) {}
+          deferredPrompt = null;
+          btn.hidden = true;
+          return;
+        }
+        if (isSafari && !isStandalone) {
+          showToast("Safari: tap Share, then Add to Home Screen.");
+          return;
+        }
+        showToast("Install option may appear in your browser menu.");
       });
     })();
   </script>
