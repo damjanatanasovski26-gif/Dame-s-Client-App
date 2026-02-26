@@ -771,6 +771,37 @@ tr:last-child td{ border-bottom:0; }
   transform:translateY(0);
 }
 
+.install-modal-backdrop{
+  z-index:60;
+}
+
+.install-modal-card{
+  width:min(520px, 100%);
+  border-radius:18px;
+  padding:20px;
+  background:
+    radial-gradient(300px 120px at 12% -8%, rgba(29,182,171,.14), transparent 70%),
+    radial-gradient(240px 110px at 98% 4%, rgba(245,158,11,.10), transparent 72%),
+    linear-gradient(180deg, color-mix(in srgb, var(--surface) 96%, #ffffff 4%), var(--surface));
+}
+
+.install-modal-card h3{
+  margin:0 0 8px;
+}
+
+.install-modal-text{
+  margin:0 0 14px;
+  line-height:1.45;
+}
+
+.install-modal-actions{
+  justify-content:flex-end;
+}
+
+.install-modal-actions .btn{
+  min-width:132px;
+}
+
 .theme-icon{
   position:absolute;
   font-size:18px;
@@ -1006,6 +1037,18 @@ tr:last-child td{ border-bottom:0; }
   .install-help-toast{
     top:98px;
     right:10px;
+  }
+  .install-modal-card{
+    padding:16px;
+    border-radius:16px;
+  }
+  .install-modal-actions{
+    width:100%;
+    gap:8px;
+  }
+  .install-modal-actions .btn{
+    flex:1 1 0;
+    min-width:0;
   }
 }
 

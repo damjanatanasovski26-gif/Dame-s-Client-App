@@ -19,6 +19,18 @@
     <span class="theme-icon moon" aria-hidden="true">&#9790;</span>
   </button>
   <button id="installAppBtn" class="install-app-btn" type="button" hidden>Install App</button>
+  <div id="installPromptModal" class="modal-backdrop install-modal-backdrop" hidden>
+    <div class="modal-card install-modal-card" role="dialog" aria-modal="true" aria-labelledby="installPromptTitle">
+      <h3 id="installPromptTitle">Install Damjan's Client App?</h3>
+      <p id="installPromptMessage" class="muted install-modal-text">
+        Add Damjan's Client App to your home screen for faster access and an app-like experience.
+      </p>
+      <div class="actions install-modal-actions">
+        <button id="installPromptConfirm" type="button" class="btn">Yes, Install</button>
+        <button id="installPromptLater" type="button" class="btn secondary">Maybe Later</button>
+      </div>
+    </div>
+  </div>
   <div id="installHelpToast" class="install-help-toast" hidden></div>
   <div class="container">
     {% block content %}{% endblock %}
@@ -101,7 +113,11 @@
     (function () {
       const btn = document.getElementById("installAppBtn");
       const toast = document.getElementById("installHelpToast");
-      if (!btn || !toast) return;
+      const modal = document.getElementById("installPromptModal");
+      const modalMessage = document.getElementById("installPromptMessage");
+      const confirmBtn = document.getElementById("installPromptConfirm");
+      const laterBtn = document.getElementById("installPromptLater");
+      if (!btn || !toast || !modal || !modalMessage || !confirmBtn || !laterBtn) return;
 
       let deferredPrompt = null;
       const ua = navigator.userAgent || "";
@@ -109,6 +125,8 @@
       const isSafari = isIos && /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS/.test(ua);
       const isStandalone = window.matchMedia && window.matchMedia("(display-mode: standalone)").matches
         || window.navigator.standalone === true;
+      const promptDismissKey = "pwa_install_prompt_dismissed_until_v1";
+      let autoPromptShown = false;
 
       function showToast(message) {
         toast.textContent = message;
@@ -126,29 +144,115 @@
         btn.hidden = false;
       }
 
+      function canShowAutoPrompt() {
+        if (isStandalone) return false;
+        const until = Number(localStorage.getItem(promptDismissKey) || "0");
+        return !until || Date.now() > until;
+      }
+
+      function dismissAutoPrompt(days) {
+        const ms = (days || 7) * 24 * 60 * 60 * 1000;
+        localStorage.setItem(promptDismissKey, String(Date.now() + ms));
+      }
+
+      function openModal() {
+        if (isStandalone) return;
+        modal.hidden = false;
+        modal.classList.add("show");
+      }
+
+      function closeModal() {
+        modal.classList.remove("show");
+        window.setTimeout(function () {
+          if (!modal.classList.contains("show")) modal.hidden = true;
+        }, 140);
+      }
+
+      function updateModalMessage() {
+        if (deferredPrompt) {
+          modalMessage.textContent = "Add Damjan's Client App to your home screen for faster access and an app-like experience.";
+          confirmBtn.textContent = "Yes, Install";
+          return;
+        }
+        if (isSafari && !isStandalone) {
+          modalMessage.textContent = "On iPhone/iPad, tap Share and then Add to Home Screen to install Damjan's Client App.";
+          confirmBtn.textContent = "Show Me How";
+          return;
+        }
+        modalMessage.textContent = "Your browser may show the install option in its menu. We can try opening it now.";
+        confirmBtn.textContent = "Open Install Option";
+      }
+
+      function maybeOpenAutoPrompt() {
+        if (autoPromptShown || !canShowAutoPrompt()) return;
+        if (!(deferredPrompt || (isSafari && !isStandalone))) return;
+        autoPromptShown = true;
+        updateModalMessage();
+        openModal();
+      }
+
       window.addEventListener("beforeinstallprompt", function (e) {
         e.preventDefault();
         deferredPrompt = e;
         showButton();
+        maybeOpenAutoPrompt();
       });
 
       if (isSafari && !isStandalone) {
         showButton();
+        window.setTimeout(maybeOpenAutoPrompt, 350);
       }
 
-      btn.addEventListener("click", async function () {
+      async function handleInstallConfirm() {
         if (deferredPrompt) {
           deferredPrompt.prompt();
-          try { await deferredPrompt.userChoice; } catch (_) {}
+          try {
+            const choice = await deferredPrompt.userChoice;
+            if (choice && choice.outcome === "accepted") {
+              btn.hidden = true;
+              closeModal();
+              return;
+            }
+          } catch (_) {}
           deferredPrompt = null;
-          btn.hidden = true;
+          dismissAutoPrompt(7);
+          closeModal();
           return;
         }
         if (isSafari && !isStandalone) {
           showToast("Safari: tap Share, then Add to Home Screen.");
+          dismissAutoPrompt(7);
+          closeModal();
           return;
         }
         showToast("Install option may appear in your browser menu.");
+        dismissAutoPrompt(7);
+        closeModal();
+      }
+
+      btn.addEventListener("click", function () {
+        updateModalMessage();
+        openModal();
+      });
+
+      confirmBtn.addEventListener("click", function () {
+        handleInstallConfirm();
+      });
+
+      laterBtn.addEventListener("click", function () {
+        dismissAutoPrompt(7);
+        closeModal();
+      });
+
+      modal.addEventListener("click", function (e) {
+        if (e.target !== modal) return;
+        dismissAutoPrompt(3);
+        closeModal();
+      });
+
+      window.addEventListener("appinstalled", function () {
+        btn.hidden = true;
+        closeModal();
       });
     })();
   </script>
