@@ -18,8 +18,8 @@
   ],
   "icons": [
     {
-      "src": "/static/images/social/instagram.png",
-      "sizes": "800x800",
+      "src": "/static/images/barbell.png",
+      "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
