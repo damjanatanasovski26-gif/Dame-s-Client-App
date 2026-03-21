@@ -2,7 +2,7 @@
   "name": "Damjan's Client App",
   "short_name": "Damjan App",
   "description": "Client training tracker for sessions, stats, appointments, and payments.",
-  "start_url": "/login?source=pwa",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "display_override": ["standalone", "minimal-ui", "browser"],

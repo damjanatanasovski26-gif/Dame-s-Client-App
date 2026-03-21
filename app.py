@@ -779,6 +779,14 @@ def login_throttle_success(keys: list[str]):
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "GET":
+        uid = session.get("user_id")
+        if uid:
+            user = db.session.get(User, uid)
+            if user and user.role != "disabled":
+                if user.role == "admin":
+                    return redirect(url_for("index"))
+                if user.client_id:
+                    return redirect(url_for("client_profile", client_id=user.client_id, tab="info"))
         return render_template("login.html", err=None, lock_seconds=None)
 
     username = (request.form.get("username") or "").strip()
