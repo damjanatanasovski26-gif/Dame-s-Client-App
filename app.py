@@ -223,6 +223,7 @@ class Client(db.Model):
     weekly_sessions = db.Column(db.Integer, default=0)
 
     created_at = db.Column(db.DateTime, default=utc_now)
+    is_active = db.Column(db.Boolean, nullable=False, default=True)
 
     # rollover system
     rollover_bonus = db.Column(db.Integer, default=0)  # bonus sessions for a specific next week
@@ -315,6 +316,7 @@ class Payment(db.Model):
 
     # total paid (e.g. 10000)
     amount_paid = db.Column(db.Integer, nullable=False, default=0)
+    due_date_override = db.Column(db.Date, nullable=True)
 
     note = db.Column(db.String(200))
 
@@ -596,6 +598,12 @@ def add_months(d: date, months: int) -> date:
     return date(year, month, day)
 
 
+def payment_due_date(payment: Payment) -> date:
+    if payment.due_date_override:
+        return payment.due_date_override
+    return add_months(payment.start_date, payment.months)
+
+
 def seed_admin():
     existing = User.query.filter_by(username="admin").first()
     if not existing:
@@ -632,7 +640,7 @@ def get_current_plan(client_id: int):
     if not latest_payment:
         return None, None
 
-    paid_until = add_months(latest_payment.start_date, latest_payment.months)
+    paid_until = payment_due_date(latest_payment)
     days_left = (paid_until - today).days
 
     status = {
@@ -845,9 +853,14 @@ def index():
         cid = current_client_id()
         return redirect(url_for("client_profile", client_id=cid, tab="info"))
 
-    clients = Client.query.order_by(Client.created_at.desc()).all()
+    show_inactive = truthy(request.args.get("show_inactive", "0"))
+    clients_query = Client.query.order_by(Client.created_at.desc())
+    clients = clients_query.all() if show_inactive else clients_query.filter_by(is_active=True).all()
+    hidden_clients_count = Client.query.filter_by(is_active=False).count()
     payment_alerts = []
     for c in clients:
+        if not c.is_active:
+            continue
         _spw, status = get_current_plan(c.id)
         if not status:
             continue
@@ -869,7 +882,15 @@ def index():
     payment_alerts.sort(key=lambda x: x["days_left"])
     err = request.args.get("err")
     msg = request.args.get("msg")
-    return render_template("index.html", clients=clients, err=err, msg=msg, payment_alerts=payment_alerts)
+    return render_template(
+        "index.html",
+        clients=clients,
+        err=err,
+        msg=msg,
+        payment_alerts=payment_alerts,
+        show_inactive=show_inactive,
+        hidden_clients_count=hidden_clients_count,
+    )
 
 
 @app.route("/client/<int:client_id>")
@@ -992,7 +1013,7 @@ def client_profile(client_id):
     today = date.today()
     payments_view = []
     for idx, p in enumerate(payments):
-        due = add_months(p.start_date, p.months)
+        due = payment_due_date(p)
         days_left = (due - today).days
         payments_view.append({
             "p": p,
@@ -1178,7 +1199,7 @@ def export_payments_csv():
     log_security_event("export_payments_csv", f"rows={len(payments)}")
     rows = []
     for p in payments:
-        due = add_months(p.start_date, p.months)
+        due = payment_due_date(p)
         rows.append([
             p.id,
             p.client_id,
@@ -1388,6 +1409,25 @@ def delete_client(client_id):
     db.session.delete(client)
     db.session.commit()
     return redirect(url_for("index"))
+
+
+@app.route("/client/<int:client_id>/status", methods=["POST"])
+@login_required
+def update_client_status(client_id):
+    if not is_admin():
+        return "Forbidden", 403
+
+    client = get_or_404(Client, client_id)
+    action = (request.form.get("action") or "").strip().lower()
+    if action == "hide":
+        client.is_active = False
+    elif action == "show":
+        client.is_active = True
+    else:
+        return redirect(url_for("index", err="Invalid client status action."))
+    db.session.commit()
+    show_inactive = "1" if truthy(request.form.get("show_inactive", "0")) else "0"
+    return redirect(url_for("index", show_inactive=show_inactive, msg="Client status updated."))
 
 
 # =========================
@@ -1995,6 +2035,46 @@ def add_payment(client_id):
     db.session.commit()
 
     return redirect(url_for("client_profile", client_id=client.id, tab="payments", msg="Payment saved"))
+
+
+@app.route("/client/<int:client_id>/payments/adjust-current", methods=["POST"], endpoint="adjust_current_payment_due")
+@login_required
+def adjust_current_payment_due(client_id):
+    if not is_admin():
+        return "Forbidden", 403
+
+    client = get_or_404(Client, client_id)
+    latest_payment = (
+        Payment.query.filter_by(client_id=client.id)
+        .order_by(Payment.start_date.desc(), Payment.paid_on.desc(), Payment.id.desc())
+        .first()
+    )
+    if not latest_payment:
+        return redirect(url_for("client_profile", client_id=client.id, tab="payments", err="No payment plan to adjust."))
+
+    due_date_raw = (request.form.get("new_due_date") or "").strip()
+    extend_days_raw = (request.form.get("extend_days") or "").strip()
+    if not due_date_raw and not extend_days_raw:
+        return redirect(url_for("client_profile", client_id=client.id, tab="payments", err="Enter days to extend or a new due date."))
+
+    new_due_date = None
+    if due_date_raw:
+        new_due_date = parse_ddmmyyyy(due_date_raw)
+        if not new_due_date:
+            return redirect(url_for("client_profile", client_id=client.id, tab="payments", err="Invalid due date. Use DD/MM/YYYY."))
+
+    if extend_days_raw:
+        extend_days = to_int(extend_days_raw, default=0)
+        if extend_days <= 0:
+            return redirect(url_for("client_profile", client_id=client.id, tab="payments", err="Extend days must be greater than zero."))
+        if new_due_date:
+            return redirect(url_for("client_profile", client_id=client.id, tab="payments", err="Use either extend days or a due date, not both."))
+        base_due = payment_due_date(latest_payment)
+        new_due_date = base_due + timedelta(days=extend_days)
+
+    latest_payment.due_date_override = new_due_date
+    db.session.commit()
+    return redirect(url_for("client_profile", client_id=client.id, tab="payments", msg="Current plan due date updated."))
 
 
 @app.route("/client/<int:client_id>/payments/delete/<int:payment_id>", methods=["POST"], endpoint="delete_payment")

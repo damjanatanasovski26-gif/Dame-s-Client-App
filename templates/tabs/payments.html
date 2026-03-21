@@ -34,6 +34,37 @@
 </div>
 
 <div class="card">
+  <h3>Adjust Current Due Date</h3>
+  {% if current_status %}
+    <div class="muted" style="margin-bottom:10px;">
+      Current due date: <b>{{ current_status.paid_until.strftime("%d/%m/%Y") }}</b>
+      {% if current_status.days_left >= 0 %}
+        ({{ current_status.days_left }} day(s) left)
+      {% else %}
+        (<span style="color:var(--danger); font-weight:700;">Overdue {{ -current_status.days_left }} day(s)</span>)
+      {% endif %}
+    </div>
+    <form class="form" action="{{ url_for('adjust_current_payment_due', client_id=client.id) }}" method="POST" style="max-width:700px;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="grid-2">
+        <div>
+          <label class="label">Extend by days</label>
+          <input class="input" name="extend_days" type="number" min="1" step="1" placeholder="e.g. 7">
+        </div>
+        <div>
+          <label class="label">Or set exact due date (DD/MM/YYYY)</label>
+          <input class="input" name="new_due_date" placeholder="e.g. 25/12/2026">
+        </div>
+      </div>
+      <button class="btn" type="submit">Update Due Date</button>
+    </form>
+    <div class="muted" style="margin-top:8px;">Use one field at a time.</div>
+  {% else %}
+    <div class="empty-state">No active payment plan yet.</div>
+  {% endif %}
+</div>
+
+<div class="card">
   <h3>Payment History</h3>
 
   {% if payments_view %}
@@ -57,7 +88,12 @@
             <td>{{ p.months }}</td>
             <td>{{ p.sessions_per_week }}</td>
             <td>{{ p.amount_paid }}</td>
-            <td>{{ row.due.strftime("%d/%m/%Y") }}</td>
+            <td>
+              {{ row.due.strftime("%d/%m/%Y") }}
+              {% if p.due_date_override %}
+                <div class="muted" style="font-size:12px;">Manual due date</div>
+              {% endif %}
+            </td>
 
             <td>
               {% if row.is_current %}

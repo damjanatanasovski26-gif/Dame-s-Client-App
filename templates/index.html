@@ -107,6 +107,13 @@
 
 <div class="card">
   <h3>Your Clients</h3>
+  <div class="actions" style="margin:10px 0 14px;">
+    {% if show_inactive %}
+      <a class="btn secondary" href="{{ url_for('index') }}">Hide Inactive Clients</a>
+    {% else %}
+      <a class="btn secondary" href="{{ url_for('index', show_inactive=1) }}">Show Inactive Clients ({{ hidden_clients_count }})</a>
+    {% endif %}
+  </div>
 
   {% if clients %}
     {% for c in clients %}
@@ -115,11 +122,25 @@
           <div class="client-name">{{ c.name }}</div>
           <div class="muted">
             Phone: {{ c.phone or "-" }} | Plan: {{ c.plan or "-" }}
+            {% if not c.is_active %}
+              | <span style="color:var(--warn); font-weight:700;">Inactive</span>
+            {% endif %}
           </div>
         </div>
 
         <div style="display:flex; gap:10px; align-items:center;">
           <a href="{{ url_for('client_profile', client_id=c.id) }}" class="btn">Open Profile</a>
+          <form action="{{ url_for('update_client_status', client_id=c.id) }}" method="POST" style="margin:0;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="show_inactive" value="{{ 1 if show_inactive else 0 }}">
+            {% if c.is_active %}
+              <input type="hidden" name="action" value="hide">
+              <button class="btn secondary" type="submit">Hide</button>
+            {% else %}
+              <input type="hidden" name="action" value="show">
+              <button class="btn secondary" type="submit">Unhide</button>
+            {% endif %}
+          </form>
           <form action="{{ url_for('delete_client', client_id=c.id) }}" method="POST"
                 onsubmit="return confirm('Delete {{ c.name }}?');" style="margin:0;">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
