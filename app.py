@@ -1068,26 +1068,26 @@ def parse_label_text(label_text: str):
 def build_label_ocr_images(image):
     base = ImageOps.exif_transpose(image)
     images = [base]
-    for angle in (-3, -2, -1, 1, 2):
+    for angle in (-2, 2):
         images.append(base.rotate(angle, expand=True, fillcolor="white"))
 
     processed = []
     for variant in images:
         grayscale = ImageOps.grayscale(variant)
         autocontrast = ImageOps.autocontrast(grayscale)
-        scale = 3 if max(autocontrast.size) < 1600 else 2
+        scale = 2 if max(autocontrast.size) < 1600 else 1
         enlarged = autocontrast.resize(
             (autocontrast.width * scale, autocontrast.height * scale),
             Image.Resampling.LANCZOS,
         ).filter(ImageFilter.SHARPEN)
         threshold = enlarged.point(lambda pixel: 255 if pixel > 150 else 0)
-        processed.extend([variant, enlarged, threshold])
+        processed.extend([enlarged, threshold])
     return processed
 
 
 def scan_label_image_text(image):
     lang = get_tesseract_languages()
-    configs = ("--psm 6", "--psm 4", "--psm 11")
+    configs = ("--psm 6",)
     texts = []
     for ocr_image in build_label_ocr_images(image):
         for config in configs:
