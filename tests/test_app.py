@@ -2,10 +2,12 @@ import os
 import tempfile
 import unittest
 from datetime import date
+from io import BytesIO
+from unittest.mock import Mock, patch
 
 from werkzeug.security import generate_password_hash
 
-from app import app, db, Client, Measurement, Payment, SessionLog, User
+from app import app, db, Client, FoodItem, FoodLogEntry, Measurement, Payment, SessionLog, User, parse_label_text, seed_reference_foods
 
 
 class TrainerAppTests(unittest.TestCase):
@@ -205,6 +207,226 @@ class TrainerAppTests(unittest.TestCase):
         )
         self.assertEqual(blocked.status_code, 200)
         self.assertIn(b"Too many attempts", blocked.data)
+
+    def test_client_can_add_food_and_log_it(self):
+        client_id = self._create_client(name="Nina")
+        self._create_user("nina_user", "pass123", role="client", client_id=client_id)
+
+        self._login("nina_user", "pass123")
+        self.client.post(
+            f"/client/{client_id}/nutrition/foods/add",
+            data={
+                "name": "Greek Yogurt",
+                "brand": "Test Brand",
+                "calories_per_100g": "63",
+                "protein_per_100g": "10.2",
+                "carbs_per_100g": "3.6",
+                "fat_per_100g": "0.4",
+                "nutrition_date": "2026-03-21",
+            },
+            follow_redirects=True,
+        )
+
+        with app.app_context():
+            food = FoodItem.query.filter_by(client_id=client_id, name="Greek Yogurt").first()
+            self.assertIsNotNone(food)
+            food_id = food.id
+
+        resp = self.client.post(
+            f"/client/{client_id}/nutrition/logs/add",
+            data={
+                "food_id": str(food_id),
+                "meal_type": "breakfast",
+                "quantity_grams": "200",
+                "logged_for": "2026-03-21",
+                "note": "post training",
+            },
+            follow_redirects=True,
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b"Food logged", resp.data)
+        self.assertIn(b"Greek Yogurt", resp.data)
+        self.assertIn(b"126", resp.data)
+
+        with app.app_context():
+            log = FoodLogEntry.query.filter_by(client_id=client_id).first()
+            self.assertIsNotNone(log)
+            self.assertEqual(log.meal_type, "breakfast")
+            self.assertEqual(log.logged_for.isoformat(), "2026-03-21")
+            self.assertAlmostEqual(log.calories, 126.0)
+            self.assertAlmostEqual(log.protein, 20.4)
+
+    def test_calorie_target_updates_on_nutrition_tab(self):
+        client_id = self._create_client(name="Omar")
+        self._create_user("admin", "admin123", role="admin")
+        self._login("admin", "admin123")
+
+        resp = self.client.post(
+            f"/client/{client_id}/nutrition/target",
+            data={"daily_calorie_target": "2400", "nutrition_date": "2026-03-21"},
+            follow_redirects=True,
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b"Daily calorie target updated", resp.data)
+        self.assertIn(b"2400 target", resp.data)
+
+        with app.app_context():
+            client = db.session.get(Client, client_id)
+            self.assertEqual(client.daily_calorie_target, 2400)
+
+    def test_can_import_food_from_search_results_stored_in_session(self):
+        client_id = self._create_client(name="Iva")
+        self._create_user("admin", "admin123", role="admin")
+        self._login("admin", "admin123")
+
+        with self.client.session_transaction() as sess:
+            sess[f"nutrition_search_results_{client_id}"] = [{
+                "name": "Skyr",
+                "brand": "Imported",
+                "source": "openfoodfacts",
+                "source_ref": "12345",
+                "barcode": "5310000000000",
+                "calories_per_100g": 63.0,
+                "protein_per_100g": 11.0,
+                "carbs_per_100g": 3.8,
+                "fat_per_100g": 0.2,
+            }]
+
+        resp = self.client.post(
+            f"/client/{client_id}/nutrition/import",
+            data={"result_index": "0", "nutrition_date": "2026-03-21"},
+            follow_redirects=True,
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b"Food imported into the shared library", resp.data)
+
+        with app.app_context():
+            food = FoodItem.query.filter_by(source="openfoodfacts", source_ref="12345").first()
+            self.assertIsNotNone(food)
+            self.assertEqual(food.barcode, "5310000000000")
+
+    def test_parse_label_text_extracts_macros_from_english_label(self):
+        parsed = parse_label_text(
+            "Energy 250 kcal\nFat 10 g\nCarbohydrates 20 g\nProtein 8 g"
+        )
+        self.assertEqual(parsed["calories"], 250.0)
+        self.assertEqual(parsed["fat"], 10.0)
+        self.assertEqual(parsed["carbs"], 20.0)
+        self.assertEqual(parsed["protein"], 8.0)
+
+    def test_parse_label_text_extracts_macros_from_macedonian_label(self):
+        parsed = parse_label_text(
+            "\u0415\u043d\u0435\u0440\u0433\u0438\u0458\u0430 310 kcal\n"
+            "\u041c\u0430\u0441\u0442\u0438 12 g\n"
+            "\u0408\u0430\u0433\u043b\u0435\u0445\u0438\u0434\u0440\u0430\u0442\u0438 42 g\n"
+            "\u041f\u0440\u043e\u0442\u0435\u0438\u043d\u0438 9 g"
+        )
+        self.assertEqual(parsed["calories"], 310.0)
+        self.assertEqual(parsed["fat"], 12.0)
+        self.assertEqual(parsed["carbs"], 42.0)
+        self.assertEqual(parsed["protein"], 9.0)
+
+    def test_parse_label_text_extracts_macros_from_albanian_label(self):
+        parsed = parse_label_text(
+            "Vlera energjetike 180 kcal\n"
+            "Yndyrna 4,5 g\n"
+            "Karbohidrate 22 g\n"
+            "Proteina 7 g"
+        )
+        self.assertEqual(parsed["calories"], 180.0)
+        self.assertEqual(parsed["fat"], 4.5)
+        self.assertEqual(parsed["carbs"], 22.0)
+        self.assertEqual(parsed["protein"], 7.0)
+
+    def test_parse_label_text_tolerates_common_ocr_noise(self):
+        parsed = parse_label_text(
+            "Enep.BpeuHoci/Energy 1 33kcal659K\n"
+            "Mactu | Fat Bg\n"
+            "Заситени масти / Saturated fat 2g\n"
+            "Protein 2g\n"
+        )
+        self.assertEqual(parsed["calories"], 133.0)
+        self.assertEqual(parsed["fat"], 6.0)
+        self.assertEqual(parsed["protein"], 2.0)
+
+    def test_seed_library_replaces_old_prepared_seed_items_with_raw_ingredients(self):
+        with app.app_context():
+            db.session.add(FoodItem(
+                client_id=None,
+                name="Ajvar",
+                brand="Regional Starter",
+                source="seed",
+                source_ref="ajvar",
+                calories_per_100g=122,
+                protein_per_100g=1.5,
+                carbs_per_100g=8.7,
+                fat_per_100g=8.8,
+            ))
+            db.session.commit()
+            seed_reference_foods()
+
+            self.assertIsNone(FoodItem.query.filter_by(source="seed", source_ref="ajvar").first())
+            self.assertIsNotNone(FoodItem.query.filter_by(source="seed", source_ref="chicken-breast-raw").first())
+
+    def test_food_log_can_match_by_search_name_when_hidden_id_is_missing(self):
+        client_id = self._create_client(name="Sara")
+        self._create_user("sara_user", "pass123", role="client", client_id=client_id)
+        with app.app_context():
+            db.session.add(FoodItem(
+                client_id=client_id,
+                name="Chicken Breast",
+                brand="Local",
+                source="manual",
+                calories_per_100g=165,
+                protein_per_100g=31,
+                carbs_per_100g=0,
+                fat_per_100g=3.6,
+            ))
+            db.session.commit()
+
+        self._login("sara_user", "pass123")
+        resp = self.client.post(
+            f"/client/{client_id}/nutrition/logs/add",
+            data={
+                "food_name": "Chicken Breast - Local",
+                "meal_type": "lunch",
+                "quantity_grams": "100",
+                "logged_for": "2026-03-21",
+            },
+            follow_redirects=True,
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b"Food logged", resp.data)
+
+    @patch("app.Image.open")
+    @patch("app.label_scan_enabled", return_value=True)
+    @patch("app.scan_label_image_text", return_value="Energy 99 kcal\nFat 2 g")
+    def test_label_scan_populates_manual_draft_when_partial_data_is_found(self, _ocr_mock, _enabled_mock, open_mock):
+        client_id = self._create_client(name="Lena")
+        self._create_user("lena_user", "pass123", role="client", client_id=client_id)
+        self._login("lena_user", "pass123")
+        image_ctx = Mock()
+        image_ctx.__enter__ = Mock(return_value=Mock())
+        image_ctx.__exit__ = Mock(return_value=None)
+        open_mock.return_value = image_ctx
+
+        resp = self.client.post(
+            f"/client/{client_id}/nutrition/scan-label",
+            data={
+                "label_name": "Scanned Yogurt",
+                "nutrition_date": "2026-03-21",
+                "label_photo": (BytesIO(
+                    b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde"
+                    b"\x00\x00\x00\x0cIDATx\x9cc\xf8\xff\xff?\x00\x05\xfe\x02\xfeA\xa5\x1d\xb6\x00\x00\x00\x00IEND\xaeB`\x82"
+                ), "label.png"),
+            },
+            content_type="multipart/form-data",
+            follow_redirects=True,
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b"Review the custom food form below", resp.data)
+        self.assertIn(b"Scanned Yogurt", resp.data)
+        self.assertIn(b"99.0", resp.data)
 
 
 if __name__ == "__main__":

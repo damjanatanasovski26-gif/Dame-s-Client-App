@@ -1,0 +1,11 @@
+.git
+.gitignore
+.venv
+venv
+__pycache__
+*.pyc
+instance
+tests
+static/uploads
+.env
+.env.local

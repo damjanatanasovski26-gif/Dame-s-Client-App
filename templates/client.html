@@ -70,6 +70,7 @@
   <div class="actions" style="margin-top:12px;">
     <a class="btn secondary" href="{{ url_for('client_profile', client_id=client.id, tab='sessions') }}#logSessionForm">Quick Log Session</a>
     <a class="btn secondary" href="{{ url_for('client_profile', client_id=client.id, tab='stats') }}#statsEntryForm">Quick Add Weight</a>
+    <a class="btn secondary" href="{{ url_for('client_profile', client_id=client.id, tab='nutrition') }}#nutritionLogForm">Quick Log Food</a>
     {% if is_admin %}
       <a class="btn secondary" href="{{ url_for('client_profile', client_id=client.id, tab='payments') }}#paymentEntryForm">Quick Add Payment</a>
     {% endif %}
@@ -105,6 +106,9 @@
   <a class="tab {% if tab=='sessions' %}active{% endif %}" href="{{ url_for('client_profile', client_id=client.id, tab='sessions') }}">
      Sessions
   </a>
+  <a class="tab {% if tab=='nutrition' %}active{% endif %}" href="{{ url_for('client_profile', client_id=client.id, tab='nutrition') }}">
+     Nutrition
+  </a>
   {% if is_admin %}
     <a class="tab {% if tab=='payments' %}active{% endif %}" href="{{ url_for('client_profile', client_id=client.id, tab='payments') }}">
        Payments
@@ -118,6 +122,8 @@
   {% include "tabs/stats.html" %}
 {% elif tab == "sessions" %}
   {% include "tabs/sessions.html" %}
+{% elif tab == "nutrition" %}
+  {% include "tabs/nutrition.html" %}
 {% elif tab == "payments" and is_admin %}
   {% include "tabs/payments.html" %}
 {% endif %}

@@ -76,4 +76,7 @@ powershell -ExecutionPolicy Bypass -File scripts\deploy_prep.ps1
 ```
 
 ## 7) Railway
-See `RAILWAY.md` for Railway-specific setup and migration commands.
+For OCR-enabled production deploys on Railway, use the included `Dockerfile`.
+It installs the Tesseract binary and language data required for label scanning.
+
+See `RAILWAY.md` for the Railway-specific setup steps.

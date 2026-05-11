@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, redirect, url_for, session, Response, send_file, abort
 from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import or_
 import click
 from datetime import datetime, date, timedelta, timezone
 import calendar
@@ -14,9 +15,41 @@ import json
 import os
 import secrets
 import re
+import shutil
+from urllib.error import HTTPError, URLError
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen
 from math import ceil
 from werkzeug.utils import secure_filename
 import uuid
+
+try:
+    import pytesseract
+except ImportError:
+    pytesseract = None
+
+from PIL import Image, ImageFilter, ImageOps
+
+
+def load_local_env(env_path: str):
+    if not os.path.exists(env_path):
+        return
+    try:
+        with open(env_path, "r", encoding="utf-8") as fh:
+            for raw_line in fh:
+                line = raw_line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, value = line.split("=", 1)
+                key = key.strip()
+                value = value.strip().strip('"').strip("'")
+                if key and key not in os.environ:
+                    os.environ[key] = value
+    except OSError:
+        pass
+
+
+load_local_env(os.path.join(os.path.dirname(__file__), ".env"))
 
 app = Flask(__name__)
 APP_ENV = os.environ.get("TRAINER_APP_ENV", os.environ.get("FLASK_ENV", "development")).lower()
@@ -63,8 +96,16 @@ app.config["UPLOAD_PROGRESS_DIR"] = os.environ.get(
     "UPLOAD_PROGRESS_DIR",
     os.path.join(app.root_path, "static", "uploads", "progress")
 )
+app.config["UPLOAD_LABEL_DIR"] = os.environ.get(
+    "UPLOAD_LABEL_DIR",
+    os.path.join(app.root_path, "static", "uploads", "nutrition_labels")
+)
+app.config["USDA_API_KEY"] = os.environ.get("USDA_API_KEY", "").strip()
+app.config["TESSERACT_CMD"] = os.environ.get("TESSERACT_CMD", "").strip()
+app.config["TESSERACT_LANGS"] = os.environ.get("TESSERACT_LANGS", "eng+mkd+sqi").strip()
 
 os.makedirs(app.config["UPLOAD_PROGRESS_DIR"], exist_ok=True)
+os.makedirs(app.config["UPLOAD_LABEL_DIR"], exist_ok=True)
 
 if os.environ.get("TRUST_PROXY", "1").lower() in ("1", "true", "yes", "on"):
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
@@ -224,6 +265,7 @@ class Client(db.Model):
 
     created_at = db.Column(db.DateTime, default=utc_now)
     is_active = db.Column(db.Boolean, nullable=False, default=True)
+    daily_calorie_target = db.Column(db.Integer, nullable=True)
 
     # rollover system
     rollover_bonus = db.Column(db.Integer, default=0)  # bonus sessions for a specific next week
@@ -297,6 +339,38 @@ class ClientGoal(db.Model):
     status = db.Column(db.String(20), nullable=False, default="active")  # active/completed/paused
     created_at = db.Column(db.DateTime, default=utc_now, nullable=False)
     note = db.Column(db.String(300))
+
+
+class FoodItem(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    client_id = db.Column(db.Integer, db.ForeignKey("client.id"), nullable=True, index=True)
+    name = db.Column(db.String(120), nullable=False)
+    brand = db.Column(db.String(120))
+    serving_label = db.Column(db.String(80))
+    source = db.Column(db.String(30), nullable=False, default="manual")
+    source_ref = db.Column(db.String(120))
+    barcode = db.Column(db.String(64))
+    calories_per_100g = db.Column(db.Float, nullable=False)
+    protein_per_100g = db.Column(db.Float, nullable=False, default=0)
+    carbs_per_100g = db.Column(db.Float, nullable=False, default=0)
+    fat_per_100g = db.Column(db.Float, nullable=False, default=0)
+    created_at = db.Column(db.DateTime, default=utc_now, nullable=False)
+
+
+class FoodLogEntry(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    client_id = db.Column(db.Integer, db.ForeignKey("client.id"), nullable=False, index=True)
+    food_id = db.Column(db.Integer, db.ForeignKey("food_item.id"), nullable=False, index=True)
+    logged_for = db.Column(db.Date, nullable=False, default=date.today, index=True)
+    meal_type = db.Column(db.String(20), nullable=False, default="snack")
+    quantity_grams = db.Column(db.Float, nullable=False)
+    food_name = db.Column(db.String(160), nullable=False)
+    calories = db.Column(db.Float, nullable=False, default=0)
+    protein = db.Column(db.Float, nullable=False, default=0)
+    carbs = db.Column(db.Float, nullable=False, default=0)
+    fat = db.Column(db.Float, nullable=False, default=0)
+    note = db.Column(db.String(200))
+    created_at = db.Column(db.DateTime, default=utc_now, nullable=False)
 
 
 class Payment(db.Model):
@@ -405,6 +479,90 @@ MEASUREMENT_FIELDS = [
     "quad_right",
     "calf_left",
     "calf_right",
+]
+
+MEAL_TYPES = ("breakfast", "lunch", "dinner", "snack")
+LABEL_REGEX_PATTERNS = {
+    "calories": [
+        r"(?:energy|energia|energjia|vlera\s+energjetike|energetska\s+vrednost|\u0435\u043d\u0435\u0440\u0433\u0438\u0458\u0430|\u0435\u043d\u0435\u0440\u0433\u0435\u0442\u0441\u043a\u0430\s+\u0432\u0440\u0435\u0434\u043d\u043e\u0441\u0442)[^\n\r]{0,50}?(\d+(?:[.,]\d+)?)\s*kcal",
+        r"(\d+(?:[.,]\d+)?)\s*kcal",
+    ],
+    "protein": [
+        r"(?:protein(?:s)?|proteina|proteini|\u0431\u0435\u043b\u043a\u043e\u0432\u0438\u043d\u0438|\u043f\u0440\u043e\u0442\u0435\u0438\u043d\u0438)[^\n\r]{0,40}?(\d+(?:[.,]\d+)?)\s*g",
+    ],
+    "carbs": [
+        r"(?:carbohydrate(?:s)?|carbs|karbohidrate(?:t)?|ugljeni\s+hidrati|\u0458\u0430\u0433\u043b\u0435\u0445\u0438\u0434\u0440\u0430\u0442\u0438)[^\n\r]{0,40}?(\d+(?:[.,]\d+)?)\s*g",
+    ],
+    "fat": [
+        r"(?:fat|fats|yndyr(?:e|a|na)|yndyr\u00eb|yndyrna|mast(?:i)?|\u043c\u0430\u0441\u0442\u0438)[^\n\r]{0,40}?(\d+(?:[.,]\d+)?)\s*g",
+    ],
+}
+RAW_INGREDIENT_LIBRARY = [
+    {"slug": "apple", "name": "Apple", "group": "Shared Raw Ingredient", "calories": 52, "protein": 0.3, "carbs": 13.8, "fat": 0.2},
+    {"slug": "banana", "name": "Banana", "group": "Shared Raw Ingredient", "calories": 89, "protein": 1.1, "carbs": 22.8, "fat": 0.3},
+    {"slug": "orange", "name": "Orange", "group": "Shared Raw Ingredient", "calories": 47, "protein": 0.9, "carbs": 11.8, "fat": 0.1},
+    {"slug": "pear", "name": "Pear", "group": "Shared Raw Ingredient", "calories": 57, "protein": 0.4, "carbs": 15.2, "fat": 0.1},
+    {"slug": "peach", "name": "Peach", "group": "Shared Raw Ingredient", "calories": 39, "protein": 0.9, "carbs": 9.5, "fat": 0.3},
+    {"slug": "kiwi", "name": "Kiwi", "group": "Shared Raw Ingredient", "calories": 61, "protein": 1.1, "carbs": 14.7, "fat": 0.5},
+    {"slug": "pineapple", "name": "Pineapple", "group": "Shared Raw Ingredient", "calories": 50, "protein": 0.5, "carbs": 13.1, "fat": 0.1},
+    {"slug": "grapes", "name": "Grapes", "group": "Shared Raw Ingredient", "calories": 69, "protein": 0.7, "carbs": 18.1, "fat": 0.2},
+    {"slug": "strawberries", "name": "Strawberries", "group": "Shared Raw Ingredient", "calories": 32, "protein": 0.7, "carbs": 7.7, "fat": 0.3},
+    {"slug": "blueberries", "name": "Blueberries", "group": "Shared Raw Ingredient", "calories": 57, "protein": 0.7, "carbs": 14.5, "fat": 0.3},
+    {"slug": "watermelon", "name": "Watermelon", "group": "Shared Raw Ingredient", "calories": 30, "protein": 0.6, "carbs": 7.6, "fat": 0.2},
+    {"slug": "lemon", "name": "Lemon", "group": "Shared Raw Ingredient", "calories": 29, "protein": 1.1, "carbs": 9.3, "fat": 0.3},
+    {"slug": "avocado", "name": "Avocado", "group": "Shared Raw Ingredient", "calories": 160, "protein": 2.0, "carbs": 8.5, "fat": 14.7},
+    {"slug": "tomato", "name": "Tomato", "group": "Shared Raw Ingredient", "calories": 18, "protein": 0.9, "carbs": 3.9, "fat": 0.2},
+    {"slug": "cucumber", "name": "Cucumber", "group": "Shared Raw Ingredient", "calories": 15, "protein": 0.7, "carbs": 3.6, "fat": 0.1},
+    {"slug": "carrot", "name": "Carrot", "group": "Shared Raw Ingredient", "calories": 41, "protein": 0.9, "carbs": 9.6, "fat": 0.2},
+    {"slug": "broccoli", "name": "Broccoli", "group": "Shared Raw Ingredient", "calories": 34, "protein": 2.8, "carbs": 6.6, "fat": 0.4},
+    {"slug": "cauliflower", "name": "Cauliflower", "group": "Shared Raw Ingredient", "calories": 25, "protein": 1.9, "carbs": 5.0, "fat": 0.3},
+    {"slug": "spinach", "name": "Spinach", "group": "Shared Raw Ingredient", "calories": 23, "protein": 2.9, "carbs": 3.6, "fat": 0.4},
+    {"slug": "lettuce", "name": "Lettuce", "group": "Shared Raw Ingredient", "calories": 15, "protein": 1.4, "carbs": 2.9, "fat": 0.2},
+    {"slug": "onion", "name": "Onion", "group": "Shared Raw Ingredient", "calories": 40, "protein": 1.1, "carbs": 9.3, "fat": 0.1},
+    {"slug": "garlic", "name": "Garlic", "group": "Shared Raw Ingredient", "calories": 149, "protein": 6.4, "carbs": 33.1, "fat": 0.5},
+    {"slug": "bell-pepper", "name": "Bell Pepper", "group": "Shared Raw Ingredient", "calories": 31, "protein": 1.0, "carbs": 6.0, "fat": 0.3},
+    {"slug": "zucchini", "name": "Zucchini", "group": "Shared Raw Ingredient", "calories": 17, "protein": 1.2, "carbs": 3.1, "fat": 0.3},
+    {"slug": "mushrooms", "name": "Mushrooms", "group": "Shared Raw Ingredient", "calories": 22, "protein": 3.1, "carbs": 3.3, "fat": 0.3},
+    {"slug": "cabbage", "name": "Cabbage", "group": "Shared Raw Ingredient", "calories": 25, "protein": 1.3, "carbs": 5.8, "fat": 0.1},
+    {"slug": "green-beans", "name": "Green Beans", "group": "Shared Raw Ingredient", "calories": 31, "protein": 1.8, "carbs": 7.0, "fat": 0.2},
+    {"slug": "peas", "name": "Peas", "group": "Shared Raw Ingredient", "calories": 81, "protein": 5.4, "carbs": 14.5, "fat": 0.4},
+    {"slug": "corn", "name": "Corn", "group": "Shared Raw Ingredient", "calories": 86, "protein": 3.3, "carbs": 18.7, "fat": 1.4},
+    {"slug": "potato", "name": "Potato", "group": "Shared Raw Ingredient", "calories": 77, "protein": 2.0, "carbs": 17.5, "fat": 0.1},
+    {"slug": "sweet-potato", "name": "Sweet Potato", "group": "Shared Raw Ingredient", "calories": 86, "protein": 1.6, "carbs": 20.1, "fat": 0.1},
+    {"slug": "rice-white-dry", "name": "Rice, White, Dry", "group": "Shared Raw Ingredient", "calories": 365, "protein": 7.1, "carbs": 80.0, "fat": 0.7},
+    {"slug": "rice-brown-dry", "name": "Rice, Brown, Dry", "group": "Shared Raw Ingredient", "calories": 370, "protein": 7.9, "carbs": 77.2, "fat": 2.9},
+    {"slug": "oats-dry", "name": "Oats, Dry", "group": "Shared Raw Ingredient", "calories": 389, "protein": 16.9, "carbs": 66.3, "fat": 6.9},
+    {"slug": "quinoa-dry", "name": "Quinoa, Dry", "group": "Shared Raw Ingredient", "calories": 368, "protein": 14.1, "carbs": 64.2, "fat": 6.1},
+    {"slug": "barley-dry", "name": "Barley, Dry", "group": "Shared Raw Ingredient", "calories": 354, "protein": 12.5, "carbs": 73.5, "fat": 2.3},
+    {"slug": "whole-wheat-pasta-dry", "name": "Whole Wheat Pasta, Dry", "group": "Shared Raw Ingredient", "calories": 348, "protein": 14.6, "carbs": 72.0, "fat": 2.5},
+    {"slug": "lentils-dry", "name": "Lentils, Dry", "group": "Shared Raw Ingredient", "calories": 353, "protein": 25.8, "carbs": 60.1, "fat": 1.1},
+    {"slug": "chickpeas-dry", "name": "Chickpeas, Dry", "group": "Shared Raw Ingredient", "calories": 364, "protein": 19.3, "carbs": 60.7, "fat": 6.0},
+    {"slug": "black-beans-dry", "name": "Black Beans, Dry", "group": "Shared Raw Ingredient", "calories": 341, "protein": 21.6, "carbs": 62.4, "fat": 1.4},
+    {"slug": "kidney-beans-dry", "name": "Kidney Beans, Dry", "group": "Shared Raw Ingredient", "calories": 333, "protein": 23.6, "carbs": 60.0, "fat": 0.8},
+    {"slug": "white-beans-dry", "name": "White Beans, Dry", "group": "Shared Raw Ingredient", "calories": 336, "protein": 21.1, "carbs": 61.3, "fat": 1.6},
+    {"slug": "olive-oil", "name": "Olive Oil", "group": "Shared Raw Ingredient", "calories": 884, "protein": 0.0, "carbs": 0.0, "fat": 100.0},
+    {"slug": "sunflower-oil", "name": "Sunflower Oil", "group": "Shared Raw Ingredient", "calories": 884, "protein": 0.0, "carbs": 0.0, "fat": 100.0},
+    {"slug": "canola-oil", "name": "Canola Oil", "group": "Shared Raw Ingredient", "calories": 884, "protein": 0.0, "carbs": 0.0, "fat": 100.0},
+    {"slug": "coconut-oil", "name": "Coconut Oil", "group": "Shared Raw Ingredient", "calories": 892, "protein": 0.0, "carbs": 0.0, "fat": 100.0},
+    {"slug": "almonds", "name": "Almonds", "group": "Shared Raw Ingredient", "calories": 579, "protein": 21.2, "carbs": 21.6, "fat": 49.9},
+    {"slug": "walnuts", "name": "Walnuts", "group": "Shared Raw Ingredient", "calories": 654, "protein": 15.2, "carbs": 13.7, "fat": 65.2},
+    {"slug": "cashews", "name": "Cashews", "group": "Shared Raw Ingredient", "calories": 553, "protein": 18.2, "carbs": 30.2, "fat": 43.8},
+    {"slug": "peanuts", "name": "Peanuts", "group": "Shared Raw Ingredient", "calories": 567, "protein": 25.8, "carbs": 16.1, "fat": 49.2},
+    {"slug": "pistachios", "name": "Pistachios", "group": "Shared Raw Ingredient", "calories": 562, "protein": 20.2, "carbs": 28.0, "fat": 45.3},
+    {"slug": "chia-seeds", "name": "Chia Seeds", "group": "Shared Raw Ingredient", "calories": 486, "protein": 16.5, "carbs": 42.1, "fat": 30.7},
+    {"slug": "flax-seeds", "name": "Flax Seeds", "group": "Shared Raw Ingredient", "calories": 534, "protein": 18.3, "carbs": 28.9, "fat": 42.2},
+    {"slug": "pumpkin-seeds", "name": "Pumpkin Seeds", "group": "Shared Raw Ingredient", "calories": 559, "protein": 30.2, "carbs": 10.7, "fat": 49.0},
+    {"slug": "sunflower-seeds", "name": "Sunflower Seeds", "group": "Shared Raw Ingredient", "calories": 584, "protein": 20.8, "carbs": 20.0, "fat": 51.5},
+    {"slug": "sesame-seeds", "name": "Sesame Seeds", "group": "Shared Raw Ingredient", "calories": 573, "protein": 17.7, "carbs": 23.4, "fat": 49.7},
+    {"slug": "chicken-breast-raw", "name": "Chicken Breast, Raw", "group": "Shared Raw Ingredient", "calories": 120, "protein": 22.5, "carbs": 0.0, "fat": 2.6},
+    {"slug": "chicken-thigh-raw", "name": "Chicken Thigh, Raw", "group": "Shared Raw Ingredient", "calories": 144, "protein": 16.8, "carbs": 0.0, "fat": 8.1},
+    {"slug": "ground-beef-lean-raw", "name": "Ground Beef, Lean, Raw", "group": "Shared Raw Ingredient", "calories": 176, "protein": 20.0, "carbs": 0.0, "fat": 10.0},
+    {"slug": "ground-turkey-raw", "name": "Ground Turkey, Raw", "group": "Shared Raw Ingredient", "calories": 149, "protein": 19.0, "carbs": 0.0, "fat": 8.0},
+    {"slug": "salmon-raw", "name": "Salmon, Raw", "group": "Shared Raw Ingredient", "calories": 208, "protein": 20.4, "carbs": 0.0, "fat": 13.4},
+    {"slug": "tuna-raw", "name": "Tuna, Raw", "group": "Shared Raw Ingredient", "calories": 132, "protein": 28.0, "carbs": 0.0, "fat": 1.3},
+    {"slug": "pork-loin-raw", "name": "Pork Loin, Raw", "group": "Shared Raw Ingredient", "calories": 143, "protein": 21.0, "carbs": 0.0, "fat": 6.0},
+    {"slug": "egg-whole-raw", "name": "Egg, Whole, Raw", "group": "Shared Raw Ingredient", "calories": 143, "protein": 12.6, "carbs": 0.7, "fat": 9.5},
+    {"slug": "egg-white-raw", "name": "Egg White, Raw", "group": "Shared Raw Ingredient", "calories": 52, "protein": 10.9, "carbs": 0.7, "fat": 0.2},
 ]
 
 
@@ -516,6 +674,479 @@ def parse_iso_date(value: str):
         return datetime.strptime(value, "%Y-%m-%d").date()
     except Exception:
         return None
+
+
+def normalize_meal_type(value: str | None):
+    meal_type = (value or "").strip().lower()
+    if meal_type not in MEAL_TYPES:
+        return "snack"
+    return meal_type
+
+
+def meal_type_label(meal_type: str):
+    return normalize_meal_type(meal_type).title()
+
+
+def resolve_tesseract_cmd():
+    configured = app.config.get("TESSERACT_CMD", "").strip()
+    if configured:
+        return configured
+    return shutil.which("tesseract") or ""
+
+
+def label_scan_enabled():
+    if pytesseract is None:
+        return False
+    tesseract_cmd = resolve_tesseract_cmd()
+    if not tesseract_cmd:
+        return False
+    try:
+        pytesseract.pytesseract.tesseract_cmd = tesseract_cmd
+        pytesseract.get_tesseract_version()
+        return True
+    except Exception:
+        return False
+
+
+def get_tesseract_languages():
+    requested = [lang.strip() for lang in app.config.get("TESSERACT_LANGS", "").split("+") if lang.strip()]
+    if not requested:
+        return None
+    try:
+        installed = set(pytesseract.get_languages(config=""))
+    except Exception:
+        installed = set()
+    available = [lang for lang in requested if lang in installed]
+    if available:
+        return "+".join(available)
+    return "+".join(requested)
+
+
+def parse_positive_float(value, label: str, *, allow_zero: bool = False):
+    parsed = to_float(value)
+    if parsed is None:
+        return None, f"{label} is required."
+    if parsed < 0 or (not allow_zero and parsed == 0):
+        comparator = "0 or more" if allow_zero else "more than 0"
+        return None, f"{label} must be {comparator}."
+    return parsed, None
+
+
+def nutrition_redirect(client_id: int, *, msg: str | None = None, err: str | None = None, logged_for: date | None = None):
+    params = {"client_id": client_id, "tab": "nutrition"}
+    if msg:
+        params["msg"] = msg
+    if err:
+        params["err"] = err
+    if logged_for:
+        params["nutrition_date"] = logged_for.isoformat()
+    return redirect(url_for("client_profile", **params))
+
+
+def nutrition_search_session_key(client_id: int):
+    return f"nutrition_search_results_{client_id}"
+
+
+def nutrition_label_draft_session_key(client_id: int):
+    return f"nutrition_label_draft_{client_id}"
+
+
+def set_nutrition_search_results(client_id: int, results: list[dict]):
+    session[nutrition_search_session_key(client_id)] = results
+
+
+def get_nutrition_search_results(client_id: int):
+    return session.get(nutrition_search_session_key(client_id), [])
+
+
+def set_nutrition_label_draft(client_id: int, draft: dict | None):
+    key = nutrition_label_draft_session_key(client_id)
+    if draft:
+        session[key] = draft
+    else:
+        session.pop(key, None)
+
+
+def get_nutrition_label_draft(client_id: int):
+    return session.get(nutrition_label_draft_session_key(client_id), {})
+
+
+def get_accessible_food(client_id: int, food_id: int):
+    return (
+        FoodItem.query
+        .filter(FoodItem.id == food_id)
+        .filter(or_(FoodItem.client_id.is_(None), FoodItem.client_id == client_id))
+        .first()
+    )
+
+
+def parse_decimal_text(value):
+    cleaned = (value or "").strip().replace(",", ".")
+    if not cleaned:
+        return None
+    try:
+        return float(cleaned)
+    except ValueError:
+        return None
+
+
+def normalize_food_search_text(value: str):
+    return re.sub(r"[^a-z0-9]+", " ", (value or "").strip().lower()).strip()
+
+
+def extract_nutrient_value(nutrients, names: tuple[str, ...]):
+    for nutrient in nutrients or []:
+        name = (nutrient.get("nutrientName") or nutrient.get("name") or "").strip().lower()
+        unit = (nutrient.get("unitName") or nutrient.get("unit") or "").strip().lower()
+        value = nutrient.get("value")
+        if value is None:
+            continue
+        if name in names:
+            if "energy" in name and unit not in ("kcal", "kcal/100g"):
+                continue
+            return float(value)
+    return 0.0
+
+
+def http_get_json(url: str, headers: dict | None = None):
+    req = Request(url, headers=headers or {"User-Agent": "TrainerApp/1.0"})
+    with urlopen(req, timeout=12) as resp:
+        body = resp.read().decode("utf-8")
+    return json.loads(body)
+
+
+def fetch_usda_foods(query: str):
+    api_key = app.config.get("USDA_API_KEY", "")
+    if not api_key:
+        raise RuntimeError("USDA_API_KEY is not configured.")
+    params = urlencode({
+        "api_key": api_key,
+        "query": query,
+        "pageSize": 10,
+        "dataType": ["Foundation", "SR Legacy", "Branded"],
+    }, doseq=True)
+    payload = http_get_json(f"https://api.nal.usda.gov/fdc/v1/foods/search?{params}")
+    results = []
+    for food in payload.get("foods", []):
+        nutrients = food.get("foodNutrients", [])
+        calories = extract_nutrient_value(nutrients, ("energy",))
+        protein = extract_nutrient_value(nutrients, ("protein",))
+        carbs = extract_nutrient_value(nutrients, ("carbohydrate, by difference", "carbohydrate"))
+        fat = extract_nutrient_value(nutrients, ("total lipid (fat)", "fat"))
+        if calories <= 0:
+            continue
+        results.append({
+            "name": (food.get("description") or "USDA Food").title(),
+            "brand": food.get("brandOwner") or food.get("brandName") or "USDA",
+            "source": "usda",
+            "source_ref": str(food.get("fdcId") or ""),
+            "barcode": "",
+            "calories_per_100g": round(calories, 1),
+            "protein_per_100g": round(protein, 1),
+            "carbs_per_100g": round(carbs, 1),
+            "fat_per_100g": round(fat, 1),
+        })
+    return results
+
+
+def map_off_product(product: dict):
+    nutriments = product.get("nutriments") or {}
+    calories = parse_decimal_text(str(nutriments.get("energy-kcal_100g") or nutriments.get("energy-kcal") or ""))
+    if calories is None:
+        kj = parse_decimal_text(str(nutriments.get("energy-kj_100g") or ""))
+        calories = round(kj / 4.184, 1) if kj else None
+    protein = parse_decimal_text(str(nutriments.get("proteins_100g") or nutriments.get("proteins") or "")) or 0.0
+    carbs = parse_decimal_text(str(nutriments.get("carbohydrates_100g") or nutriments.get("carbohydrates") or "")) or 0.0
+    fat = parse_decimal_text(str(nutriments.get("fat_100g") or nutriments.get("fat") or "")) or 0.0
+    if calories is None:
+        return None
+    return {
+        "name": (product.get("product_name") or product.get("generic_name") or "Open Food Facts Product").strip(),
+        "brand": (product.get("brands") or "Open Food Facts").strip(),
+        "source": "openfoodfacts",
+        "source_ref": (product.get("_id") or "").strip(),
+        "barcode": (product.get("code") or "").strip(),
+        "calories_per_100g": round(calories, 1),
+        "protein_per_100g": round(protein, 1),
+        "carbs_per_100g": round(carbs, 1),
+        "fat_per_100g": round(fat, 1),
+    }
+
+
+def fetch_open_food_facts_foods(query: str):
+    barcode_query = (query or "").strip()
+    if barcode_query.isdigit():
+        payload = http_get_json(f"https://world.openfoodfacts.org/api/v2/product/{barcode_query}.json")
+        product = payload.get("product") or {}
+        mapped = map_off_product(product)
+        return [mapped] if mapped else []
+
+    params = urlencode({
+        "search_terms": query,
+        "search_simple": 1,
+        "action": "process",
+        "json": 1,
+        "page_size": 10,
+    })
+    payload = http_get_json(f"https://world.openfoodfacts.org/cgi/search.pl?{params}")
+    results = []
+    for product in payload.get("products", []):
+        mapped = map_off_product(product)
+        if mapped:
+            results.append(mapped)
+    return results
+
+
+def seed_reference_foods():
+    desired = {item["slug"]: item for item in RAW_INGREDIENT_LIBRARY}
+    existing = {
+        item.source_ref: item
+        for item in FoodItem.query.filter_by(source="seed").all()
+    }
+
+    changed = 0
+    for slug, food in existing.items():
+        if slug in desired:
+            continue
+        db.session.delete(food)
+        changed += 1
+
+    for slug, item in desired.items():
+        existing_item = existing.get(slug)
+        if not existing_item:
+            db.session.add(FoodItem(
+                client_id=None,
+                name=item["name"],
+                brand=item["group"],
+                source="seed",
+                source_ref=slug,
+                calories_per_100g=item["calories"],
+                protein_per_100g=item["protein"],
+                carbs_per_100g=item["carbs"],
+                fat_per_100g=item["fat"],
+            ))
+            changed += 1
+            continue
+
+        existing_item.client_id = None
+        existing_item.name = item["name"]
+        existing_item.brand = item["group"]
+        existing_item.calories_per_100g = item["calories"]
+        existing_item.protein_per_100g = item["protein"]
+        existing_item.carbs_per_100g = item["carbs"]
+        existing_item.fat_per_100g = item["fat"]
+        changed += 1
+
+    if changed:
+        db.session.commit()
+    return changed
+
+
+def clean_ocr_number(value: str):
+    text = (value or "").strip().replace(" ", "").replace(",", ".")
+    if not text:
+        return None
+    text = text.translate(str.maketrans({
+        "O": "0",
+        "o": "0",
+        "I": "1",
+        "l": "1",
+        "|": "1",
+        "!": "1",
+        "B": "6",
+        "b": "6",
+        "S": "5",
+    }))
+    match = re.search(r"\d+(?:\.\d+)?", text)
+    return parse_decimal_text(match.group(0)) if match else None
+
+
+def line_has_any(line: str, keywords: tuple[str, ...]):
+    return any(keyword in line for keyword in keywords)
+
+
+def extract_macro_values_from_line(line: str):
+    values = []
+    candidates = re.findall(r"([0-9OIl!|BS.,\s]{1,8})\s*(?:g|q|9|\u0433|\u0431)\b", line, re.IGNORECASE)
+    for candidate in reversed(candidates):
+        value = clean_ocr_number(candidate)
+        if value is not None:
+            values.append(value)
+    fallback = re.search(r"([0-9OIl!|BSb.,\s]{1,8})\s*$", line, re.IGNORECASE)
+    if fallback:
+        value = clean_ocr_number(fallback.group(1))
+        if value is not None:
+            if value > 100:
+                value = clean_ocr_number(str(int(value))[:-1])
+            if value <= 100:
+                values.append(value)
+    return values
+
+
+def extract_macro_value_from_line(line: str):
+    values = extract_macro_values_from_line(line)
+    return values[0] if values else None
+
+
+def choose_ocr_value(candidates: list[float], *, require_consensus: bool = False):
+    cleaned = []
+    for value in candidates:
+        if value is None:
+            continue
+        rounded = round(float(value), 1)
+        cleaned.append(rounded)
+    if not cleaned:
+        return None
+    counts = {}
+    for value in cleaned:
+        counts[value] = counts.get(value, 0) + 1
+    best_value, best_count = max(counts.items(), key=lambda item: (item[1], -abs(item[0])))
+    if require_consensus and len(counts) > 1 and best_count < 2:
+        return None
+    if require_consensus and len(counts) > 1 and best_count / len(cleaned) < 0.5:
+        return None
+    return best_value
+
+
+def parse_label_text_by_rows(label_text: str):
+    candidates = {"calories": [], "protein": [], "carbs": [], "fat": []}
+    rows = [row.strip().lower() for row in re.split(r"[\n\r]+", label_text or "") if row.strip()]
+    for row in rows:
+        kcal_match = re.search(r"(\d[\d\s.,]{0,7})\s*kcal", row, re.IGNORECASE)
+        if kcal_match:
+            candidates["calories"].append(clean_ocr_number(kcal_match.group(1)))
+
+        if (
+            line_has_any(row, ("fat", "masti", "mactu", "macru", "\u043c\u0430\u0441\u0442\u0438", "yndyr"))
+            and not line_has_any(row, ("saturated", "\u0437\u0430\u0441\u0438\u0442", "ngop"))
+        ):
+            candidates["fat"].extend(extract_macro_values_from_line(row))
+
+        if (
+            line_has_any(row, (
+                "carb",
+                "karbo",
+                "ugljeni",
+                "jagle",
+                "\u0458\u0430\u0433\u043b\u0435",
+                "\u0458armex",
+            ))
+            and not line_has_any(row, ("sugar", "\u0448\u0435\u045c\u0435\u0440", "sheqer"))
+        ):
+            candidates["carbs"].extend(extract_macro_values_from_line(row))
+
+        if (
+            line_has_any(row, ("protein", "proteina", "proteini", "\u043f\u0440\u043e\u0442\u0435\u0438\u043d", "\u0440\u043e\u0442\u0435\u0438\u043d"))
+        ):
+            candidates["protein"].extend(extract_macro_values_from_line(row))
+    return {
+        "calories": choose_ocr_value(candidates["calories"]),
+        "protein": choose_ocr_value(candidates["protein"], require_consensus=True),
+        "carbs": choose_ocr_value(candidates["carbs"], require_consensus=True),
+        "fat": choose_ocr_value(candidates["fat"], require_consensus=True),
+    }
+
+
+def parse_label_text(label_text: str):
+    text = (label_text or "").lower()
+    values = parse_label_text_by_rows(label_text)
+    for key, patterns in LABEL_REGEX_PATTERNS.items():
+        if values.get(key) is not None:
+            continue
+        for pattern in patterns:
+            match = re.search(pattern, text, re.IGNORECASE)
+            if not match:
+                continue
+            values[key] = parse_decimal_text(match.group(1))
+            if values[key] is not None:
+                break
+        if key not in values:
+            values[key] = None
+    return values
+
+
+def build_label_ocr_images(image):
+    base = ImageOps.exif_transpose(image)
+    images = [base]
+    for angle in (-3, -2, -1, 1, 2):
+        images.append(base.rotate(angle, expand=True, fillcolor="white"))
+
+    processed = []
+    for variant in images:
+        grayscale = ImageOps.grayscale(variant)
+        autocontrast = ImageOps.autocontrast(grayscale)
+        scale = 3 if max(autocontrast.size) < 1600 else 2
+        enlarged = autocontrast.resize(
+            (autocontrast.width * scale, autocontrast.height * scale),
+            Image.Resampling.LANCZOS,
+        ).filter(ImageFilter.SHARPEN)
+        threshold = enlarged.point(lambda pixel: 255 if pixel > 150 else 0)
+        processed.extend([variant, enlarged, threshold])
+    return processed
+
+
+def scan_label_image_text(image):
+    lang = get_tesseract_languages()
+    configs = ("--psm 6", "--psm 4", "--psm 11")
+    texts = []
+    for ocr_image in build_label_ocr_images(image):
+        for config in configs:
+            text = pytesseract.image_to_string(ocr_image, lang=lang, config=config)
+            if text.strip():
+                texts.append(text)
+    return "\n".join(texts)
+
+
+def build_nutrition_summary(logs: list[FoodLogEntry], calorie_target: int | None):
+    totals = {
+        "calories": round(sum(log.calories for log in logs), 1),
+        "protein": round(sum(log.protein for log in logs), 1),
+        "carbs": round(sum(log.carbs for log in logs), 1),
+        "fat": round(sum(log.fat for log in logs), 1),
+    }
+    meal_sections = []
+    for meal_type in MEAL_TYPES:
+        meal_logs = [log for log in logs if log.meal_type == meal_type]
+        if not meal_logs:
+            continue
+        meal_sections.append({
+            "key": meal_type,
+            "label": meal_type_label(meal_type),
+            "items": meal_logs,
+            "calories": round(sum(log.calories for log in meal_logs), 1),
+        })
+
+    goal = calorie_target or 0
+    if goal > 0:
+        ratio = totals["calories"] / goal
+        percent = int(round(ratio * 100))
+        ring_percent = max(0, min(percent, 100))
+        remaining = round(goal - totals["calories"], 1)
+        if ratio < 0.85:
+            tone = "safe"
+            status = f"{remaining:.0f} kcal left"
+        elif ratio <= 1:
+            tone = "near"
+            status = f"{remaining:.0f} kcal left"
+        else:
+            tone = "over"
+            status = f"{abs(remaining):.0f} kcal over"
+    else:
+        percent = 0
+        ring_percent = 0
+        tone = "safe"
+        status = "Set a daily target"
+
+    return {
+        "totals": totals,
+        "meal_sections": meal_sections,
+        "goal": goal,
+        "percent": percent,
+        "ring_percent": ring_percent,
+        "tone": tone,
+        "status": status,
+        "has_logs": bool(logs),
+    }
 
 
 def allowed_photo_file(filename: str):
@@ -902,7 +1533,9 @@ def client_profile(client_id):
             return "Forbidden", 403
 
     client = get_or_404(Client, client_id)
+    seed_reference_foods()
     tab = request.args.get("tab", "info")
+    nutrition_date = parse_iso_date(request.args.get("nutrition_date")) or date.today()
     err = request.args.get("err")
     msg = request.args.get("msg")
     viewer = current_user()
@@ -1063,6 +1696,20 @@ def client_profile(client_id):
         .order_by(ClientGoal.created_at.desc(), ClientGoal.id.desc())
         .all()
     )
+    foods = (
+        FoodItem.query
+        .filter(or_(FoodItem.client_id.is_(None), FoodItem.client_id == client.id))
+        .order_by(FoodItem.name.asc(), FoodItem.brand.asc(), FoodItem.id.asc())
+        .all()
+    )
+    food_logs = (
+        FoodLogEntry.query.filter_by(client_id=client.id, logged_for=nutrition_date)
+        .order_by(FoodLogEntry.created_at.desc(), FoodLogEntry.id.desc())
+        .all()
+    )
+    nutrition_summary = build_nutrition_summary(food_logs, client.daily_calorie_target)
+    nutrition_search_results = get_nutrition_search_results(client.id)
+    nutrition_label_draft = get_nutrition_label_draft(client.id)
     if is_admin():
         notes = (
             ClientNote.query.filter_by(client_id=client.id)
@@ -1127,6 +1774,13 @@ def client_profile(client_id):
         pending_today_appointments=pending_today_appointments,
         photos=photos,
         goals=goals,
+        foods=foods,
+        food_logs=food_logs,
+        nutrition_date=nutrition_date,
+        nutrition_summary=nutrition_summary,
+        nutrition_search_results=nutrition_search_results,
+        nutrition_label_draft=nutrition_label_draft,
+        label_scan_enabled=label_scan_enabled(),
         client_user=client_user,
         client_online_now=client_online_now,
         client_last_seen_display=client_last_seen_display,
@@ -1594,6 +2248,278 @@ def delete_client_goal(client_id, goal_id):
     db.session.delete(g)
     db.session.commit()
     return redirect(url_for("client_profile", client_id=client_id, tab="info", msg="Goal deleted."))
+
+
+@app.route("/client/<int:client_id>/nutrition/target", methods=["POST"])
+@login_required
+def update_calorie_target(client_id):
+    if not is_admin() and current_client_id() != client_id:
+        return "Forbidden", 403
+
+    client = get_or_404(Client, client_id)
+    target_raw = (request.form.get("daily_calorie_target") or "").strip()
+    nutrition_date = parse_iso_date(request.form.get("nutrition_date")) or date.today()
+    if not target_raw:
+        client.daily_calorie_target = None
+        db.session.commit()
+        return nutrition_redirect(client.id, msg="Daily calorie target cleared.", logged_for=nutrition_date)
+
+    try:
+        target = int(target_raw)
+    except ValueError:
+        return nutrition_redirect(client.id, err="Daily calorie target must be a whole number.", logged_for=nutrition_date)
+    if target <= 0:
+        return nutrition_redirect(client.id, err="Daily calorie target must be greater than 0.", logged_for=nutrition_date)
+
+    client.daily_calorie_target = target
+    db.session.commit()
+    return nutrition_redirect(client.id, msg="Daily calorie target updated.", logged_for=nutrition_date)
+
+
+@app.route("/client/<int:client_id>/nutrition/foods/add", methods=["POST"])
+@login_required
+def add_food_item(client_id):
+    if not is_admin() and current_client_id() != client_id:
+        return "Forbidden", 403
+
+    client = get_or_404(Client, client_id)
+    nutrition_date = parse_iso_date(request.form.get("nutrition_date")) or date.today()
+    name = (request.form.get("name") or "").strip()
+    if not name:
+        return nutrition_redirect(client.id, err="Food name is required.", logged_for=nutrition_date)
+
+    calories_per_100g, err = parse_positive_float(request.form.get("calories_per_100g"), "Calories per 100g")
+    if err:
+        return nutrition_redirect(client.id, err=err, logged_for=nutrition_date)
+
+    protein_per_100g, err = parse_positive_float(request.form.get("protein_per_100g"), "Protein per 100g", allow_zero=True)
+    if err:
+        return nutrition_redirect(client.id, err=err, logged_for=nutrition_date)
+    carbs_per_100g, err = parse_positive_float(request.form.get("carbs_per_100g"), "Carbs per 100g", allow_zero=True)
+    if err:
+        return nutrition_redirect(client.id, err=err, logged_for=nutrition_date)
+    fat_per_100g, err = parse_positive_float(request.form.get("fat_per_100g"), "Fat per 100g", allow_zero=True)
+    if err:
+        return nutrition_redirect(client.id, err=err, logged_for=nutrition_date)
+
+    food = FoodItem(
+        client_id=client.id,
+        name=name[:120],
+        brand=((request.form.get("brand") or "").strip() or None),
+        serving_label=((request.form.get("serving_label") or "").strip() or None),
+        source="manual",
+        calories_per_100g=calories_per_100g,
+        protein_per_100g=protein_per_100g,
+        carbs_per_100g=carbs_per_100g,
+        fat_per_100g=fat_per_100g,
+    )
+    db.session.add(food)
+    db.session.commit()
+    set_nutrition_label_draft(client.id, None)
+    return nutrition_redirect(client.id, msg="Food saved to your library.", logged_for=nutrition_date)
+
+
+@app.route("/client/<int:client_id>/nutrition/search", methods=["POST"])
+@login_required
+def search_food_sources(client_id):
+    if not is_admin() and current_client_id() != client_id:
+        return "Forbidden", 403
+
+    client = get_or_404(Client, client_id)
+    seed_reference_foods()
+    logged_for = parse_iso_date(request.form.get("nutrition_date")) or date.today()
+    source = (request.form.get("source") or "").strip().lower()
+    query = (request.form.get("query") or "").strip()
+    if not query:
+        return nutrition_redirect(client.id, err="Enter a food or barcode to search.", logged_for=logged_for)
+
+    try:
+        if source == "usda":
+            results = fetch_usda_foods(query)
+        elif source == "openfoodfacts":
+            results = fetch_open_food_facts_foods(query)
+        else:
+            return nutrition_redirect(client.id, err="Unknown food source.", logged_for=logged_for)
+    except RuntimeError as exc:
+        return nutrition_redirect(client.id, err=str(exc), logged_for=logged_for)
+    except (HTTPError, URLError, TimeoutError, json.JSONDecodeError):
+        return nutrition_redirect(client.id, err="Could not reach the external food source right now.", logged_for=logged_for)
+
+    set_nutrition_search_results(client.id, results)
+    if not results:
+        return nutrition_redirect(client.id, msg="No matching foods found.", logged_for=logged_for)
+    return nutrition_redirect(client.id, msg=f"Loaded {len(results)} result(s).", logged_for=logged_for)
+
+
+@app.route("/client/<int:client_id>/nutrition/import", methods=["POST"])
+@login_required
+def import_food_search_result(client_id):
+    if not is_admin() and current_client_id() != client_id:
+        return "Forbidden", 403
+
+    client = get_or_404(Client, client_id)
+    logged_for = parse_iso_date(request.form.get("nutrition_date")) or date.today()
+    try:
+        idx = int(request.form.get("result_index") or "-1")
+    except ValueError:
+        idx = -1
+    results = get_nutrition_search_results(client.id)
+    if idx < 0 or idx >= len(results):
+        return nutrition_redirect(client.id, err="That search result is no longer available.", logged_for=logged_for)
+
+    item = results[idx]
+    existing = (
+        FoodItem.query
+        .filter(FoodItem.client_id.is_(None))
+        .filter_by(source=item["source"], source_ref=item.get("source_ref") or None)
+        .first()
+    )
+    if existing:
+        return nutrition_redirect(client.id, msg="That food is already in the library.", logged_for=logged_for)
+
+    food = FoodItem(
+        client_id=None,
+        name=item["name"][:120],
+        brand=(item.get("brand") or None),
+        source=item["source"],
+        source_ref=(item.get("source_ref") or None),
+        barcode=(item.get("barcode") or None),
+        calories_per_100g=item["calories_per_100g"],
+        protein_per_100g=item["protein_per_100g"],
+        carbs_per_100g=item["carbs_per_100g"],
+        fat_per_100g=item["fat_per_100g"],
+    )
+    db.session.add(food)
+    db.session.commit()
+    return nutrition_redirect(client.id, msg="Food imported into the shared library.", logged_for=logged_for)
+
+
+@app.route("/client/<int:client_id>/nutrition/logs/add", methods=["POST"])
+@login_required
+def add_food_log_entry(client_id):
+    if not is_admin() and current_client_id() != client_id:
+        return "Forbidden", 403
+
+    client = get_or_404(Client, client_id)
+    logged_for = parse_iso_date(request.form.get("logged_for")) or date.today()
+
+    food_id_raw = (request.form.get("food_id") or "").strip()
+    if not food_id_raw:
+        search_name = normalize_food_search_text(request.form.get("food_name") or "")
+        if search_name:
+            matched_food = next(
+                (
+                    item for item in (
+                        FoodItem.query
+                        .filter(or_(FoodItem.client_id.is_(None), FoodItem.client_id == client.id))
+                        .order_by(FoodItem.name.asc(), FoodItem.brand.asc(), FoodItem.id.asc())
+                        .all()
+                    )
+                    if search_name in normalize_food_search_text(f"{item.name} {item.brand or ''}")
+                ),
+                None,
+            )
+            food_id_raw = str(matched_food.id) if matched_food else ""
+    try:
+        food_id = int(food_id_raw or "0")
+    except ValueError:
+        food_id = 0
+    food = get_accessible_food(client.id, food_id)
+    if not food:
+        return nutrition_redirect(client.id, err="Select a food from your library first.", logged_for=logged_for)
+
+    quantity_grams, err = parse_positive_float(request.form.get("quantity_grams"), "Quantity in grams")
+    if err:
+        return nutrition_redirect(client.id, err=err, logged_for=logged_for)
+
+    factor = quantity_grams / 100
+    food_label = food.name if not food.brand else f"{food.name} ({food.brand})"
+    log_entry = FoodLogEntry(
+        client_id=client.id,
+        food_id=food.id,
+        logged_for=logged_for,
+        meal_type=normalize_meal_type(request.form.get("meal_type")),
+        quantity_grams=quantity_grams,
+        food_name=food_label[:160],
+        calories=round(food.calories_per_100g * factor, 1),
+        protein=round(food.protein_per_100g * factor, 1),
+        carbs=round(food.carbs_per_100g * factor, 1),
+        fat=round(food.fat_per_100g * factor, 1),
+        note=((request.form.get("note") or "").strip() or None),
+    )
+    db.session.add(log_entry)
+    db.session.commit()
+    return nutrition_redirect(client.id, msg="Food logged.", logged_for=logged_for)
+
+
+@app.route("/client/<int:client_id>/nutrition/scan-label", methods=["POST"])
+@login_required
+def scan_food_label(client_id):
+    if not is_admin() and current_client_id() != client_id:
+        return "Forbidden", 403
+
+    client = get_or_404(Client, client_id)
+    logged_for = parse_iso_date(request.form.get("nutrition_date")) or date.today()
+    if not label_scan_enabled():
+        return nutrition_redirect(
+            client.id,
+            err="Label OCR is not enabled yet. Install pytesseract and the Tesseract OCR engine first.",
+            logged_for=logged_for,
+        )
+
+    label_file = request.files.get("label_photo")
+    if not label_file or not label_file.filename:
+        return nutrition_redirect(client.id, err="Choose a nutrition label image first.", logged_for=logged_for)
+    if not allowed_photo_file(label_file.filename):
+        return nutrition_redirect(client.id, err="Use a JPG, PNG, or WEBP image for label scanning.", logged_for=logged_for)
+
+    label_name = (request.form.get("label_name") or "").strip()
+    brand = (request.form.get("label_brand") or "").strip() or None
+    safe_name = secure_filename(label_file.filename)
+    unique_name = f"{uuid.uuid4().hex}_{safe_name}"
+    target_path = os.path.join(app.config["UPLOAD_LABEL_DIR"], unique_name)
+    label_file.save(target_path)
+
+    try:
+        with Image.open(target_path) as image:
+            text = scan_label_image_text(image)
+    except Exception:
+        return nutrition_redirect(client.id, err="Could not read that label image.", logged_for=logged_for)
+
+    parsed = parse_label_text(text)
+    if not label_name:
+        label_name = os.path.splitext(safe_name)[0].replace("_", " ").strip() or "Scanned Label Food"
+
+    draft = {
+        "name": label_name[:120],
+        "brand": brand or "",
+        "serving_label": "Scanned from label",
+        "calories_per_100g": "" if parsed["calories"] is None else str(round(parsed["calories"], 1)),
+        "protein_per_100g": "" if parsed["protein"] is None else str(round(parsed["protein"], 1)),
+        "carbs_per_100g": "" if parsed["carbs"] is None else str(round(parsed["carbs"], 1)),
+        "fat_per_100g": "" if parsed["fat"] is None else str(round(parsed["fat"], 1)),
+        "ocr_text": text[:4000],
+    }
+    set_nutrition_label_draft(client.id, draft)
+
+    if parsed["calories"] is None and parsed["protein"] is None and parsed["carbs"] is None and parsed["fat"] is None:
+        return nutrition_redirect(client.id, err="Could not read the label cleanly. Review the manual form below and fill in the missing values.", logged_for=logged_for)
+    return nutrition_redirect(client.id, msg="Label scanned. Review the custom food form below and save the values.", logged_for=logged_for)
+
+
+@app.route("/client/<int:client_id>/nutrition/logs/delete/<int:log_id>", methods=["POST"])
+@login_required
+def delete_food_log_entry(client_id, log_id):
+    if not is_admin() and current_client_id() != client_id:
+        return "Forbidden", 403
+
+    log_entry = get_or_404(FoodLogEntry, log_id)
+    if log_entry.client_id != client_id:
+        abort(404)
+    logged_for = log_entry.logged_for
+    db.session.delete(log_entry)
+    db.session.commit()
+    return nutrition_redirect(client_id, msg="Logged food removed.", logged_for=logged_for)
 
 
 @app.route("/client/<int:client_id>/change-password", methods=["POST"], endpoint="change_client_password")

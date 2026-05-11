@@ -19,20 +19,31 @@ Database URL:
 - Preferred: set `TRAINER_DATABASE_URI` to Railway Postgres connection string.
 - Alternative: rely on Railway `DATABASE_URL` (already supported by app code).
 
+Optional nutrition/OCR variables:
+- `USDA_API_KEY=<your USDA FoodData Central key>`
+- `TESSERACT_CMD=/usr/bin/tesseract` (already set in the Docker image, only override if needed)
+- `TESSERACT_LANGS=eng+mkd+sqi` (English, Macedonian, Albanian; already set in the Docker image)
+
 ## 3) Build/start
-Railway will install `requirements.txt`.
-Start command is read from `Procfile`:
+Railway should build from the included `Dockerfile`.
+That image installs:
+- Python dependencies from `requirements.txt`
+- `tesseract-ocr`
+- English OCR data
+- Macedonian OCR data
+- Albanian OCR data
 
-`web: gunicorn wsgi:app --workers 2 --bind 0.0.0.0:${PORT}`
+The container start command automatically runs:
+- `flask db upgrade`
+- `flask seed-admin`
+- `gunicorn`
 
-## 4) Run migrations
-Before first production use, run in Railway app shell:
+## 4) Manual one-time checks
+After the first deploy:
 
-```bash
-python -m flask --app app db upgrade
-```
-
-If this DB existed before migrations:
+- Verify the app service is actually using the `Dockerfile`
+- Confirm your PostgreSQL variables are attached
+- If this database existed before migrations, run once in the Railway shell:
 
 ```bash
 python -m flask --app app db stamp head
@@ -42,3 +53,5 @@ python -m flask --app app db stamp head
 - Open `/ping` and confirm `PING OK`
 - Log in with admin
 - Verify add/edit/session/payment flows
+- Verify USDA import works in the Nutrition tab
+- Verify label scan works in the Nutrition tab
