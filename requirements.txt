@@ -5,6 +5,7 @@ SQLAlchemy==2.0.46
 Werkzeug==3.1.5
 waitress==3.0.2
 gunicorn==23.0.0
+Pillow
 reportlab==4.2.5
 psycopg[binary]==3.2.13
 pytesseract==0.3.13
