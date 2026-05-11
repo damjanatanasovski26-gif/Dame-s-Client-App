@@ -1087,7 +1087,7 @@ def build_label_ocr_images(image):
 
 def scan_label_image_text(image):
     lang = get_tesseract_languages()
-    configs = ("--psm 6",)
+    configs = ("--psm 6", "--psm 4")
     texts = []
     for ocr_image in build_label_ocr_images(image):
         for config in configs:
