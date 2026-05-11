@@ -39,7 +39,7 @@
 <div class="nutrition-grid">
   <div class="card">
     <h3>Import Food Data</h3>
-    <div class="muted" style="margin-bottom:12px;">Search USDA for base foods or Open Food Facts for European and barcode-heavy packaged products.</div>
+    <div class="muted" style="margin-bottom:12px;">Search for store bought products.</div>
     <form class="form" action="{{ url_for('search_food_sources', client_id=client.id) }}" method="POST">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="nutrition_date" value="{{ nutrition_date.isoformat() }}">
@@ -54,7 +54,7 @@
         </div>
         <div>
           <label class="label">Food or barcode</label>
-          <input class="input" name="query" maxlength="120" placeholder="Chicken breast, skyr, 5312345678901" required>
+          <input class="input" name="query" maxlength="120" placeholder="Chicken breast, Ground meat, Steak" required>
         </div>
       </div>
 
