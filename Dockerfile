@@ -19,8 +19,7 @@ RUN pip install --upgrade pip && pip install -r requirements.txt
 
 COPY . .
 
-ENV TRAINER_APP_ENV=production \
-    FLASK_APP=app \
+ENV FLASK_APP=app \
     TESSERACT_CMD=/usr/bin/tesseract \
     TESSERACT_LANGS=eng+mkd+sqi
 
