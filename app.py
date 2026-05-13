@@ -1065,36 +1065,53 @@ def parse_label_text(label_text: str):
     return values
 
 
+def score_label_text_candidates(label_text: str):
+    parsed = parse_label_text(label_text)
+    found_values = sum(1 for value in parsed.values() if value is not None)
+    digit_count = len(re.findall(r"\d", label_text or ""))
+    return found_values, digit_count, -len(label_text or "")
+
+
 def build_label_ocr_images(image):
     base = ImageOps.exif_transpose(image)
-    images = [base]
+    variants = [base]
     for angle in (-2, 2):
-        images.append(base.rotate(angle, expand=True, fillcolor="white"))
+        variants.append(base.rotate(angle, expand=True, fillcolor="white"))
 
     processed = []
-    for variant in images:
+    for variant in variants:
         grayscale = ImageOps.grayscale(variant)
         autocontrast = ImageOps.autocontrast(grayscale)
         scale = 2 if max(autocontrast.size) < 1600 else 1
         enlarged = autocontrast.resize(
             (autocontrast.width * scale, autocontrast.height * scale),
             Image.Resampling.LANCZOS,
-        ).filter(ImageFilter.SHARPEN)
-        threshold = enlarged.point(lambda pixel: 255 if pixel > 150 else 0)
+        ).filter(ImageFilter.UnsharpMask(radius=1, percent=150, threshold=3))
+        threshold = enlarged.point(lambda pixel: 255 if pixel > 160 else 0)
         processed.extend([enlarged, threshold])
     return processed
 
 
 def scan_label_image_text(image):
     lang = get_tesseract_languages()
-    configs = ("--psm 6", "--psm 4")
-    texts = []
+    base_config = "--oem 1"
+    configs = (f"{base_config} --psm 6", f"{base_config} --psm 4")
+
+    best_text = ""
+    best_score = (-1, -1, 0)
     for ocr_image in build_label_ocr_images(image):
         for config in configs:
             text = pytesseract.image_to_string(ocr_image, lang=lang, config=config)
-            if text.strip():
-                texts.append(text)
-    return "\n".join(texts)
+            if not text.strip():
+                continue
+            score = score_label_text_candidates(text)
+            if score > best_score:
+                best_score = score
+                best_text = text
+            if score[0] == 4:
+                return text.strip()
+
+    return best_text.strip()
 
 
 def build_nutrition_summary(logs: list[FoodLogEntry], calorie_target: int | None):
