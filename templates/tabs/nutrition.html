@@ -36,53 +36,48 @@
   </div>
 </div>
 
-<div class="nutrition-grid">
-  <div class="card">
-    <h3>Import Food Data</h3>
-    <div class="muted" style="margin-bottom:12px;">Search for store bought products.</div>
-    <form class="form" action="{{ url_for('search_food_sources', client_id=client.id) }}" method="POST">
+<div class="card nutrition-day-card">
+  <div class="nutrition-toolbar">
+    <div>
+      <div class="nutrition-kicker">Nutrition Day</div>
+      <h3 style="margin-bottom:8px;">{{ nutrition_date.strftime("%d/%m/%Y") }}</h3>
+      <div class="muted">Review your daily goal and date, then log food without clutter.</div>
+    </div>
+    <div class="nutrition-goal-summary">
+      <div>
+        <div class="nutrition-goal-label">Daily goal</div>
+        <div class="nutrition-goal-value">{{ client.daily_calorie_target or "Not set" }} kcal</div>
+      </div>
+      <button
+        type="button"
+        class="btn secondary"
+        id="toggleNutritionGoalEdit"
+        data-closed-text="{% if client.daily_calorie_target %}Change target{% else %}Set target{% endif %}"
+        data-open-text="Hide target"
+      >
+        {% if client.daily_calorie_target %}Change target{% else %}Set target{% endif %}
+      </button>
+    </div>
+  </div>
+  <div class="nutrition-goal-form-wrap">
+    <form class="form nutrition-goal-form{% if not client.daily_calorie_target %} nutrition-goal-form--expanded{% endif %}" id="nutritionGoalForm" action="{{ url_for('update_calorie_target', client_id=client.id) }}" method="POST">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="nutrition_date" value="{{ nutrition_date.isoformat() }}">
-
-      <div class="grid-2">
-        <div>
-          <label class="label">Source</label>
-          <select class="input" name="source">
-            <option value="usda">USDA</option>
-            <option value="openfoodfacts">Open Food Facts</option>
-          </select>
-        </div>
-        <div>
-          <label class="label">Food or barcode</label>
-          <input class="input" name="query" maxlength="120" placeholder="Chicken breast, Ground meat, Steak" required>
-        </div>
+      <div class="nutrition-date-form">
+        <input class="input" type="date" name="nutrition_date" value="{{ nutrition_date.isoformat() }}">
+        <button class="btn secondary" type="submit">Open Day</button>
       </div>
-
-      <button class="btn secondary" type="submit">Search Source</button>
+      <label class="label">Daily calorie target</label>
+      <div class="nutrition-inline-form">
+        <input class="input" type="number" name="daily_calorie_target" min="1" placeholder="e.g. 2200" value="{{ client.daily_calorie_target or '' }}">
+        <button class="btn" type="submit">Save target</button>
+      </div>
     </form>
-
-    {% if nutrition_search_results %}
-      <div class="nutrition-search-results">
-        {% for result in nutrition_search_results %}
-          <div class="nutrition-search-card">
-            <div>
-              <div><b>{{ result.name }}</b>{% if result.brand %} <span class="muted">| {{ result.brand }}</span>{% endif %}</div>
-              <div class="muted">{{ result.calories_per_100g }} kcal | {{ result.protein_per_100g }}P / {{ result.carbs_per_100g }}C / {{ result.fat_per_100g }}F per 100g</div>
-              {% if result.barcode %}<div class="muted">Barcode: {{ result.barcode }}</div>{% endif %}
-            </div>
-            <form action="{{ url_for('import_food_search_result', client_id=client.id) }}" method="POST" style="margin:0;">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <input type="hidden" name="nutrition_date" value="{{ nutrition_date.isoformat() }}">
-              <input type="hidden" name="result_index" value="{{ loop.index0 }}">
-              <button class="btn" type="submit">Import</button>
-            </form>
-          </div>
-        {% endfor %}
-      </div>
-    {% endif %}
   </div>
+</div>
 
-  <div class="card">
+<div class="nutrition-grid">
+  <div class="card nutrition-card-highlight">
     <h3>Scan Nutrition Label</h3>
     <div class="muted" style="margin-bottom:12px;">
       Upload a label photo to extract calories, protein, carbs, and fat per 100g.
@@ -92,130 +87,127 @@
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="nutrition_date" value="{{ nutrition_date.isoformat() }}">
       <div class="grid-2">
-        <input class="input" name="label_name" maxlength="120" placeholder="Product name">
-        <input class="input" name="label_brand" maxlength="120" placeholder="Brand (optional)">
+        <div>
+          <label class="label">Product name</label>
+          <input class="input" name="label_name" maxlength="120" placeholder="Product name">
+        </div>
+        <div>
+          <label class="label">Brand</label>
+          <input class="input" name="label_brand" maxlength="120" placeholder="Brand (optional)">
+        </div>
       </div>
-      <input class="input" type="file" name="label_photo" accept=".jpg,.jpeg,.png,.webp" {% if not label_scan_enabled %}disabled{% endif %} required>
+      <div>
+        <label class="label">Label photo</label>
+        <input class="input" type="file" name="label_photo" accept=".jpg,.jpeg,.png,.webp" {% if not label_scan_enabled %}disabled{% endif %} required>
+      </div>
       <button class="btn secondary" type="submit" {% if not label_scan_enabled %}disabled{% endif %}>Scan Label</button>
     </form>
   </div>
-</div>
 
-<div class="card">
-  <div class="nutrition-toolbar">
-    <div>
-      <h3 style="margin-bottom:6px;">Nutrition Day</h3>
-      <div class="muted">Switch day, set a calorie goal, and review the total before logging more food.</div>
-    </div>
-    <form class="nutrition-date-form" action="{{ url_for('client_profile', client_id=client.id) }}" method="GET">
-      <input type="hidden" name="tab" value="nutrition">
-      <input class="input" type="date" name="nutrition_date" value="{{ nutrition_date.isoformat() }}">
-      <button class="btn secondary" type="submit">Open Day</button>
-    </form>
-  </div>
+  <div class="nutrition-right-column">
+    <div class="card">
+      <h3>Log Food</h3>
+      <form id="nutritionLogForm" class="form" action="{{ url_for('add_food_log_entry', client_id=client.id) }}" method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="logged_for" value="{{ nutrition_date.isoformat() }}">
+        <input type="hidden" name="food_id" id="nutritionFoodId">
 
-  <form class="form" action="{{ url_for('update_calorie_target', client_id=client.id) }}" method="POST" style="max-width:460px; margin-top:14px;">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <input type="hidden" name="nutrition_date" value="{{ nutrition_date.isoformat() }}">
-    <label class="label">Daily calorie target</label>
-    <div class="nutrition-inline-form">
-      <input class="input" type="number" name="daily_calorie_target" min="1" placeholder="e.g. 2200" value="{{ client.daily_calorie_target or '' }}">
-      <button class="btn" type="submit">Save Target</button>
-    </div>
-  </form>
-</div>
+        <label class="label">Food</label>
+        <input
+          class="input"
+          type="search"
+          id="nutritionFoodSearch"
+          name="food_name"
+          list="nutritionFoodsList"
+          placeholder="Search saved foods"
+          autocomplete="off"
+          required
+        >
+        <datalist id="nutritionFoodsList">
+          {% for food in foods %}
+            <option
+              value="{{ food.name }}{% if food.brand %} - {{ food.brand }}{% endif %}"
+              data-food-id="{{ food.id }}"
+            >
+              {{ food.calories_per_100g|round|int }} kcal / 100g
+            </option>
+          {% endfor %}
+        </datalist>
+        <div class="muted" id="nutritionFoodHint">Choose a saved item from the search list.</div>
 
-<div class="nutrition-grid">
-  <div class="card">
-    <h3>Log Food</h3>
-    <form id="nutritionLogForm" class="form" action="{{ url_for('add_food_log_entry', client_id=client.id) }}" method="POST">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <input type="hidden" name="logged_for" value="{{ nutrition_date.isoformat() }}">
-      <input type="hidden" name="food_id" id="nutritionFoodId">
-
-      <label class="label">Food</label>
-      <input
-        class="input"
-        type="search"
-        id="nutritionFoodSearch"
-        name="food_name"
-        list="nutritionFoodsList"
-        placeholder="Search saved foods"
-        autocomplete="off"
-        required
-      >
-      <datalist id="nutritionFoodsList">
-        {% for food in foods %}
-          <option
-            value="{{ food.name }}{% if food.brand %} - {{ food.brand }}{% endif %}"
-            data-food-id="{{ food.id }}"
-          >
-            {{ food.calories_per_100g|round|int }} kcal / 100g
-          </option>
-        {% endfor %}
-      </datalist>
-      <div class="muted" id="nutritionFoodHint">Choose a saved item from the search list.</div>
-
-      <div class="grid-2">
-        <div>
-          <label class="label">Meal</label>
-          <select class="input" name="meal_type">
-            <option value="breakfast">Breakfast</option>
-            <option value="lunch">Lunch</option>
-            <option value="dinner">Dinner</option>
-            <option value="snack" selected>Snack</option>
-          </select>
+        <div class="grid-2">
+          <div>
+            <label class="label">Meal</label>
+            <select class="input" name="meal_type">
+              <option value="breakfast">Breakfast</option>
+              <option value="lunch">Lunch</option>
+              <option value="dinner">Dinner</option>
+              <option value="snack" selected>Snack</option>
+            </select>
+          </div>
+          <div>
+            <label class="label">Quantity (g)</label>
+            <input class="input" type="number" name="quantity_grams" min="1" step="0.1" placeholder="e.g. 150" required>
+          </div>
         </div>
-        <div>
-          <label class="label">Quantity (g)</label>
-          <input class="input" type="number" name="quantity_grams" min="1" step="0.1" placeholder="e.g. 150" required>
-        </div>
-      </div>
 
-      <label class="label">Note</label>
-      <input class="input" name="note" maxlength="200" placeholder="Optional note (post workout, pre-bed, etc.)">
-      <button class="btn" type="submit">Log Food</button>
-    </form>
+        <label class="label">Note</label>
+        <input class="input" name="note" maxlength="200" placeholder="Optional note (post workout, pre-bed, etc.)">
+        <button class="btn" type="submit">Log Food</button>
+      </form>
 
-    {% if not foods %}
-      <div class="empty-state" style="margin-top:12px;">No saved foods yet. Add one below first.</div>
-    {% endif %}
-  </div>
-
-  <div class="card">
-    <h3>Save Custom Food</h3>
-    <form class="form" action="{{ url_for('add_food_item', client_id=client.id) }}" method="POST">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <input type="hidden" name="nutrition_date" value="{{ nutrition_date.isoformat() }}">
-
-      <div class="grid-2">
-        <div>
-          <label class="label">Food name</label>
-          <input class="input" name="name" maxlength="120" placeholder="Chicken breast" value="{{ nutrition_label_draft.get('name', '') }}" required>
-        </div>
-        <div>
-          <label class="label">Brand (optional)</label>
-          <input class="input" name="brand" maxlength="120" placeholder="Local market / brand" value="{{ nutrition_label_draft.get('brand', '') }}">
-        </div>
-      </div>
-
-      <label class="label">Serving note (optional)</label>
-      <input class="input" name="serving_label" maxlength="80" placeholder="1 slice = 32g" value="{{ nutrition_label_draft.get('serving_label', '') }}">
-
-      <div class="grid-2">
-        <input class="input" type="number" name="calories_per_100g" min="0" step="0.1" placeholder="Calories / 100g" value="{{ nutrition_label_draft.get('calories_per_100g', '') }}" required>
-        <input class="input" type="number" name="protein_per_100g" min="0" step="0.1" placeholder="Protein / 100g" value="{{ nutrition_label_draft.get('protein_per_100g', '') }}" required>
-        <input class="input" type="number" name="carbs_per_100g" min="0" step="0.1" placeholder="Carbs / 100g" value="{{ nutrition_label_draft.get('carbs_per_100g', '') }}" required>
-        <input class="input" type="number" name="fat_per_100g" min="0" step="0.1" placeholder="Fat / 100g" value="{{ nutrition_label_draft.get('fat_per_100g', '') }}" required>
-      </div>
-
-      {% if nutrition_label_draft.get('ocr_text') %}
-        <label class="label">OCR text preview</label>
-        <textarea class="input nutrition-ocr-preview" rows="8" readonly>{{ nutrition_label_draft.get('ocr_text', '') }}</textarea>
+      {% if not foods %}
+        <div class="empty-state" style="margin-top:12px;">No saved foods yet. Add one below first.</div>
       {% endif %}
+    </div>
 
-      <button class="btn secondary" type="submit">Save Food</button>
-    </form>
+    <div class="card">
+      <h3>Save Custom Food</h3>
+      <form class="form" action="{{ url_for('add_food_item', client_id=client.id) }}" method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="nutrition_date" value="{{ nutrition_date.isoformat() }}">
+
+        <div class="grid-2">
+          <div>
+            <label class="label">Food name</label>
+            <input class="input" name="name" maxlength="120" placeholder="Chicken breast" value="{{ nutrition_label_draft.get('name', '') }}" required>
+          </div>
+          <div>
+            <label class="label">Brand (optional)</label>
+            <input class="input" name="brand" maxlength="120" placeholder="Local market / brand" value="{{ nutrition_label_draft.get('brand', '') }}">
+          </div>
+        </div>
+
+        <label class="label">Serving note (optional)</label>
+        <input class="input" name="serving_label" maxlength="80" placeholder="1 slice = 32g" value="{{ nutrition_label_draft.get('serving_label', '') }}">
+
+        <div class="grid-2">
+          <div>
+            <label class="label">Calories / 100g</label>
+            <input class="input" type="number" name="calories_per_100g" min="0" step="0.1" value="{{ nutrition_label_draft.get('calories_per_100g', '') }}" required>
+          </div>
+          <div>
+            <label class="label">Protein / 100g</label>
+            <input class="input" type="number" name="protein_per_100g" min="0" step="0.1" value="{{ nutrition_label_draft.get('protein_per_100g', '') }}" required>
+          </div>
+          <div>
+            <label class="label">Carbs / 100g</label>
+            <input class="input" type="number" name="carbs_per_100g" min="0" step="0.1" value="{{ nutrition_label_draft.get('carbs_per_100g', '') }}" required>
+          </div>
+          <div>
+            <label class="label">Fat / 100g</label>
+            <input class="input" type="number" name="fat_per_100g" min="0" step="0.1" value="{{ nutrition_label_draft.get('fat_per_100g', '') }}" required>
+          </div>
+        </div>
+
+        {% if nutrition_label_draft.get('ocr_text') %}
+          <label class="label">OCR text preview</label>
+          <textarea class="input nutrition-ocr-preview" rows="8" readonly>{{ nutrition_label_draft.get('ocr_text', '') }}</textarea>
+        {% endif %}
+
+        <button class="btn secondary" type="submit">Save Food</button>
+      </form>
+    </div>
   </div>
 </div>
 
@@ -297,5 +289,26 @@
 
     searchInput.addEventListener("input", syncSelectedFood);
     searchInput.addEventListener("change", syncSelectedFood);
+  })();
+</script>
+
+<script>
+  (function () {
+    const toggleButton = document.getElementById("toggleNutritionGoalEdit");
+    const goalForm = document.getElementById("nutritionGoalForm");
+    if (!toggleButton || !goalForm) return;
+
+    const updateButtonText = function () {
+      const openText = toggleButton.dataset.openText || "Hide target";
+      const closedText = toggleButton.dataset.closedText || "Change target";
+      toggleButton.textContent = goalForm.classList.contains("nutrition-goal-form--expanded") ? openText : closedText;
+    };
+
+    updateButtonText();
+
+    toggleButton.addEventListener("click", function () {
+      goalForm.classList.toggle("nutrition-goal-form--expanded");
+      updateButtonText();
+    });
   })();
 </script>

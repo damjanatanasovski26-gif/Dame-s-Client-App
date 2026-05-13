@@ -1080,12 +1080,73 @@ tr:last-child td{ border-bottom:0; }
   flex-wrap:wrap;
 }
 
-.nutrition-date-form,
-.nutrition-inline-form{
+.nutrition-goal-summary{
   display:flex;
-  gap:10px;
   align-items:center;
+  justify-content:flex-end;
+  gap:18px;
   flex-wrap:wrap;
+  text-align:right;
+}
+
+.nutrition-goal-label{
+  color:var(--muted);
+  text-transform:uppercase;
+  letter-spacing:.08em;
+  font-size:12px;
+}
+
+.nutrition-goal-value{
+  font-size:20px;
+  font-weight:800;
+}
+
+.nutrition-goal-form-wrap{
+  margin-top:18px;
+}
+
+.nutrition-goal-form{
+  display:none;
+  gap:12px;
+}
+
+.nutrition-goal-form--expanded{
+  display:flex;
+  flex-direction:column;
+}
+
+.nutrition-right-column{
+  display:flex;
+  flex-direction:column;
+  gap:18px;
+}
+
+.nutrition-card-highlight{
+  border-color:rgba(15,118,110,.18);
+  background:linear-gradient(180deg, color-mix(in srgb, var(--surface) 94%, #ecfaf8 6%), var(--surface));
+}
+
+[data-theme="dark"] .nutrition-card-highlight{
+  background:linear-gradient(180deg, color-mix(in srgb, var(--surface) 92%, #0a1621 8%), var(--surface));
+}
+
+.nutrition-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:18px;
+  margin-bottom:18px;
+}
+
+.nutrition-day-card{
+  padding:22px;
+}
+
+.nutrition-day-card .nutrition-kicker{
+  margin-bottom:10px;
+}
+
+.nutrition-day-card .nutrition-toolbar{
+  align-items:flex-start;
 }
 
 .nutrition-date-form .input,
