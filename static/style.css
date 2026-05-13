@@ -1084,9 +1084,10 @@ tr:last-child td{ border-bottom:0; }
   display:flex;
   align-items:center;
   justify-content:flex-end;
-  gap:18px;
+  gap:16px;
   flex-wrap:wrap;
   text-align:right;
+  white-space:nowrap;
 }
 
 .nutrition-goal-label{
@@ -1116,8 +1117,8 @@ tr:last-child td{ border-bottom:0; }
 }
 
 .nutrition-right-column{
-  display:flex;
-  flex-direction:column;
+  display:grid;
+  grid-template-columns:1fr;
   gap:18px;
 }
 
@@ -1132,9 +1133,48 @@ tr:last-child td{ border-bottom:0; }
 
 .nutrition-grid{
   display:grid;
-  grid-template-columns:1fr 1fr;
+  grid-template-columns:1fr;
   gap:18px;
   margin-bottom:18px;
+  align-items:start;
+}
+
+.nutrition-grid > .nutrition-card-highlight{
+  grid-column:1 / -1;
+}
+
+.nutrition-right-column > .card{
+  height:auto;
+}
+
+.btn.small{
+  padding:8px 11px;
+  font-size:13px;
+  border-radius:10px;
+}
+
+.btn.danger.small{
+  background:rgba(220,38,38,.12);
+  color:var(--danger) !important;
+  border-color:rgba(220,38,38,.24);
+}
+
+.btn.danger.small:hover{
+  background:rgba(220,38,38,.16);
+}
+
+.nutrition-log-row{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  align-items:center;
+  gap:16px;
+  padding:12px 0;
+  border-top:1px solid color-mix(in srgb, var(--line) 72%, transparent 28%);
+}
+
+.nutrition-log-row:first-of-type{
+  border-top:0;
+  padding-top:0;
 }
 
 .nutrition-day-card{
@@ -1156,9 +1196,10 @@ tr:last-child td{ border-bottom:0; }
 
 .nutrition-grid{
   display:grid;
-  grid-template-columns:1fr 1fr;
+  grid-template-columns:1fr;
   gap:18px;
   margin-bottom:18px;
+  align-items:start;
 }
 
 .nutrition-search-results{
@@ -1264,6 +1305,9 @@ tr:last-child td{ border-bottom:0; }
   .nutrition-grid{
     grid-template-columns:1fr;
   }
+  .nutrition-right-column{
+    grid-template-columns:1fr;
+  }
 }
 
 @media (max-width: 720px){
@@ -1319,6 +1363,21 @@ tr:last-child td{ border-bottom:0; }
   .login-split{
     grid-template-columns:1fr;
     min-height:auto;
+  }
+  .nutrition-goal-summary{
+    justify-content:space-between;
+    width:100%;
+  }
+  .nutrition-goal-summary > div{
+    min-width:0;
+  }
+  .nutrition-log-row{
+    flex-direction:column;
+    align-items:flex-start;
+  }
+  .nutrition-log-meta{
+    align-items:flex-start;
+    text-align:left;
   }
   .auth-visual-full{
     min-height:34vh;
