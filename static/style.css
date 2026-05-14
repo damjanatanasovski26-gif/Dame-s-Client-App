@@ -1057,12 +1057,38 @@ tr:last-child td{ border-bottom:0; }
   letter-spacing:.08em;
 }
 
-.nutrition-metrics-grid{
-  margin-bottom:18px;
-}
-
 .nutrition-metric-card{
   margin-bottom:0;
+  position:relative;
+  overflow:hidden;
+}
+
+.nutrition-metric-card::before{
+  content:'';
+  position:absolute;
+  top:100%;
+  left:0;
+  right:0;
+  bottom:0;
+  background:linear-gradient(180deg, rgba(34, 197, 94, 0.8) 0%, rgba(34, 197, 94, 0.9) 70%, rgba(34, 197, 94, 1.0) 100%);
+  transition:height 0.5s ease;
+  z-index:1;
+}
+
+.nutrition-metric-card.macro-progress::before{
+  height:calc(var(--macro-progress) * 1%);
+  top:calc(100% - var(--macro-progress) * 1%);
+}
+
+.nutrition-metric-card.macro-over::before{
+  background:linear-gradient(180deg, rgba(239, 68, 68, 0.9) 0%, rgba(220, 38, 38, 1.0) 70%, rgba(239, 68, 68, 1.0) 100%);
+  height:100% !important;
+  top:0 !important;
+}
+
+.nutrition-metric-card .nutrition-metric-inner{
+  position:relative;
+  z-index:2;
 }
 
 .nutrition-metric-value{

@@ -22,21 +22,24 @@
 </div>
 
 <div class="stats-grid nutrition-metrics-grid">
-  <div class="card nutrition-metric-card">
+  {% set protein_ratio = (daily_totals.protein / nutrition_summary.protein_goal * 100) if nutrition_summary.protein_goal else 0 %}
+  <div class="card nutrition-metric-card {% if protein_ratio >= 100 %}macro-over{% elif protein_ratio > 0 %}macro-progress{% endif %}" {% if nutrition_summary.protein_goal %}style="--macro-progress: {{ protein_ratio if protein_ratio < 100 else 100 }};"{% endif %}>
     <span class="muted">Protein</span>
     <div class="nutrition-metric-value">{{ daily_totals.protein }}g</div>
     {% if nutrition_summary.protein_goal %}
       <div class="nutrition-metric-goal-label muted">{{ nutrition_summary.protein_goal }}g goal</div>
     {% endif %}
   </div>
-  <div class="card nutrition-metric-card">
+  {% set carbs_ratio = (daily_totals.carbs / nutrition_summary.carbs_goal * 100) if nutrition_summary.carbs_goal else 0 %}
+  <div class="card nutrition-metric-card {% if carbs_ratio >= 100 %}macro-over{% elif carbs_ratio > 0 %}macro-progress{% endif %}" {% if nutrition_summary.carbs_goal %}style="--macro-progress: {{ carbs_ratio if carbs_ratio < 100 else 100 }};"{% endif %}>
     <span class="muted">Carbs</span>
     <div class="nutrition-metric-value">{{ daily_totals.carbs }}g</div>
     {% if nutrition_summary.carbs_goal %}
       <div class="nutrition-metric-goal-label muted">{{ nutrition_summary.carbs_goal }}g goal</div>
     {% endif %}
   </div>
-  <div class="card nutrition-metric-card">
+  {% set fat_ratio = (daily_totals.fat / nutrition_summary.fat_goal * 100) if nutrition_summary.fat_goal else 0 %}
+  <div class="card nutrition-metric-card {% if fat_ratio >= 100 %}macro-over{% elif fat_ratio > 0 %}macro-progress{% endif %}" {% if nutrition_summary.fat_goal %}style="--macro-progress: {{ fat_ratio if fat_ratio < 100 else 100 }};"{% endif %}>
     <span class="muted">Fat</span>
     <div class="nutrition-metric-value">{{ daily_totals.fat }}g</div>
     {% if nutrition_summary.fat_goal %}
