@@ -323,4 +323,261 @@
       updateButtonText();
     });
   })();
+
+  // AJAX form handling
+  (function () {
+    // Food logging form
+    const nutritionLogForm = document.getElementById("nutritionLogForm");
+    if (nutritionLogForm) {
+      nutritionLogForm.addEventListener("submit", function (e) {
+        e.preventDefault();
+
+        const formData = new FormData(this);
+        const submitButton = this.querySelector('button[type="submit"]');
+        const originalText = submitButton.textContent;
+
+        // Disable button and show loading
+        submitButton.disabled = true;
+        submitButton.textContent = "Logging...";
+
+        fetch("{{ url_for('add_food_log_entry_ajax', client_id=client.id) }}", {
+          method: "POST",
+          body: formData,
+          headers: {
+            "X-Requested-With": "XMLHttpRequest"
+          }
+        })
+        .then(response => response.json())
+        .then(data => {
+          if (data.success) {
+            // Update nutrition summary
+            updateNutritionSummary(data.nutrition_summary);
+            // Clear form fields
+            clearFoodLogForm();
+            // Show success message
+            showMessage(data.message, "success");
+          } else {
+            showMessage(data.error, "error");
+          }
+        })
+        .catch(error => {
+          console.error("Error:", error);
+          showMessage("An error occurred. Please try again.", "error");
+        })
+        .finally(() => {
+          // Re-enable button
+          submitButton.disabled = false;
+          submitButton.textContent = originalText;
+        });
+      });
+    }
+
+    // Calorie target form
+    const goalForm = document.getElementById("nutritionGoalForm");
+    if (goalForm) {
+      goalForm.addEventListener("submit", function (e) {
+        e.preventDefault();
+
+        const formData = new FormData(this);
+        const submitButton = this.querySelector('button[type="submit"]');
+        const originalText = submitButton.textContent;
+
+        // Disable button and show loading
+        submitButton.disabled = true;
+        submitButton.textContent = "Saving...";
+
+        fetch("{{ url_for('update_calorie_target_ajax', client_id=client.id) }}", {
+          method: "POST",
+          body: formData,
+          headers: {
+            "X-Requested-With": "XMLHttpRequest"
+          }
+        })
+        .then(response => response.json())
+        .then(data => {
+          if (data.success) {
+            // Update nutrition summary
+            updateNutritionSummary(data.nutrition_summary);
+            // Show success message
+            showMessage(data.message, "success");
+          } else {
+            showMessage(data.error, "error");
+          }
+        })
+        .catch(error => {
+          console.error("Error:", error);
+          showMessage("An error occurred. Please try again.", "error");
+        })
+        .finally(() => {
+          // Re-enable button
+          submitButton.disabled = false;
+          submitButton.textContent = originalText;
+        });
+      });
+    }
+
+    function updateNutritionSummary(summary) {
+      // Update calorie hero
+      const calorieValue = document.querySelector(".nutrition-big-number");
+      if (calorieValue) {
+        calorieValue.textContent = Math.round(summary.totals.calories);
+      }
+
+      const calorieTarget = document.querySelector(".nutrition-target-line span:last-child");
+      if (calorieTarget && summary.goal) {
+        calorieTarget.textContent = `kcal eaten / ${summary.goal} target`;
+      }
+
+      const statusElement = document.querySelector(".nutrition-status");
+      if (statusElement) {
+        statusElement.textContent = summary.status;
+        statusElement.className = `nutrition-status nutrition-status-${summary.tone}`;
+      }
+
+      const calorieRing = document.querySelector(".calorie-ring");
+      if (calorieRing) {
+        calorieRing.style.setProperty("--progress", summary.ring_percent);
+        calorieRing.className = `calorie-ring calorie-ring-${summary.tone}`;
+      }
+
+      const calorieRingInner = document.querySelector(".calorie-ring-inner b");
+      if (calorieRingInner) {
+        calorieRingInner.textContent = `${summary.percent}%`;
+      }
+
+      const heroCard = document.querySelector(".nutrition-hero");
+      if (heroCard) {
+        heroCard.className = `card nutrition-hero nutrition-hero-${summary.tone}`;
+      }
+
+      // Update macro cards
+      updateMacroCard("protein", summary.totals.protein, summary.protein_goal);
+      updateMacroCard("carbs", summary.totals.carbs, summary.carbs_goal);
+      updateMacroCard("fat", summary.totals.fat, summary.fat_goal);
+
+      // Update meal sections
+      updateMealSections(summary.meal_sections);
+    }
+
+    function updateMacroCard(macro, current, goal) {
+      const card = document.querySelector(`.nutrition-metric-card:nth-child(${macro === "protein" ? 1 : macro === "carbs" ? 2 : 3})`);
+      if (!card) return;
+
+      const valueElement = card.querySelector(".nutrition-metric-value");
+      if (valueElement) {
+        valueElement.textContent = `${current}g`;
+      }
+
+      const goalElement = card.querySelector(".nutrition-metric-goal-label");
+      if (goalElement) {
+        if (goal) {
+          goalElement.textContent = `${goal}g goal`;
+          goalElement.style.display = "";
+        } else {
+          goalElement.style.display = "none";
+        }
+      }
+
+      // Update classes and styles for animation
+      card.className = "card nutrition-metric-card";
+      if (goal) {
+        const ratio = (current / goal * 100);
+        if (ratio >= 100) {
+          card.classList.add("macro-over");
+          card.style.setProperty("--macro-progress", "100");
+        } else if (ratio > 0) {
+          card.classList.add("macro-progress");
+          card.style.setProperty("--macro-progress", Math.min(ratio, 100));
+        }
+      }
+    }
+
+    function updateMealSections(mealSections) {
+      const mealList = document.querySelector(".nutrition-meal-list");
+      if (!mealList) return;
+
+      if (!mealSections || mealSections.length === 0) {
+        mealList.innerHTML = '<div class="empty-state">No foods logged for this day yet.</div>';
+        return;
+      }
+
+      mealList.innerHTML = mealSections.map(meal => `
+        <div class="nutrition-meal-card">
+          <div class="nutrition-meal-head">
+            <strong>${meal.label}</strong>
+            <span>${Math.round(meal.calories)} kcal</span>
+          </div>
+          ${meal.items.map(item => `
+            <div class="nutrition-log-row">
+              <div>
+                <div><b>${item.food_name}</b></div>
+                <div class="muted">${item.quantity_grams}g${item.note ? ` | ${item.note}` : ''}</div>
+              </div>
+              <div class="nutrition-log-meta">
+                <span>${item.calories} kcal</span>
+                <span>${item.protein}P / ${item.carbs}C / ${item.fat}F</span>
+                <form action="{{ url_for('delete_food_log_entry', client_id=client.id, log_id=item.id) }}" method="POST" style="margin:0;">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button class="btn danger" type="submit">Delete</button>
+                </form>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      `).join('');
+    }
+
+    function clearFoodLogForm() {
+      const form = document.getElementById("nutritionLogForm");
+      if (!form) return;
+
+      // Clear all inputs except hidden ones
+      const inputs = form.querySelectorAll('input:not([type="hidden"]), select, textarea');
+      inputs.forEach(input => {
+        if (input.type === "number") {
+          input.value = "";
+        } else if (input.tagName === "SELECT") {
+          input.value = "snack"; // Reset to default snack
+        } else {
+          input.value = "";
+        }
+      });
+
+      // Reset hidden food ID
+      const foodIdInput = document.getElementById("nutritionFoodId");
+      if (foodIdInput) {
+        foodIdInput.value = "";
+      }
+
+      // Reset hint text
+      const hint = document.getElementById("nutritionFoodHint");
+      if (hint) {
+        hint.textContent = "Choose a saved item from the search list.";
+      }
+    }
+
+    function showMessage(message, type) {
+      // Remove existing messages
+      const existingMessages = document.querySelectorAll(".nutrition-message");
+      existingMessages.forEach(msg => msg.remove());
+
+      // Create new message
+      const messageDiv = document.createElement("div");
+      messageDiv.className = `nutrition-message nutrition-message-${type}`;
+      messageDiv.textContent = message;
+
+      // Add to page
+      const container = document.querySelector(".container");
+      if (container) {
+        container.insertBefore(messageDiv, container.firstChild);
+
+        // Auto-remove after 3 seconds
+        setTimeout(() => {
+          if (messageDiv.parentNode) {
+            messageDiv.remove();
+          }
+        }, 3000);
+      }
+    }
+  })();
 </script>

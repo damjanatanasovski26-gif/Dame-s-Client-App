@@ -2301,6 +2301,81 @@ def update_calorie_target(client_id):
     return nutrition_redirect(client.id, msg="Daily calorie target updated.", logged_for=nutrition_date)
 
 
+@app.route("/client/<int:client_id>/nutrition/update-target-ajax", methods=["POST"])
+@login_required
+def update_calorie_target_ajax(client_id):
+    if not is_admin() and current_client_id() != client_id:
+        return jsonify({"success": False, "error": "Forbidden"}), 403
+
+    client = get_or_404(Client, client_id)
+    target_raw = (request.form.get("daily_calorie_target") or "").strip()
+    nutrition_date = parse_iso_date(request.form.get("nutrition_date")) or date.today()
+
+    if not target_raw:
+        client.daily_calorie_target = None
+        db.session.commit()
+        # Get updated nutrition summary
+        food_logs = (
+            FoodLogEntry.query.filter_by(client_id=client.id, logged_for=nutrition_date)
+            .order_by(FoodLogEntry.created_at.desc(), FoodLogEntry.id.desc())
+            .all()
+        )
+        nutrition_summary = build_nutrition_summary(food_logs, client.daily_calorie_target)
+        return jsonify({
+            "success": True,
+            "message": "Daily calorie target cleared.",
+            "nutrition_summary": {
+                "totals": nutrition_summary["totals"],
+                "goal": nutrition_summary["goal"],
+                "protein_goal": nutrition_summary["protein_goal"],
+                "carbs_goal": nutrition_summary["carbs_goal"],
+                "fat_goal": nutrition_summary["fat_goal"],
+                "percent": nutrition_summary["percent"],
+                "ring_percent": nutrition_summary["ring_percent"],
+                "tone": nutrition_summary["tone"],
+                "status": nutrition_summary["status"],
+                "meal_sections": nutrition_summary["meal_sections"],
+                "has_logs": nutrition_summary["has_logs"]
+            }
+        })
+
+    try:
+        target = int(target_raw)
+    except ValueError:
+        return jsonify({"success": False, "error": "Daily calorie target must be a whole number."}), 400
+    if target <= 0:
+        return jsonify({"success": False, "error": "Daily calorie target must be greater than 0."}), 400
+
+    client.daily_calorie_target = target
+    db.session.commit()
+
+    # Get updated nutrition summary
+    food_logs = (
+        FoodLogEntry.query.filter_by(client_id=client.id, logged_for=nutrition_date)
+        .order_by(FoodLogEntry.created_at.desc(), FoodLogEntry.id.desc())
+        .all()
+    )
+    nutrition_summary = build_nutrition_summary(food_logs, client.daily_calorie_target)
+
+    return jsonify({
+        "success": True,
+        "message": "Daily calorie target updated!",
+        "nutrition_summary": {
+            "totals": nutrition_summary["totals"],
+            "goal": nutrition_summary["goal"],
+            "protein_goal": nutrition_summary["protein_goal"],
+            "carbs_goal": nutrition_summary["carbs_goal"],
+            "fat_goal": nutrition_summary["fat_goal"],
+            "percent": nutrition_summary["percent"],
+            "ring_percent": nutrition_summary["ring_percent"],
+            "tone": nutrition_summary["tone"],
+            "status": nutrition_summary["status"],
+            "meal_sections": nutrition_summary["meal_sections"],
+            "has_logs": nutrition_summary["has_logs"]
+        }
+    })
+
+
 @app.route("/client/<int:client_id>/nutrition/foods/add", methods=["POST"])
 @login_required
 def add_food_item(client_id):
@@ -2475,6 +2550,92 @@ def add_food_log_entry(client_id):
     db.session.add(log_entry)
     db.session.commit()
     return nutrition_redirect(client.id, msg="Food logged.", logged_for=logged_for)
+
+
+@app.route("/client/<int:client_id>/nutrition/log-food-ajax", methods=["POST"])
+@login_required
+def add_food_log_entry_ajax(client_id):
+    if not is_admin() and current_client_id() != client_id:
+        return jsonify({"success": False, "error": "Forbidden"}), 403
+
+    client = get_or_404(Client, client_id)
+    logged_for = parse_iso_date(request.form.get("logged_for")) or date.today()
+
+    food_id_raw = (request.form.get("food_id") or "").strip()
+    if not food_id_raw:
+        search_name = normalize_food_search_text(request.form.get("food_name") or "")
+        if search_name:
+            matched_food = next(
+                (
+                    item for item in (
+                        FoodItem.query
+                        .filter(or_(FoodItem.client_id.is_(None), FoodItem.client_id == client.id))
+                        .order_by(FoodItem.name.asc(), FoodItem.brand.asc(), FoodItem.id.asc())
+                        .all()
+                    )
+                    if search_name in normalize_food_search_text(f"{item.name} {item.brand or ''}")
+                ),
+                None,
+            )
+            food_id_raw = str(matched_food.id) if matched_food else ""
+    try:
+        food_id = int(food_id_raw or "0")
+    except ValueError:
+        food_id = 0
+    food = get_accessible_food(client.id, food_id)
+    if not food:
+        return jsonify({"success": False, "error": "Select a food from your library first."}), 400
+
+    quantity_grams, err = parse_positive_float(request.form.get("quantity_grams"), "Quantity in grams")
+    if err:
+        return jsonify({"success": False, "error": err}), 400
+
+    factor = quantity_grams / 100
+    food_label = food.name if not food.brand else f"{food.name} ({food.brand})"
+    log_entry = FoodLogEntry(
+        client_id=client.id,
+        food_id=food.id,
+        logged_for=logged_for,
+        meal_type=normalize_meal_type(request.form.get("meal_type")),
+        quantity_grams=quantity_grams,
+        food_name=food_label[:160],
+        calories=round(food.calories_per_100g * factor, 1),
+        protein=round(food.protein_per_100g * factor, 1),
+        carbs=round(food.carbs_per_100g * factor, 1),
+        fat=round(food.fat_per_100g * factor, 1),
+        note=((request.form.get("note") or "").strip() or None),
+    )
+    db.session.add(log_entry)
+    db.session.commit()
+
+    # Clear the nutrition label draft after successful logging
+    session.pop(nutrition_label_draft_session_key(client.id), None)
+
+    # Get updated nutrition summary
+    food_logs = (
+        FoodLogEntry.query.filter_by(client_id=client.id, logged_for=logged_for)
+        .order_by(FoodLogEntry.created_at.desc(), FoodLogEntry.id.desc())
+        .all()
+    )
+    nutrition_summary = build_nutrition_summary(food_logs, client.daily_calorie_target)
+
+    return jsonify({
+        "success": True,
+        "message": "Food logged successfully!",
+        "nutrition_summary": {
+            "totals": nutrition_summary["totals"],
+            "goal": nutrition_summary["goal"],
+            "protein_goal": nutrition_summary["protein_goal"],
+            "carbs_goal": nutrition_summary["carbs_goal"],
+            "fat_goal": nutrition_summary["fat_goal"],
+            "percent": nutrition_summary["percent"],
+            "ring_percent": nutrition_summary["ring_percent"],
+            "tone": nutrition_summary["tone"],
+            "status": nutrition_summary["status"],
+            "meal_sections": nutrition_summary["meal_sections"],
+            "has_logs": nutrition_summary["has_logs"]
+        }
+    })
 
 
 @app.route("/client/<int:client_id>/nutrition/scan-label", methods=["POST"])
