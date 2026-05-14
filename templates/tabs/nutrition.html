@@ -25,14 +25,23 @@
   <div class="card nutrition-metric-card">
     <span class="muted">Protein</span>
     <div class="nutrition-metric-value">{{ daily_totals.protein }}g</div>
+    {% if nutrition_summary.protein_goal %}
+      <div class="nutrition-metric-goal-label muted">{{ nutrition_summary.protein_goal }}g goal</div>
+    {% endif %}
   </div>
   <div class="card nutrition-metric-card">
     <span class="muted">Carbs</span>
     <div class="nutrition-metric-value">{{ daily_totals.carbs }}g</div>
+    {% if nutrition_summary.carbs_goal %}
+      <div class="nutrition-metric-goal-label muted">{{ nutrition_summary.carbs_goal }}g goal</div>
+    {% endif %}
   </div>
   <div class="card nutrition-metric-card">
     <span class="muted">Fat</span>
     <div class="nutrition-metric-value">{{ daily_totals.fat }}g</div>
+    {% if nutrition_summary.fat_goal %}
+      <div class="nutrition-metric-goal-label muted">{{ nutrition_summary.fat_goal }}g goal</div>
+    {% endif %}
   </div>
 </div>
 

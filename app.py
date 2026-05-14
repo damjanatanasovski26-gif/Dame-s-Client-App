@@ -1134,6 +1134,11 @@ def build_nutrition_summary(logs: list[FoodLogEntry], calorie_target: int | None
         })
 
     goal = calorie_target or 0
+    # Calculate macro goals based on calorie target
+    protein_goal = round((goal * 0.35) / 4, 1) if goal > 0 else 0
+    carbs_goal = round((goal * 0.40) / 4, 1) if goal > 0 else 0
+    fat_goal = round((goal * 0.25) / 9, 1) if goal > 0 else 0
+
     if goal > 0:
         ratio = totals["calories"] / goal
         percent = int(round(ratio * 100))
@@ -1158,6 +1163,9 @@ def build_nutrition_summary(logs: list[FoodLogEntry], calorie_target: int | None
         "totals": totals,
         "meal_sections": meal_sections,
         "goal": goal,
+        "protein_goal": protein_goal,
+        "carbs_goal": carbs_goal,
+        "fat_goal": fat_goal,
         "percent": percent,
         "ring_percent": ring_percent,
         "tone": tone,
