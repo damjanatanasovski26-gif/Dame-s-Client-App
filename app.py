@@ -8,6 +8,7 @@ import calendar
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.middleware.proxy_fix import ProxyFix
 from functools import wraps
+import base64
 import csv
 import hmac
 import io
@@ -101,6 +102,9 @@ app.config["UPLOAD_LABEL_DIR"] = os.environ.get(
     os.path.join(app.root_path, "static", "uploads", "nutrition_labels")
 )
 app.config["USDA_API_KEY"] = os.environ.get("USDA_API_KEY", "").strip()
+app.config["GOOGLE_VISION_API_KEY"] = os.environ.get("GOOGLE_VISION_API_KEY", "").strip()
+app.config["GOOGLE_VISION_FEATURE_TYPE"] = os.environ.get("GOOGLE_VISION_FEATURE_TYPE", "DOCUMENT_TEXT_DETECTION").strip()
+app.config["GOOGLE_VISION_LANGUAGE_HINTS"] = os.environ.get("GOOGLE_VISION_LANGUAGE_HINTS", "en,mk,sq").strip()
 app.config["TESSERACT_CMD"] = os.environ.get("TESSERACT_CMD", "").strip()
 app.config["TESSERACT_LANGS"] = os.environ.get("TESSERACT_LANGS", "eng+mkd+sqi").strip()
 
@@ -694,7 +698,13 @@ def resolve_tesseract_cmd():
     return shutil.which("tesseract") or ""
 
 
+def google_vision_enabled():
+    return bool(app.config.get("GOOGLE_VISION_API_KEY", "").strip())
+
+
 def label_scan_enabled():
+    if google_vision_enabled():
+        return True
     if pytesseract is None:
         return False
     tesseract_cmd = resolve_tesseract_cmd()
@@ -706,6 +716,14 @@ def label_scan_enabled():
         return True
     except Exception:
         return False
+
+
+def label_scan_provider_label():
+    if google_vision_enabled():
+        return "Google Vision OCR"
+    if label_scan_enabled():
+        return "Tesseract OCR"
+    return ""
 
 
 def get_tesseract_languages():
@@ -1093,6 +1111,69 @@ def build_label_ocr_images(image):
     return processed
 
 
+def get_google_vision_language_hints():
+    return [
+        hint.strip()
+        for hint in app.config.get("GOOGLE_VISION_LANGUAGE_HINTS", "").split(",")
+        if hint.strip()
+    ]
+
+
+def scan_label_with_google_vision(image_path: str):
+    api_key = app.config.get("GOOGLE_VISION_API_KEY", "").strip()
+    if not api_key:
+        raise RuntimeError("Google Vision API key is not configured.")
+
+    with open(image_path, "rb") as fh:
+        encoded_image = base64.b64encode(fh.read()).decode("ascii")
+
+    feature_type = app.config.get("GOOGLE_VISION_FEATURE_TYPE", "DOCUMENT_TEXT_DETECTION").strip() or "DOCUMENT_TEXT_DETECTION"
+    request_payload = {
+        "requests": [{
+            "image": {"content": encoded_image},
+            "features": [{"type": feature_type}],
+        }]
+    }
+    language_hints = get_google_vision_language_hints()
+    if language_hints:
+        request_payload["requests"][0]["imageContext"] = {"languageHints": language_hints}
+
+    endpoint = f"https://vision.googleapis.com/v1/images:annotate?{urlencode({'key': api_key})}"
+    req = Request(
+        endpoint,
+        data=json.dumps(request_payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+
+    try:
+        with urlopen(req, timeout=20) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+    except (HTTPError, URLError, TimeoutError, json.JSONDecodeError) as exc:
+        raise RuntimeError("Google Vision could not read that image right now.") from exc
+
+    if payload.get("error"):
+        message = payload["error"].get("message") or "Google Vision returned an error."
+        raise RuntimeError(message)
+
+    responses = payload.get("responses") or []
+    if not responses:
+        return ""
+    response = responses[0]
+    if response.get("error"):
+        message = response["error"].get("message") or "Google Vision returned an error."
+        raise RuntimeError(message)
+
+    full_text = response.get("fullTextAnnotation", {}).get("text")
+    if full_text:
+        return full_text.strip()
+
+    annotations = response.get("textAnnotations") or []
+    if annotations and annotations[0].get("description"):
+        return annotations[0]["description"].strip()
+    return ""
+
+
 def scan_label_image_text(image):
     lang = get_tesseract_languages()
     base_config = "--oem 1"
@@ -1113,6 +1194,14 @@ def scan_label_image_text(image):
                 return text.strip()
 
     return best_text.strip()
+
+
+def scan_label_file_text(image_path: str):
+    if google_vision_enabled():
+        return scan_label_with_google_vision(image_path)
+
+    with Image.open(image_path) as image:
+        return scan_label_image_text(image)
 
 
 def build_nutrition_summary(logs: list[FoodLogEntry], calorie_target: int | None):
@@ -1848,6 +1937,7 @@ def client_profile(client_id):
         nutrition_search_results=nutrition_search_results,
         nutrition_label_draft=nutrition_label_draft,
         label_scan_enabled=label_scan_enabled(),
+        label_scan_provider=label_scan_provider_label(),
         client_user=client_user,
         client_online_now=client_online_now,
         client_last_seen_display=client_last_seen_display,
@@ -2654,7 +2744,7 @@ def scan_food_label(client_id):
     if not label_scan_enabled():
         return nutrition_redirect(
             client.id,
-            err="Label OCR is not enabled yet. Install pytesseract and the Tesseract OCR engine first.",
+            err="Label OCR is not enabled yet. Add GOOGLE_VISION_API_KEY or install Tesseract OCR first.",
             logged_for=logged_for,
         )
 
@@ -2672,8 +2762,9 @@ def scan_food_label(client_id):
     label_file.save(target_path)
 
     try:
-        with Image.open(target_path) as image:
-            text = scan_label_image_text(image)
+        text = scan_label_file_text(target_path)
+    except RuntimeError as exc:
+        return nutrition_redirect(client.id, err=str(exc), logged_for=logged_for)
     except Exception:
         return nutrition_redirect(client.id, err="Could not read that label image.", logged_for=logged_for)
 

@@ -7,7 +7,7 @@ from unittest.mock import Mock, patch
 
 from werkzeug.security import generate_password_hash
 
-from app import app, db, Client, FoodItem, FoodLogEntry, Measurement, Payment, SessionLog, User, parse_label_text, seed_reference_foods
+from app import app, db, Client, FoodItem, FoodLogEntry, Measurement, Payment, SessionLog, User, parse_label_text, scan_label_file_text, seed_reference_foods
 
 
 class TrainerAppTests(unittest.TestCase):
@@ -488,17 +488,12 @@ class TrainerAppTests(unittest.TestCase):
             self.assertNotIn(f"nutrition_label_draft_{client_id}", sess)
         self.assertNotIn(b'value="Scanned Protein"', resp.data)
 
-    @patch("app.Image.open")
     @patch("app.label_scan_enabled", return_value=True)
-    @patch("app.scan_label_image_text", return_value="Energy 99 kcal\nFat 2 g")
-    def test_label_scan_populates_manual_draft_when_partial_data_is_found(self, _ocr_mock, _enabled_mock, open_mock):
+    @patch("app.scan_label_file_text", return_value="Energy 99 kcal\nFat 2 g")
+    def test_label_scan_populates_manual_draft_when_partial_data_is_found(self, _ocr_mock, _enabled_mock):
         client_id = self._create_client(name="Lena")
         self._create_user("lena_user", "pass123", role="client", client_id=client_id)
         self._login("lena_user", "pass123")
-        image_ctx = Mock()
-        image_ctx.__enter__ = Mock(return_value=Mock())
-        image_ctx.__exit__ = Mock(return_value=None)
-        open_mock.return_value = image_ctx
 
         resp = self.client.post(
             f"/client/{client_id}/nutrition/scan-label",
@@ -517,6 +512,40 @@ class TrainerAppTests(unittest.TestCase):
         self.assertIn(b"Review the custom food form below", resp.data)
         self.assertIn(b"Scanned Yogurt", resp.data)
         self.assertIn(b"99.0", resp.data)
+
+    @patch("app.urlopen")
+    def test_google_vision_ocr_is_used_when_api_key_is_configured(self, urlopen_mock):
+        old_api_key = app.config.get("GOOGLE_VISION_API_KEY")
+        old_hints = app.config.get("GOOGLE_VISION_LANGUAGE_HINTS")
+        app.config["GOOGLE_VISION_API_KEY"] = "test-key"
+        app.config["GOOGLE_VISION_LANGUAGE_HINTS"] = "en,mk,sq"
+        response_ctx = Mock()
+        response_ctx.__enter__ = Mock(return_value=Mock(read=Mock(return_value=(
+            b'{"responses":[{"fullTextAnnotation":{"text":"Energy 123 kcal\\nProtein 8 g"}}]}'
+        ))))
+        response_ctx.__exit__ = Mock(return_value=None)
+        urlopen_mock.return_value = response_ctx
+
+        fd, image_path = tempfile.mkstemp(prefix="label_", suffix=".png")
+        os.close(fd)
+        try:
+            with open(image_path, "wb") as fh:
+                fh.write(b"fake-image")
+
+            text = scan_label_file_text(image_path)
+        finally:
+            if os.path.exists(image_path):
+                os.remove(image_path)
+            app.config["GOOGLE_VISION_API_KEY"] = old_api_key
+            app.config["GOOGLE_VISION_LANGUAGE_HINTS"] = old_hints
+
+        self.assertIn("Energy 123 kcal", text)
+        request = urlopen_mock.call_args.args[0]
+        self.assertIn("vision.googleapis.com", request.full_url)
+        self.assertIn("key=test-key", request.full_url)
+        body = request.data.decode("utf-8")
+        self.assertIn("DOCUMENT_TEXT_DETECTION", body)
+        self.assertIn('"languageHints": ["en", "mk", "sq"]', body)
 
 
 if __name__ == "__main__":

@@ -86,7 +86,8 @@
     <h3>Scan Nutrition Label</h3>
     <div class="muted" style="margin-bottom:12px;">
       Upload a label photo to extract calories, protein, carbs, and fat per 100g.
-      {% if not label_scan_enabled %}OCR support is not installed on this environment yet.{% endif %}
+      {% if label_scan_provider %}Using {{ label_scan_provider }}.{% endif %}
+      {% if not label_scan_enabled %}OCR support is not configured on this environment yet.{% endif %}
     </div>
     <form class="form" action="{{ url_for('scan_food_label', client_id=client.id) }}" method="POST" enctype="multipart/form-data">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

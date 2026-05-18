@@ -21,6 +21,9 @@ Database URL:
 
 Optional nutrition/OCR variables:
 - `USDA_API_KEY=<your USDA FoodData Central key>`
+- `GOOGLE_VISION_API_KEY=<your Google Cloud Vision API key>` (preferred production OCR)
+- `GOOGLE_VISION_FEATURE_TYPE=DOCUMENT_TEXT_DETECTION`
+- `GOOGLE_VISION_LANGUAGE_HINTS=en,mk,sq`
 - `TESSERACT_CMD=/usr/bin/tesseract` (already set in the Docker image, only override if needed)
 - `TESSERACT_LANGS=eng+mkd+sqi` (English, Macedonian, Albanian; already set in the Docker image)
 
