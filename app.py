@@ -1208,6 +1208,8 @@ def legacy_parse_label_text_by_rows(label_text: str):
 
 def classify_nutrition_row(row: str):
     text = (row or "").lower()
+    if "nutrition facts" in text:
+        return None
     if line_has_any(text, ("saturated", "saturates", "\u0437\u0430\u0441\u0438\u0442", "ngop")):
         return "saturated_fat"
     if line_has_any(text, ("sugar", "sugars", "\u0448\u0435\u045c\u0435\u0440", "sheqer")):
@@ -1218,7 +1220,7 @@ def classify_nutrition_row(row: str):
         return "protein"
     if line_has_any(text, ("carb", "karbo", "ugljeni", "jagle", "\u0458\u0430\u0433\u043b\u0435", "\u0458armex")):
         return "carbs"
-    if line_has_any(text, ("fat", "fats", "masti", "mactu", "macru", "\u043c\u0430\u0441\u0442\u0438", "yndyr", "mast")):
+    if re.search(r"\b(?:fat|fats|masti|mactu|macru|mast\w*|yndyr\w*)\b|\u043c\u0430\u0441\u0442\u0438", text):
         return "fat"
     if line_has_any(text, ("salt", "sol", "\u0441\u043e\u043b")):
         return "salt"
@@ -1226,24 +1228,12 @@ def classify_nutrition_row(row: str):
 
 
 def find_nutrition_label_mentions(label_text: str):
-    label_patterns = (
-        ("saturated_fat", r"\b(?:saturated|saturates|ngop)\b|\u0437\u0430\u0441\u0438\u0442"),
-        ("sugars", r"\b(?:sugar|sugars|sheqer)\b|\u0448\u0435\u045c\u0435\u0440"),
-        ("calories", r"\b(?:energy|energia|energjia)\b|\u0435\u043d\u0435\u0440\u0433"),
-        ("protein", r"\b(?:protein|proteina|proteini)\b|\u043f\u0440\u043e\u0442\u0435\u0438\u043d|\u0440\u043e\u0442\u0435\u0438\u043d"),
-        ("carbs", r"\b(?:carbohydrate|carbohydrates|carbs|karbo\w*|ugljeni|jagle\w*)\b|\u0458\u0430\u0433\u043b\u0435"),
-        ("fat", r"\b(?:fat|fats|masti|mactu|macru|mast\w*|yndyr\w*)\b|\u043c\u0430\u0441\u0442\u0438"),
-        ("salt", r"\b(?:salt|sol)\b|\u0441\u043e\u043b"),
-    )
-    mentions = []
-    text = (label_text or "").lower()
-    for label, pattern in label_patterns:
-        for match in re.finditer(pattern, text, re.IGNORECASE):
-            if label == "fat" and "saturated" in text[max(0, match.start() - 14):match.start()]:
-                continue
-            mentions.append((match.start(), label))
-    mentions.sort(key=lambda item: item[0])
-    return [label for _, label in mentions]
+    labels = []
+    for row in re.split(r"[\n\r]+", label_text or ""):
+        label = classify_nutrition_row(row)
+        if label:
+            labels.append(label)
+    return labels
 
 
 def find_nutrition_value_mentions(label_text: str):
@@ -1253,13 +1243,28 @@ def find_nutrition_value_mentions(label_text: str):
         value = clean_ocr_number(match.group(1))
         if value is not None:
             mentions.append((match.start(), "calories", value))
-    for match in re.finditer(r"(\d[\d\s.,]{0,7})\s*(?:g|q|9|\u0433|\u0431)\b", text, re.IGNORECASE):
+    for match in re.finditer(r"(\d[\d .,]{0,7})\s*(?:g|q|9|\u0433|\u0431)\b", text, re.IGNORECASE):
         value = clean_ocr_number(match.group(1))
         prefix = text[max(0, match.start() - 8):match.start()].lower()
         if value is not None and not (round(value, 1) == 100.0 and "per" in prefix):
             mentions.append((match.start(), "grams", value))
     mentions.sort(key=lambda item: item[0])
     return mentions
+
+
+def find_bare_column_gram_values(label_text: str):
+    values = []
+    for row in re.split(r"[\n\r]+", label_text or ""):
+        stripped = row.strip()
+        if not re.fullmatch(r"\d[\d .,]{0,7}", stripped):
+            continue
+        value = clean_ocr_number(stripped)
+        if value is None or value > 100:
+            continue
+        if "." not in stripped and "," not in stripped and stripped.endswith("0") and value >= 10:
+            value = value / 10
+        values.append(value)
+    return values
 
 
 def add_column_order_candidates(label_text: str, candidates: dict):
@@ -1277,6 +1282,11 @@ def add_column_order_candidates(label_text: str, candidates: dict):
 
     for label, value in zip(gram_labels, gram_values):
         if label in ("fat", "carbs", "protein") and not candidates.get(label):
+            candidates[label].append(value)
+
+    bare_values = find_bare_column_gram_values(label_text)
+    for label, value in zip((label for label in labels if label in ("protein",)), bare_values):
+        if not candidates.get(label):
             candidates[label].append(value)
 
 

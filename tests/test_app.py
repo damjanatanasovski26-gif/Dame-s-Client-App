@@ -392,6 +392,29 @@ class TrainerAppTests(unittest.TestCase):
         self.assertEqual(parsed["carbs"], 9.9)
         self.assertEqual(parsed["protein"], 78.0)
 
+    def test_parse_label_text_pairs_bilingual_columnar_label_values(self):
+        parsed = parse_label_text(
+            "\u041d\u0443\u0442\u0440\u0438\u0442\u0438\u0432\u043d\u0438 \u0432\u0440\u0435\u0434\u043d\u043e\u0441\u0442\u0438\n"
+            "Nutrition Facts\n"
+            "Per 100g\n"
+            "\u0415\u043d\u0435\u0440.\u0432\u0440\u0435\u0434\u043d\u043e\u0441\u0442/Energy 133kcal/559kJ\n"
+            "\u041c\u0430\u0441\u0442\u0438 / Fat\n"
+            "\u0417\u0430\u0441\u0438\u0442\u0435\u043d\u0438 \u043c\u0430\u0441\u0442\u0438 / Saturated fat\n"
+            "\u0408\u0430\u0433\u043b\u0435\u0445\u0438\u0434\u0440\u0430\u0442\u0438 / Carbohydrates\n"
+            "\u0428\u0435\u045c\u0435\u0440\u0438 / Sugar\n"
+            "\u041f\u0440\u043e\u0442\u0435\u0438\u043d\u0438 / Protein\n"
+            "\u0421\u043e\u043b / Salt\n"
+            "8g\n"
+            "2g\n"
+            "11g\n"
+            "20\n"
+            "1g"
+        )
+        self.assertEqual(parsed["calories"], 133.0)
+        self.assertEqual(parsed["fat"], 8.0)
+        self.assertEqual(parsed["carbs"], 11.0)
+        self.assertEqual(parsed["protein"], 2.0)
+
     def test_seed_library_replaces_old_prepared_seed_items_with_raw_ingredients(self):
         with app.app_context():
             db.session.add(FoodItem(
