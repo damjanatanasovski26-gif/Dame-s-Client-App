@@ -1028,8 +1028,27 @@ def choose_ocr_value(candidates: list[float], *, require_consensus: bool = False
 
 
 def parse_label_text_by_rows(label_text: str):
-    candidates = {"calories": [], "protein": [], "carbs": [], "fat": []}
-    rows = [row.strip().lower() for row in re.split(r"[\n\r]+", label_text or "") if row.strip()]
+
+    rows = [
+        row.strip().lower()
+        for row in re.split(r"[\n\r]+", label_text or "")
+        if row.strip()
+    ]
+
+    expanded_rows = rows[:]
+
+    for i in range(len(rows) - 1):
+        combined = f"{rows[i]} {rows[i + 1]}"
+        expanded_rows.append(combined)
+
+    rows = expanded_rows
+
+    candidates = {
+        "calories": [],
+        "protein": [],
+        "carbs": [],
+        "fat": [],
+    }
     for row in rows:
         kcal_match = re.search(r"(\d[\d\s.,]{0,7})\s*kcal", row, re.IGNORECASE)
         if kcal_match:
