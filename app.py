@@ -101,6 +101,7 @@ app.config["UPLOAD_LABEL_DIR"] = os.environ.get(
     "UPLOAD_LABEL_DIR",
     os.path.join(app.root_path, "static", "uploads", "nutrition_labels")
 )
+app.config["MAX_PHOTO_UPLOAD_BYTES"] = int(os.environ.get("MAX_PHOTO_UPLOAD_BYTES", str(10 * 1024 * 1024)))
 app.config["USDA_API_KEY"] = os.environ.get("USDA_API_KEY", "").strip()
 app.config["GOOGLE_VISION_API_KEY"] = os.environ.get("GOOGLE_VISION_API_KEY", "").strip()
 app.config["GOOGLE_VISION_FEATURE_TYPE"] = os.environ.get("GOOGLE_VISION_FEATURE_TYPE", "DOCUMENT_TEXT_DETECTION").strip()
@@ -750,7 +751,7 @@ def parse_positive_float(value, label: str, *, allow_zero: bool = False):
     return parsed, None
 
 
-def nutrition_redirect(client_id: int, *, msg: str | None = None, err: str | None = None, logged_for: date | None = None):
+def nutrition_redirect(client_id: int, *, msg: str | None = None, err: str | None = None, logged_for: date | None = None, anchor: str | None = None):
     params = {"client_id": client_id, "tab": "nutrition"}
     if msg:
         params["msg"] = msg
@@ -758,6 +759,8 @@ def nutrition_redirect(client_id: int, *, msg: str | None = None, err: str | Non
         params["err"] = err
     if logged_for:
         params["nutrition_date"] = logged_for.isoformat()
+    if anchor:
+        params["_anchor"] = anchor
     return redirect(url_for("client_profile", **params))
 
 
@@ -1568,6 +1571,36 @@ def nutrition_summary_payload(nutrition_summary: dict):
 def allowed_photo_file(filename: str):
     name = (filename or "").lower()
     return name.endswith(".jpg") or name.endswith(".jpeg") or name.endswith(".png") or name.endswith(".webp")
+
+
+def validate_uploaded_image(file_storage, *, max_bytes: int | None = None):
+    if not file_storage or not file_storage.filename:
+        return "Please choose a photo file."
+    if not allowed_photo_file(file_storage.filename):
+        return "Allowed formats: .jpg, .jpeg, .png, .webp"
+
+    limit = max_bytes or app.config["MAX_PHOTO_UPLOAD_BYTES"]
+    stream = file_storage.stream
+    try:
+        stream.seek(0, os.SEEK_END)
+        size = stream.tell()
+        stream.seek(0)
+    except (OSError, AttributeError):
+        size = file_storage.content_length or 0
+
+    if size and size > limit:
+        stream.seek(0)
+        return f"Photo is too large. Max size is {limit // (1024 * 1024)} MB."
+
+    try:
+        with Image.open(stream) as img:
+            img.verify()
+    except Exception:
+        stream.seek(0)
+        return "That file does not look like a valid image."
+
+    stream.seek(0)
+    return None
 
 
 def parse_phone(value):
@@ -2784,6 +2817,30 @@ def add_food_item(client_id):
     db.session.add(food)
     db.session.commit()
     set_nutrition_label_draft(client.id, None)
+    if request.form.get("save_action") == "save_and_log":
+        quantity_grams, err = parse_positive_float(request.form.get("log_quantity_grams"), "Quantity in grams")
+        if err:
+            return nutrition_redirect(client.id, msg="Food saved to your library. Add a quantity to log it.", logged_for=nutrition_date, anchor="nutritionLogForm")
+
+        factor = quantity_grams / 100
+        food_label = food.name if not food.brand else f"{food.name} ({food.brand})"
+        log_entry = FoodLogEntry(
+            client_id=client.id,
+            food_id=food.id,
+            logged_for=nutrition_date,
+            meal_type=normalize_meal_type(request.form.get("log_meal_type")),
+            quantity_grams=quantity_grams,
+            food_name=food_label[:160],
+            calories=round(food.calories_per_100g * factor, 1),
+            protein=round(food.protein_per_100g * factor, 1),
+            carbs=round(food.carbs_per_100g * factor, 1),
+            fat=round(food.fat_per_100g * factor, 1),
+            note=((request.form.get("log_note") or "").strip() or None),
+        )
+        db.session.add(log_entry)
+        db.session.commit()
+        return nutrition_redirect(client.id, msg="Food saved and logged.", logged_for=nutrition_date, anchor="nutritionLogForm")
+
     return nutrition_redirect(client.id, msg="Food saved to your library.", logged_for=nutrition_date)
 
 
@@ -3027,6 +3084,11 @@ def scan_food_label(client_id):
         return nutrition_redirect(client.id, err=str(exc), logged_for=logged_for)
     except Exception:
         return nutrition_redirect(client.id, err="Could not read that label image.", logged_for=logged_for)
+    finally:
+        try:
+            os.remove(target_path)
+        except OSError:
+            pass
 
     parsed = parse_label_text(text)
     if not label_name:
@@ -3046,7 +3108,7 @@ def scan_food_label(client_id):
 
     if parsed["calories"] is None and parsed["protein"] is None and parsed["carbs"] is None and parsed["fat"] is None:
         return nutrition_redirect(client.id, err="Could not read the label cleanly. Review the manual form below and fill in the missing values.", logged_for=logged_for)
-    return nutrition_redirect(client.id, msg="Label scanned. Review the custom food form below and save the values.", logged_for=logged_for)
+    return nutrition_redirect(client.id, msg="Label scanned. Review the custom food form below and save the values.", logged_for=logged_for, anchor="customFoodForm")
 
 
 @app.route("/client/<int:client_id>/nutrition/logs/delete/<int:log_id>", methods=["POST"])
@@ -3189,10 +3251,9 @@ def upload_progress_photo(client_id):
         return "Forbidden", 403
     client = get_or_404(Client, client_id)
     f = request.files.get("photo")
-    if not f or not f.filename:
-        return redirect(url_for("client_profile", client_id=client.id, tab="stats", err="Please choose a photo file."))
-    if not allowed_photo_file(f.filename):
-        return redirect(url_for("client_profile", client_id=client.id, tab="stats", err="Allowed formats: .jpg, .jpeg, .png, .webp"))
+    image_error = validate_uploaded_image(f)
+    if image_error:
+        return redirect(url_for("client_profile", client_id=client.id, tab="stats", err=image_error))
     ext = os.path.splitext(f.filename)[1].lower()
     safe_name = secure_filename(f.filename)
     unique_name = f"{client.id}_{uuid.uuid4().hex}_{safe_name}"
@@ -3464,30 +3525,39 @@ def add_payment(client_id):
     amount_paid = to_int(request.form.get("amount_paid"), default=0)
     note = (request.form.get("note") or "").strip()
 
+    plan_type = (request.form.get("plan_type") or "").strip()
     if amount_paid <= 0:
         return redirect(url_for("client_profile", client_id=client.id, tab="payments", err="Enter a valid amount."))
 
-    # Rules:
-    # 5000 => 1 month, 3/week
-    # 7000 => 1 month, 5/week
-    if amount_paid % 5000 == 0 and amount_paid % 7000 != 0:
-        monthly_price = 5000
-        sessions_per_week = 3
-        months = amount_paid // 5000
-    elif amount_paid % 7000 == 0 and amount_paid % 5000 != 0:
-        monthly_price = 7000
-        sessions_per_week = 5
-        months = amount_paid // 7000
-    elif amount_paid % 5000 == 0 and amount_paid % 7000 == 0:
-        # if divisible by both (e.g. 35000), prefer 7000 plan by default
-        monthly_price = 7000
-        sessions_per_week = 5
-        months = amount_paid // 7000
+    if plan_type in ("5000", "7000"):
+        monthly_price = int(plan_type)
+        sessions_per_week = 3 if monthly_price == 5000 else 5
+        if amount_paid % monthly_price != 0:
+            return redirect(url_for(
+                "client_profile", client_id=client.id, tab="payments",
+                err=f"Amount must be a multiple of {monthly_price} for the selected plan."
+            ))
+        months = amount_paid // monthly_price
     else:
-        return redirect(url_for(
-            "client_profile", client_id=client.id, tab="payments",
-            err=f"Amount must be divisible by 5000 or 7000. (Received: {amount_paid})"
-        ))
+        # Backwards-compatible fallback for older forms/API calls.
+        if amount_paid % 5000 == 0 and amount_paid % 7000 != 0:
+            monthly_price = 5000
+            sessions_per_week = 3
+            months = amount_paid // 5000
+        elif amount_paid % 7000 == 0 and amount_paid % 5000 != 0:
+            monthly_price = 7000
+            sessions_per_week = 5
+            months = amount_paid // 7000
+        elif amount_paid % 5000 == 0 and amount_paid % 7000 == 0:
+            return redirect(url_for(
+                "client_profile", client_id=client.id, tab="payments",
+                err="Choose a plan type for this amount."
+            ))
+        else:
+            return redirect(url_for(
+                "client_profile", client_id=client.id, tab="payments",
+                err=f"Amount must be divisible by 5000 or 7000. (Received: {amount_paid})"
+            ))
 
     p = Payment(
         client_id=client.id,

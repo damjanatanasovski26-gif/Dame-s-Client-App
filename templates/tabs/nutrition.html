@@ -26,18 +26,21 @@
   <div class="card nutrition-metric-card {% if protein_ratio >= 100 %}macro-over{% elif protein_ratio > 0 %}macro-progress{% endif %}" {% if nutrition_summary.protein_goal %}style="--macro-progress: {{ protein_ratio if protein_ratio < 100 else 100 }};"{% endif %}>
     <span class="muted">Protein</span>
     <div class="nutrition-metric-value">{{ daily_totals.protein }}g</div>
+    <div class="nutrition-metric-progress"><span class="nutrition-metric-progress-fill"></span></div>
     <div class="nutrition-metric-goal-label muted" {% if not nutrition_summary.protein_goal %}style="display:none;"{% endif %}>{{ nutrition_summary.protein_goal }}g goal</div>
   </div>
   {% set carbs_ratio = (daily_totals.carbs / nutrition_summary.carbs_goal * 100) if nutrition_summary.carbs_goal else 0 %}
   <div class="card nutrition-metric-card {% if carbs_ratio >= 100 %}macro-over{% elif carbs_ratio > 0 %}macro-progress{% endif %}" {% if nutrition_summary.carbs_goal %}style="--macro-progress: {{ carbs_ratio if carbs_ratio < 100 else 100 }};"{% endif %}>
     <span class="muted">Carbs</span>
     <div class="nutrition-metric-value">{{ daily_totals.carbs }}g</div>
+    <div class="nutrition-metric-progress"><span class="nutrition-metric-progress-fill"></span></div>
     <div class="nutrition-metric-goal-label muted" {% if not nutrition_summary.carbs_goal %}style="display:none;"{% endif %}>{{ nutrition_summary.carbs_goal }}g goal</div>
   </div>
   {% set fat_ratio = (daily_totals.fat / nutrition_summary.fat_goal * 100) if nutrition_summary.fat_goal else 0 %}
   <div class="card nutrition-metric-card {% if fat_ratio >= 100 %}macro-over{% elif fat_ratio > 0 %}macro-progress{% endif %}" {% if nutrition_summary.fat_goal %}style="--macro-progress: {{ fat_ratio if fat_ratio < 100 else 100 }};"{% endif %}>
     <span class="muted">Fat</span>
     <div class="nutrition-metric-value">{{ daily_totals.fat }}g</div>
+    <div class="nutrition-metric-progress"><span class="nutrition-metric-progress-fill"></span></div>
     <div class="nutrition-metric-goal-label muted" {% if not nutrition_summary.fat_goal %}style="display:none;"{% endif %}>{{ nutrition_summary.fat_goal }}g goal</div>
   </div>
 </div>
@@ -89,7 +92,7 @@
       {% if label_scan_provider %}Using {{ label_scan_provider }}.{% endif %}
       {% if not label_scan_enabled %}OCR support is not configured on this environment yet.{% endif %}
     </div>
-    <form class="form" action="{{ url_for('scan_food_label', client_id=client.id) }}" method="POST" enctype="multipart/form-data">
+    <form class="form" id="nutritionScanForm" action="{{ url_for('scan_food_label', client_id=client.id) }}" method="POST" enctype="multipart/form-data">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="nutrition_date" value="{{ nutrition_date.isoformat() }}">
       <div class="grid-2">
@@ -104,9 +107,15 @@
       </div>
       <div>
         <label class="label">Label photo</label>
-        <input class="input" type="file" name="label_photo" accept=".jpg,.jpeg,.png,.webp" {% if not label_scan_enabled %}disabled{% endif %} required>
+        <input class="nutrition-file-input" id="nutritionLabelPhoto" type="file" name="label_photo" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" {% if not label_scan_enabled %}disabled{% endif %} required>
+        <div class="nutrition-file-picker">
+          <button class="btn secondary" id="chooseNutritionLabelPhoto" type="button" {% if not label_scan_enabled %}disabled{% endif %}>Choose Photo</button>
+          <button class="btn secondary" id="takeNutritionLabelPhoto" type="button" {% if not label_scan_enabled %}disabled{% endif %}>Take Photo</button>
+          <div class="nutrition-file-name" id="nutritionLabelFileName">No photo selected</div>
+        </div>
+        <div class="muted nutrition-file-hint">JPG, PNG, or WEBP. On mobile, Take Photo opens the camera after permission.</div>
       </div>
-      <button class="btn secondary" type="submit" {% if not label_scan_enabled %}disabled{% endif %}>Scan Label</button>
+      <button class="btn" id="nutritionScanSubmit" type="submit" {% if not label_scan_enabled %}disabled{% endif %}>Scan Label</button>
     </form>
   </div>
 
@@ -176,42 +185,79 @@
         <div class="grid-2">
           <div>
             <label class="label">Food name</label>
-            <input class="input" name="name" maxlength="120" placeholder="Chicken breast" value="{{ nutrition_label_draft.get('name', '') }}" autocomplete="off" required>
+            <input class="input {% if nutrition_label_draft.get('ocr_text') and nutrition_label_draft.get('name') %}nutrition-scanned-field{% endif %}" name="name" maxlength="120" placeholder="Chicken breast" value="{{ nutrition_label_draft.get('name', '') }}" autocomplete="off" required>
           </div>
           <div>
             <label class="label">Brand (optional)</label>
-            <input class="input" name="brand" maxlength="120" placeholder="Local market / brand" value="{{ nutrition_label_draft.get('brand', '') }}" autocomplete="off">
+            <input class="input {% if nutrition_label_draft.get('ocr_text') and nutrition_label_draft.get('brand') %}nutrition-scanned-field{% endif %}" name="brand" maxlength="120" placeholder="Local market / brand" value="{{ nutrition_label_draft.get('brand', '') }}" autocomplete="off">
           </div>
         </div>
 
         <label class="label">Serving note (optional)</label>
-        <input class="input" name="serving_label" maxlength="80" placeholder="1 slice = 32g" value="{{ nutrition_label_draft.get('serving_label', '') }}" autocomplete="off">
+        <input class="input {% if nutrition_label_draft.get('ocr_text') and nutrition_label_draft.get('serving_label') %}nutrition-scanned-field{% endif %}" name="serving_label" maxlength="80" placeholder="1 slice = 32g" value="{{ nutrition_label_draft.get('serving_label', '') }}" autocomplete="off">
 
         <div class="grid-2">
           <div>
             <label class="label">Calories / 100g</label>
-            <input class="input" type="number" name="calories_per_100g" min="0" step="0.1" value="{{ nutrition_label_draft.get('calories_per_100g', '') }}" required>
+            <input class="input {% if nutrition_label_draft.get('ocr_text') and nutrition_label_draft.get('calories_per_100g') %}nutrition-scanned-field{% elif nutrition_label_draft.get('ocr_text') %}nutrition-review-field{% endif %}" type="number" name="calories_per_100g" min="0" step="0.1" value="{{ nutrition_label_draft.get('calories_per_100g', '') }}" required>
+            {% if nutrition_label_draft.get('ocr_text') and not nutrition_label_draft.get('calories_per_100g') %}<div class="nutrition-field-note">Review needed</div>{% endif %}
           </div>
           <div>
             <label class="label">Protein / 100g</label>
-            <input class="input" type="number" name="protein_per_100g" min="0" step="0.1" value="{{ nutrition_label_draft.get('protein_per_100g', '') }}" required>
+            <input class="input {% if nutrition_label_draft.get('ocr_text') and nutrition_label_draft.get('protein_per_100g') %}nutrition-scanned-field{% elif nutrition_label_draft.get('ocr_text') %}nutrition-review-field{% endif %}" type="number" name="protein_per_100g" min="0" step="0.1" value="{{ nutrition_label_draft.get('protein_per_100g', '') }}" required>
+            {% if nutrition_label_draft.get('ocr_text') and not nutrition_label_draft.get('protein_per_100g') %}<div class="nutrition-field-note">Review needed</div>{% endif %}
           </div>
           <div>
             <label class="label">Carbs / 100g</label>
-            <input class="input" type="number" name="carbs_per_100g" min="0" step="0.1" value="{{ nutrition_label_draft.get('carbs_per_100g', '') }}" required>
+            <input class="input {% if nutrition_label_draft.get('ocr_text') and nutrition_label_draft.get('carbs_per_100g') %}nutrition-scanned-field{% elif nutrition_label_draft.get('ocr_text') %}nutrition-review-field{% endif %}" type="number" name="carbs_per_100g" min="0" step="0.1" value="{{ nutrition_label_draft.get('carbs_per_100g', '') }}" required>
+            {% if nutrition_label_draft.get('ocr_text') and not nutrition_label_draft.get('carbs_per_100g') %}<div class="nutrition-field-note">Review needed</div>{% endif %}
           </div>
           <div>
             <label class="label">Fat / 100g</label>
-            <input class="input" type="number" name="fat_per_100g" min="0" step="0.1" value="{{ nutrition_label_draft.get('fat_per_100g', '') }}" required>
+            <input class="input {% if nutrition_label_draft.get('ocr_text') and nutrition_label_draft.get('fat_per_100g') %}nutrition-scanned-field{% elif nutrition_label_draft.get('ocr_text') %}nutrition-review-field{% endif %}" type="number" name="fat_per_100g" min="0" step="0.1" value="{{ nutrition_label_draft.get('fat_per_100g', '') }}" required>
+            {% if nutrition_label_draft.get('ocr_text') and not nutrition_label_draft.get('fat_per_100g') %}<div class="nutrition-field-note">Review needed</div>{% endif %}
           </div>
         </div>
 
         {% if nutrition_label_draft.get('ocr_text') %}
-          <label class="label">OCR text preview</label>
-          <textarea class="input nutrition-ocr-preview" rows="8" readonly>{{ nutrition_label_draft.get('ocr_text', '') }}</textarea>
+          <div class="nutrition-detected">
+            <div class="nutrition-detected-head">Detected per 100g</div>
+            <div class="nutrition-detected-grid">
+              <div><span>Calories</span><b>{{ nutrition_label_draft.get('calories_per_100g') or 'Review' }}</b></div>
+              <div><span>Protein</span><b>{{ nutrition_label_draft.get('protein_per_100g') or 'Review' }}{% if nutrition_label_draft.get('protein_per_100g') %}g{% endif %}</b></div>
+              <div><span>Carbs</span><b>{{ nutrition_label_draft.get('carbs_per_100g') or 'Review' }}{% if nutrition_label_draft.get('carbs_per_100g') %}g{% endif %}</b></div>
+              <div><span>Fat</span><b>{{ nutrition_label_draft.get('fat_per_100g') or 'Review' }}{% if nutrition_label_draft.get('fat_per_100g') %}g{% endif %}</b></div>
+            </div>
+          </div>
+          <details class="nutrition-ocr-details">
+            <summary>OCR text preview</summary>
+            <textarea class="input nutrition-ocr-preview" rows="8" readonly>{{ nutrition_label_draft.get('ocr_text', '') }}</textarea>
+          </details>
         {% endif %}
 
-        <button class="btn secondary" type="submit">Save Food</button>
+        <div class="nutrition-save-log-panel">
+          <div class="grid-2">
+            <div>
+              <label class="label">Meal</label>
+              <select class="input" name="log_meal_type">
+                <option value="breakfast">Breakfast</option>
+                <option value="lunch">Lunch</option>
+                <option value="dinner">Dinner</option>
+                <option value="snack" selected>Snack</option>
+              </select>
+            </div>
+            <div>
+              <label class="label">Quantity to log (g)</label>
+              <input class="input" type="number" name="log_quantity_grams" min="1" step="0.1" placeholder="e.g. 150">
+            </div>
+          </div>
+          <label class="label">Log note</label>
+          <input class="input" name="log_note" maxlength="200" placeholder="Optional note for today's log">
+        </div>
+        <div class="nutrition-save-actions">
+          <button class="btn secondary" type="submit" name="save_action" value="save">Save Food</button>
+          <button class="btn" type="submit" name="save_action" value="save_and_log">Save &amp; Log</button>
+        </div>
       </form>
     </div>
   </div>
@@ -236,7 +282,7 @@
               <div class="nutrition-log-meta">
                 <span>{{ item.calories }} kcal</span>
                 <span>{{ item.protein }}P / {{ item.carbs }}C / {{ item.fat }}F</span>
-                <form action="{{ url_for('delete_food_log_entry', client_id=client.id, log_id=item.id) }}" method="POST" style="margin:0;">
+                <form class="nutrition-delete-form" action="{{ url_for('delete_food_log_entry', client_id=client.id, log_id=item.id) }}" method="POST" style="margin:0;">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                   <button class="btn danger" type="submit">Delete</button>
                 </form>
@@ -282,12 +328,11 @@
         hint.textContent = "Choose a saved item from the search list.";
         return;
       }
-      const fuzzyMatch = options.find(function (option) {
+      const partialMatch = options.find(function (option) {
         return option.value.toLowerCase().indexOf(rawValue) !== -1;
       });
-      if (fuzzyMatch) {
-        hiddenInput.value = fuzzyMatch.id;
-        hint.textContent = "Closest saved food matched automatically.";
+      if (partialMatch) {
+        hint.textContent = "Matching saved food found. Choose the exact item from the list.";
       } else {
         hint.textContent = "No saved food match found yet.";
       }
@@ -295,6 +340,59 @@
 
     searchInput.addEventListener("input", syncSelectedFood);
     searchInput.addEventListener("change", syncSelectedFood);
+  })();
+</script>
+
+<script>
+  (function () {
+    const form = document.getElementById("nutritionScanForm");
+    const fileInput = document.getElementById("nutritionLabelPhoto");
+    const chooseButton = document.getElementById("chooseNutritionLabelPhoto");
+    const cameraButton = document.getElementById("takeNutritionLabelPhoto");
+    const fileName = document.getElementById("nutritionLabelFileName");
+    const submitButton = document.getElementById("nutritionScanSubmit");
+    if (!form || !fileInput || !chooseButton || !cameraButton || !fileName || !submitButton) return;
+
+    function openPicker(useCamera) {
+      if (useCamera) {
+        fileInput.setAttribute("capture", "environment");
+      } else {
+        fileInput.removeAttribute("capture");
+      }
+      fileInput.click();
+    }
+
+    chooseButton.addEventListener("click", function () {
+      openPicker(false);
+    });
+
+    cameraButton.addEventListener("click", function () {
+      openPicker(true);
+    });
+
+    fileInput.addEventListener("change", function () {
+      const file = fileInput.files && fileInput.files[0];
+      fileName.textContent = file ? file.name : "No photo selected";
+    });
+
+    form.addEventListener("submit", function () {
+      submitButton.disabled = true;
+      chooseButton.disabled = true;
+      cameraButton.disabled = true;
+      submitButton.textContent = "Scanning...";
+    });
+  })();
+</script>
+
+<script>
+  (function () {
+    document.addEventListener("submit", function (event) {
+      const form = event.target;
+      if (!form.classList || !form.classList.contains("nutrition-delete-form")) return;
+      if (!window.confirm("Delete this logged food?")) {
+        event.preventDefault();
+      }
+    });
   })();
 </script>
 
@@ -565,6 +663,7 @@
           const form = document.createElement("form");
           form.method = "POST";
           form.action = `/client/{{ client.id }}/nutrition/logs/delete/${item.id}`;
+          form.className = "nutrition-delete-form";
           form.style.margin = "0";
 
           const token = document.createElement("input");

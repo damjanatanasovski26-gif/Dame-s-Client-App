@@ -1,8 +1,8 @@
-const CACHE_NAME = "trainer-app-v15";
+const CACHE_NAME = "trainer-app-v18";
 const APP_SHELL = [
   "/login",
-  "/manifest.webmanifest?v=2",
-  "/static/style.css?v=15",
+  "/manifest.webmanifest?v=4",
+  "/static/style.css?v=18",
   "/static/images/coach.png?v=2",
   "/static/images/social/instagram.png",
   "/static/images/social/facebook.png",
@@ -45,6 +45,19 @@ self.addEventListener("fetch", (event) => {
           if (cached) return cached;
           return caches.match("/static/offline.html");
         })
+    );
+    return;
+  }
+
+  if (req.url.includes("/static/style.css")) {
+    event.respondWith(
+      fetch(req)
+        .then((res) => {
+          const clone = res.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(req, clone)).catch(() => {});
+          return res;
+        })
+        .catch(() => caches.match(req))
     );
     return;
   }

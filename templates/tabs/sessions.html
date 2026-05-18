@@ -4,7 +4,16 @@
   <div class="muted" style="margin-bottom:10px;">
     This week: <b>{{ used_this_week }}</b> / <b>{{ allowed }}</b>
     (Remaining: <b>{{ remaining }}</b>)
+    {% if bonus and bonus > 0 %} | Rollover bonus: <b>{{ bonus }}</b>{% endif %}
   </div>
+  {% if is_admin %}
+    <form action="{{ url_for('transfer_sessions', client_id=client.id) }}" method="POST" style="margin:0 0 14px 0;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn secondary" type="submit" {% if remaining <= 0 %}disabled{% endif %}>
+        Transfer {{ remaining }} Unused to Next Week
+      </button>
+    </form>
+  {% endif %}
 
   <form id="logSessionForm" class="form" action="{{ url_for('add_session', client_id=client.id) }}" method="POST" style="max-width:520px;">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

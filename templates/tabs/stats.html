@@ -27,13 +27,19 @@
 
 <div class="card">
   <h3>Progress Photos</h3>
-  <form class="form" action="{{ url_for('upload_progress_photo', client_id=client.id) }}" method="POST" enctype="multipart/form-data" style="max-width:700px;">
+  <form id="progressPhotoForm" class="form" action="{{ url_for('upload_progress_photo', client_id=client.id) }}" method="POST" enctype="multipart/form-data" style="max-width:700px;">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label class="label">Photo file</label>
-    <input class="input" type="file" name="photo" accept=".jpg,.jpeg,.png,.webp" required>
+    <input class="nutrition-file-input" id="progressPhotoFile" type="file" name="photo" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" required>
+    <div class="nutrition-file-picker">
+      <button class="btn secondary" id="chooseProgressPhoto" type="button">Choose Photo</button>
+      <button class="btn secondary" id="takeProgressPhoto" type="button">Take Photo</button>
+      <div class="nutrition-file-name" id="progressPhotoFileName">No photo selected</div>
+    </div>
+    <div class="muted nutrition-file-hint">JPG, PNG, or WEBP. Max 8 MB.</div>
     <label class="label">Note</label>
     <input class="input" name="note" maxlength="200" placeholder="Optional note (front/side/back, lighting, etc.)">
-    <button class="btn" type="submit">Upload Photo</button>
+    <button class="btn" id="progressPhotoSubmit" type="submit">Upload Photo</button>
   </form>
 
   {% if photos %}
@@ -44,7 +50,7 @@
           <div class="muted" style="margin-top:8px;">{{ p.created_at.strftime("%d/%m/%Y %H:%M") }}</div>
           <div class="muted">{{ p.note or "-" }}</div>
           {% if is_admin %}
-            <form action="{{ url_for('delete_progress_photo', client_id=client.id, photo_id=p.id) }}" method="POST" style="margin-top:8px;">
+            <form action="{{ url_for('delete_progress_photo', client_id=client.id, photo_id=p.id) }}" method="POST" style="margin-top:8px;" onsubmit="return confirm('Delete this progress photo?');">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button class="btn danger" type="submit">Delete</button>
             </form>
@@ -56,6 +62,38 @@
     <div class="empty-state" style="margin-top:10px;">No progress photos yet.</div>
   {% endif %}
 </div>
+
+<script>
+  (function () {
+    const form = document.getElementById("progressPhotoForm");
+    const fileInput = document.getElementById("progressPhotoFile");
+    const chooseButton = document.getElementById("chooseProgressPhoto");
+    const cameraButton = document.getElementById("takeProgressPhoto");
+    const fileName = document.getElementById("progressPhotoFileName");
+    const submitButton = document.getElementById("progressPhotoSubmit");
+    if (!form || !fileInput || !chooseButton || !cameraButton || !fileName || !submitButton) return;
+
+    function openPicker(useCamera) {
+      if (useCamera) {
+        fileInput.setAttribute("capture", "environment");
+      } else {
+        fileInput.removeAttribute("capture");
+      }
+      fileInput.click();
+    }
+
+    chooseButton.addEventListener("click", function () { openPicker(false); });
+    cameraButton.addEventListener("click", function () { openPicker(true); });
+    fileInput.addEventListener("change", function () {
+      const file = fileInput.files && fileInput.files[0];
+      fileName.textContent = file ? file.name : "No photo selected";
+    });
+    form.addEventListener("submit", function () {
+      submitButton.disabled = true;
+      submitButton.textContent = "Uploading...";
+    });
+  })();
+</script>
 
 <!-- =========================
      WEIGHT GRAPH (ONLY)

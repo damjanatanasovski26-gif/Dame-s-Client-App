@@ -3,6 +3,7 @@ __pycache__/
 *.pyc
 
 instance/
+static/uploads/
 migrations/__pycache__/
 migrations/versions/__pycache__/
 tests/__pycache__/

@@ -11,8 +11,7 @@
 
       <div>
         <label class="label">Amount paid (MKD)</label>
-        <!-- IMPORTANT: name MUST be amount_paid -->
-        <input id="paymentAmount" class="input" name="amount_paid" type="number" min="0" step="1" placeholder="5000 / 7000 / multiple" required>
+        <input id="paymentAmount" class="input" name="amount_paid" type="number" min="0" step="1" placeholder="e.g. 5000, 10000, 14000" required>
       </div>
 
       <div style="grid-column: 1 / -1;">
@@ -183,7 +182,9 @@
       } else if (amount % 7000 === 0 && amount % 5000 !== 0) {
         monthlyPrice = 7000; sessions = 5; months = amount / 7000;
       } else if (amount % 5000 === 0 && amount % 7000 === 0) {
-        monthlyPrice = 7000; sessions = 5; months = amount / 7000;
+        previewEl.className = "alert error";
+        previewEl.textContent = "Ambiguous amount: use a non-overlapping multiple, or split it into separate payments.";
+        return;
       } else {
         previewEl.className = "alert error";
         previewEl.textContent = "Invalid amount: must be divisible by 5000 or 7000.";

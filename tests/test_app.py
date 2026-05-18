@@ -322,6 +322,45 @@ class TrainerAppTests(unittest.TestCase):
             self.assertIsNotNone(food)
             self.assertEqual(food.barcode, "5310000000000")
 
+    def test_payment_without_plan_type_rejects_ambiguous_amount(self):
+        client_id = self._create_client(name="Pay Client")
+        self._create_user("admin_pay", "pass123", role="admin")
+        self._login("admin_pay", "pass123")
+
+        resp = self.client.post(
+            f"/client/{client_id}/payments/add",
+            data={
+                "start_date": "01/03/2026",
+                "amount_paid": "35000",
+                "note": "bulk",
+            },
+            follow_redirects=True,
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b"Choose a plan type", resp.data)
+        with app.app_context():
+            payment = Payment.query.filter_by(client_id=client_id).first()
+            self.assertIsNone(payment)
+
+    def test_progress_photo_rejects_non_image_upload(self):
+        client_id = self._create_client(name="Photo Client")
+        self._create_user("photo_user", "pass123", role="client", client_id=client_id)
+        self._login("photo_user", "pass123")
+
+        resp = self.client.post(
+            f"/client/{client_id}/photos/upload",
+            data={
+                "note": "not an image",
+                "photo": (BytesIO(b"not really an image"), "fake.jpg"),
+            },
+            content_type="multipart/form-data",
+            follow_redirects=True,
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b"valid image", resp.data)
+
     def test_parse_label_text_extracts_macros_from_english_label(self):
         parsed = parse_label_text(
             "Energy 250 kcal\nFat 10 g\nCarbohydrates 20 g\nProtein 8 g"
@@ -536,6 +575,41 @@ class TrainerAppTests(unittest.TestCase):
         with self.client.session_transaction() as sess:
             self.assertNotIn(f"nutrition_label_draft_{client_id}", sess)
         self.assertNotIn(b'value="Scanned Protein"', resp.data)
+
+    def test_custom_food_can_save_and_log_in_one_submit(self):
+        client_id = self._create_client(name="Nina")
+        self._create_user("nina_user", "pass123", role="client", client_id=client_id)
+        self._login("nina_user", "pass123")
+
+        resp = self.client.post(
+            f"/client/{client_id}/nutrition/foods/add",
+            data={
+                "name": "Scanned Bar",
+                "brand": "Fast Fuel",
+                "serving_label": "Scanned from label",
+                "calories_per_100g": "200",
+                "protein_per_100g": "20",
+                "carbs_per_100g": "15",
+                "fat_per_100g": "4",
+                "nutrition_date": "2026-03-21",
+                "save_action": "save_and_log",
+                "log_meal_type": "snack",
+                "log_quantity_grams": "50",
+                "log_note": "after scan",
+            },
+            follow_redirects=True,
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b"Food saved and logged", resp.data)
+        with app.app_context():
+            food = FoodItem.query.filter_by(client_id=client_id, name="Scanned Bar").first()
+            self.assertIsNotNone(food)
+            log = FoodLogEntry.query.filter_by(client_id=client_id, food_id=food.id).first()
+            self.assertIsNotNone(log)
+            self.assertEqual(log.quantity_grams, 50.0)
+            self.assertEqual(log.calories, 100.0)
+            self.assertEqual(log.protein, 10.0)
 
     @patch("app.label_scan_enabled", return_value=True)
     @patch("app.scan_label_file_text", return_value="Energy 99 kcal\nFat 2 g")
