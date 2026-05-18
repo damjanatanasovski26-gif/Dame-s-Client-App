@@ -1061,18 +1061,20 @@ tr:last-child td{ border-bottom:0; }
   margin-bottom:0;
   position:relative;
   overflow:hidden;
+  isolation:isolate;
+  --macro-fill:0%;
+  --macro-fill-color:rgba(34, 197, 94, .34);
+  background:
+    linear-gradient(
+      to top,
+      var(--macro-fill-color) 0 var(--macro-fill),
+      transparent var(--macro-fill) 100%
+    ),
+    linear-gradient(180deg, color-mix(in srgb, var(--surface) 94%, #ffffff 6%), var(--surface));
 }
 
 .nutrition-metric-card::before{
-  content:'';
-  position:absolute;
-  top:100%;
-  left:0;
-  right:0;
-  bottom:0;
-  background:linear-gradient(180deg, rgba(34, 197, 94, 0.8) 0%, rgba(34, 197, 94, 0.9) 70%, rgba(34, 197, 94, 1.0) 100%);
-  transition:height 0.5s ease;
-  z-index:1;
+  content:none;
 }
 
 .nutrition-metric-card.macro-progress::before{
@@ -1080,15 +1082,23 @@ tr:last-child td{ border-bottom:0; }
   top:calc(100% - var(--macro-progress) * 1%);
 }
 
+.nutrition-metric-card.macro-progress{
+  --macro-fill:calc(var(--macro-progress) * 1%);
+}
+
 .nutrition-metric-card.macro-over::before{
-  background:linear-gradient(180deg, rgba(239, 68, 68, 0.9) 0%, rgba(220, 38, 38, 1.0) 70%, rgba(239, 68, 68, 1.0) 100%);
   height:100% !important;
   top:0 !important;
 }
 
-.nutrition-metric-card .nutrition-metric-inner{
+.nutrition-metric-card.macro-over{
+  --macro-fill:100%;
+  --macro-fill-color:rgba(239, 68, 68, .36);
+}
+
+.nutrition-metric-card > *{
   position:relative;
-  z-index:2;
+  z-index:1;
 }
 
 .nutrition-metric-value{

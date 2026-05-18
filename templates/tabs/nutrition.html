@@ -26,25 +26,19 @@
   <div class="card nutrition-metric-card {% if protein_ratio >= 100 %}macro-over{% elif protein_ratio > 0 %}macro-progress{% endif %}" {% if nutrition_summary.protein_goal %}style="--macro-progress: {{ protein_ratio if protein_ratio < 100 else 100 }};"{% endif %}>
     <span class="muted">Protein</span>
     <div class="nutrition-metric-value">{{ daily_totals.protein }}g</div>
-    {% if nutrition_summary.protein_goal %}
-      <div class="nutrition-metric-goal-label muted">{{ nutrition_summary.protein_goal }}g goal</div>
-    {% endif %}
+    <div class="nutrition-metric-goal-label muted" {% if not nutrition_summary.protein_goal %}style="display:none;"{% endif %}>{{ nutrition_summary.protein_goal }}g goal</div>
   </div>
   {% set carbs_ratio = (daily_totals.carbs / nutrition_summary.carbs_goal * 100) if nutrition_summary.carbs_goal else 0 %}
   <div class="card nutrition-metric-card {% if carbs_ratio >= 100 %}macro-over{% elif carbs_ratio > 0 %}macro-progress{% endif %}" {% if nutrition_summary.carbs_goal %}style="--macro-progress: {{ carbs_ratio if carbs_ratio < 100 else 100 }};"{% endif %}>
     <span class="muted">Carbs</span>
     <div class="nutrition-metric-value">{{ daily_totals.carbs }}g</div>
-    {% if nutrition_summary.carbs_goal %}
-      <div class="nutrition-metric-goal-label muted">{{ nutrition_summary.carbs_goal }}g goal</div>
-    {% endif %}
+    <div class="nutrition-metric-goal-label muted" {% if not nutrition_summary.carbs_goal %}style="display:none;"{% endif %}>{{ nutrition_summary.carbs_goal }}g goal</div>
   </div>
   {% set fat_ratio = (daily_totals.fat / nutrition_summary.fat_goal * 100) if nutrition_summary.fat_goal else 0 %}
   <div class="card nutrition-metric-card {% if fat_ratio >= 100 %}macro-over{% elif fat_ratio > 0 %}macro-progress{% endif %}" {% if nutrition_summary.fat_goal %}style="--macro-progress: {{ fat_ratio if fat_ratio < 100 else 100 }};"{% endif %}>
     <span class="muted">Fat</span>
     <div class="nutrition-metric-value">{{ daily_totals.fat }}g</div>
-    {% if nutrition_summary.fat_goal %}
-      <div class="nutrition-metric-goal-label muted">{{ nutrition_summary.fat_goal }}g goal</div>
-    {% endif %}
+    <div class="nutrition-metric-goal-label muted" {% if not nutrition_summary.fat_goal %}style="display:none;"{% endif %}>{{ nutrition_summary.fat_goal }}g goal</div>
   </div>
 </div>
 
@@ -74,10 +68,9 @@
   <div class="nutrition-goal-form-wrap">
     <form class="form nutrition-goal-form{% if not client.daily_calorie_target %} nutrition-goal-form--expanded{% endif %}" id="nutritionGoalForm" action="{{ url_for('update_calorie_target', client_id=client.id) }}" method="POST">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <input type="hidden" name="nutrition_date" value="{{ nutrition_date.isoformat() }}">
       <div class="nutrition-date-form">
         <input class="input" type="date" name="nutrition_date" value="{{ nutrition_date.isoformat() }}">
-        <button class="btn secondary" type="submit">Open Day</button>
+        <button class="btn secondary" type="button" id="openNutritionDay">Open Day</button>
       </div>
       <label class="label">Daily calorie target</label>
       <div class="nutrition-inline-form">
@@ -175,23 +168,23 @@
 
     <div class="card">
       <h3>Save Custom Food</h3>
-      <form class="form" action="{{ url_for('add_food_item', client_id=client.id) }}" method="POST">
+      <form class="form" id="customFoodForm" action="{{ url_for('add_food_item', client_id=client.id) }}" method="POST" autocomplete="off">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="nutrition_date" value="{{ nutrition_date.isoformat() }}">
 
         <div class="grid-2">
           <div>
             <label class="label">Food name</label>
-            <input class="input" name="name" maxlength="120" placeholder="Chicken breast" value="{{ nutrition_label_draft.get('name', '') }}" required>
+            <input class="input" name="name" maxlength="120" placeholder="Chicken breast" value="{{ nutrition_label_draft.get('name', '') }}" autocomplete="off" required>
           </div>
           <div>
             <label class="label">Brand (optional)</label>
-            <input class="input" name="brand" maxlength="120" placeholder="Local market / brand" value="{{ nutrition_label_draft.get('brand', '') }}">
+            <input class="input" name="brand" maxlength="120" placeholder="Local market / brand" value="{{ nutrition_label_draft.get('brand', '') }}" autocomplete="off">
           </div>
         </div>
 
         <label class="label">Serving note (optional)</label>
-        <input class="input" name="serving_label" maxlength="80" placeholder="1 slice = 32g" value="{{ nutrition_label_draft.get('serving_label', '') }}">
+        <input class="input" name="serving_label" maxlength="80" placeholder="1 slice = 32g" value="{{ nutrition_label_draft.get('serving_label', '') }}" autocomplete="off">
 
         <div class="grid-2">
           <div>
@@ -225,8 +218,8 @@
 
 <div class="card">
   <h3>Meals for the Day</h3>
-  {% if nutrition_summary.meal_sections %}
-    <div class="nutrition-meal-list">
+  <div class="nutrition-meal-list">
+    {% if nutrition_summary.meal_sections %}
       {% for meal in nutrition_summary.meal_sections %}
         <div class="nutrition-meal-card">
           <div class="nutrition-meal-head">
@@ -251,10 +244,10 @@
           {% endfor %}
         </div>
       {% endfor %}
-    </div>
-  {% else %}
-    <div class="empty-state">No foods logged for this day yet.</div>
-  {% endif %}
+    {% else %}
+      <div class="empty-state">No foods logged for this day yet.</div>
+    {% endif %}
+  </div>
 </div>
 
 <script>
@@ -326,6 +319,31 @@
 
   // AJAX form handling
   (function () {
+    const nutritionDayUrl = "{{ url_for('client_profile', client_id=client.id, tab='nutrition') }}";
+    const openDayButton = document.getElementById("openNutritionDay");
+    if (openDayButton) {
+      openDayButton.addEventListener("click", function () {
+        const dateInput = document.querySelector('#nutritionGoalForm input[name="nutrition_date"]');
+        const selectedDate = dateInput ? dateInput.value : "";
+        const url = new URL(nutritionDayUrl, window.location.origin);
+        if (selectedDate) {
+          url.searchParams.set("nutrition_date", selectedDate);
+        }
+        window.location.href = url.toString();
+      });
+    }
+
+    function handleJsonResponse(response) {
+      return response.json().catch(() => {
+        throw new Error("Unexpected server response.");
+      }).then(data => {
+        if (!response.ok || !data.success) {
+          throw new Error(data.error || "Something went wrong.");
+        }
+        return data;
+      });
+    }
+
     // Food logging form
     const nutritionLogForm = document.getElementById("nutritionLogForm");
     if (nutritionLogForm) {
@@ -347,22 +365,15 @@
             "X-Requested-With": "XMLHttpRequest"
           }
         })
-        .then(response => response.json())
+        .then(handleJsonResponse)
         .then(data => {
-          if (data.success) {
-            // Update nutrition summary
-            updateNutritionSummary(data.nutrition_summary);
-            // Clear form fields
-            clearFoodLogForm();
-            // Show success message
-            showMessage(data.message, "success");
-          } else {
-            showMessage(data.error, "error");
-          }
+          updateNutritionSummary(data.nutrition_summary);
+          clearFoodLogForm();
+          showMessage(data.message, "success");
         })
         .catch(error => {
           console.error("Error:", error);
-          showMessage("An error occurred. Please try again.", "error");
+          showMessage(error.message || "An error occurred. Please try again.", "error");
         })
         .finally(() => {
           // Re-enable button
@@ -393,20 +404,15 @@
             "X-Requested-With": "XMLHttpRequest"
           }
         })
-        .then(response => response.json())
+        .then(handleJsonResponse)
         .then(data => {
-          if (data.success) {
-            // Update nutrition summary
-            updateNutritionSummary(data.nutrition_summary);
-            // Show success message
-            showMessage(data.message, "success");
-          } else {
-            showMessage(data.error, "error");
-          }
+          updateNutritionSummary(data.nutrition_summary);
+          updateGoalDisplay(data.nutrition_summary.goal);
+          showMessage(data.message, "success");
         })
         .catch(error => {
           console.error("Error:", error);
-          showMessage("An error occurred. Please try again.", "error");
+          showMessage(error.message || "An error occurred. Please try again.", "error");
         })
         .finally(() => {
           // Re-enable button
@@ -424,8 +430,8 @@
       }
 
       const calorieTarget = document.querySelector(".nutrition-target-line span:last-child");
-      if (calorieTarget && summary.goal) {
-        calorieTarget.textContent = `kcal eaten / ${summary.goal} target`;
+      if (calorieTarget) {
+        calorieTarget.textContent = summary.goal ? `kcal eaten / ${summary.goal} target` : "kcal eaten";
       }
 
       const statusElement = document.querySelector(".nutrition-status");
@@ -457,6 +463,18 @@
 
       // Update meal sections
       updateMealSections(summary.meal_sections);
+    }
+
+    function updateGoalDisplay(goal) {
+      const goalValue = document.querySelector(".nutrition-goal-value");
+      if (goalValue) {
+        goalValue.textContent = goal ? `${goal} kcal` : "Not set";
+      }
+
+      const calorieTarget = document.querySelector(".nutrition-target-line span:last-child");
+      if (calorieTarget) {
+        calorieTarget.textContent = goal ? `kcal eaten / ${goal} target` : "kcal eaten";
+      }
     }
 
     function updateMacroCard(macro, current, goal) {
@@ -497,37 +515,75 @@
       if (!mealList) return;
 
       if (!mealSections || mealSections.length === 0) {
-        mealList.innerHTML = '<div class="empty-state">No foods logged for this day yet.</div>';
+        mealList.textContent = "";
+        const emptyState = document.createElement("div");
+        emptyState.className = "empty-state";
+        emptyState.textContent = "No foods logged for this day yet.";
+        mealList.appendChild(emptyState);
         return;
       }
 
-      const clientId = "{{ client.id }}";
       const csrfToken = "{{ csrf_token() }}";
+      mealList.textContent = "";
 
-      mealList.innerHTML = mealSections.map(meal => `
-        <div class="nutrition-meal-card">
-          <div class="nutrition-meal-head">
-            <strong>${meal.label}</strong>
-            <span>${Math.round(meal.calories)} kcal</span>
-          </div>
-          ${meal.items.map(item => `
-            <div class="nutrition-log-row">
-              <div>
-                <div><b>${item.food_name}</b></div>
-                <div class="muted">${item.quantity_grams}g${item.note ? ` | ${item.note}` : ''}</div>
-              </div>
-              <div class="nutrition-log-meta">
-                <span>${item.calories} kcal</span>
-                <span>${item.protein}P / ${item.carbs}C / ${item.fat}F</span>
-                <form action="/client/${clientId}/nutrition/logs/delete/${item.id}" method="POST" style="margin:0;">
-                  <input type="hidden" name="csrf_token" value="${csrfToken}">
-                  <button class="btn danger" type="submit">Delete</button>
-                </form>
-              </div>
-            </div>
-          `).join('')}
-        </div>
-      `).join('');
+      mealSections.forEach(meal => {
+        const mealCard = document.createElement("div");
+        mealCard.className = "nutrition-meal-card";
+
+        const mealHead = document.createElement("div");
+        mealHead.className = "nutrition-meal-head";
+        const mealLabel = document.createElement("strong");
+        mealLabel.textContent = meal.label;
+        const mealCalories = document.createElement("span");
+        mealCalories.textContent = `${Math.round(meal.calories)} kcal`;
+        mealHead.append(mealLabel, mealCalories);
+        mealCard.appendChild(mealHead);
+
+        meal.items.forEach(item => {
+          const row = document.createElement("div");
+          row.className = "nutrition-log-row";
+
+          const details = document.createElement("div");
+          const nameWrap = document.createElement("div");
+          const name = document.createElement("b");
+          name.textContent = item.food_name;
+          nameWrap.appendChild(name);
+
+          const note = document.createElement("div");
+          note.className = "muted";
+          note.textContent = `${item.quantity_grams}g${item.note ? ` | ${item.note}` : ""}`;
+          details.append(nameWrap, note);
+
+          const meta = document.createElement("div");
+          meta.className = "nutrition-log-meta";
+          const calories = document.createElement("span");
+          calories.textContent = `${item.calories} kcal`;
+          const macros = document.createElement("span");
+          macros.textContent = `${item.protein}P / ${item.carbs}C / ${item.fat}F`;
+
+          const form = document.createElement("form");
+          form.method = "POST";
+          form.action = `/client/{{ client.id }}/nutrition/logs/delete/${item.id}`;
+          form.style.margin = "0";
+
+          const token = document.createElement("input");
+          token.type = "hidden";
+          token.name = "csrf_token";
+          token.value = csrfToken;
+
+          const deleteButton = document.createElement("button");
+          deleteButton.className = "btn danger";
+          deleteButton.type = "submit";
+          deleteButton.textContent = "Delete";
+          form.append(token, deleteButton);
+
+          meta.append(calories, macros, form);
+          row.append(details, meta);
+          mealCard.appendChild(row);
+        });
+
+        mealList.appendChild(mealCard);
+      });
     }
 
     function clearFoodLogForm() {

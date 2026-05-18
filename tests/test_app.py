@@ -274,6 +274,23 @@ class TrainerAppTests(unittest.TestCase):
             client = db.session.get(Client, client_id)
             self.assertEqual(client.daily_calorie_target, 2400)
 
+    def test_ajax_calorie_target_returns_integer_macro_goals(self):
+        client_id = self._create_client(name="Tara")
+        self._create_user("tara_user", "pass123", role="client", client_id=client_id)
+        self._login("tara_user", "pass123")
+
+        resp = self.client.post(
+            f"/client/{client_id}/nutrition/update-target-ajax",
+            data={"daily_calorie_target": "2400", "nutrition_date": "2026-03-21"},
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        summary = resp.get_json()["nutrition_summary"]
+        self.assertEqual(summary["protein_goal"], 210)
+        self.assertEqual(summary["carbs_goal"], 240)
+        self.assertEqual(summary["fat_goal"], 67)
+        self.assertIsInstance(summary["protein_goal"], int)
+
     def test_can_import_food_from_search_results_stored_in_session(self):
         client_id = self._create_client(name="Iva")
         self._create_user("admin", "admin123", role="admin")
@@ -397,6 +414,79 @@ class TrainerAppTests(unittest.TestCase):
         )
         self.assertEqual(resp.status_code, 200)
         self.assertIn(b"Food logged", resp.data)
+
+    def test_ajax_food_log_returns_serialized_summary(self):
+        client_id = self._create_client(name="Mila")
+        self._create_user("mila_user", "pass123", role="client", client_id=client_id)
+        with app.app_context():
+            db.session.add(FoodItem(
+                client_id=client_id,
+                name="Skyr",
+                brand="Plain",
+                source="manual",
+                calories_per_100g=63,
+                protein_per_100g=11,
+                carbs_per_100g=3.8,
+                fat_per_100g=0.2,
+            ))
+            db.session.commit()
+            food_id = FoodItem.query.filter_by(client_id=client_id, name="Skyr").first().id
+
+        self._login("mila_user", "pass123")
+        resp = self.client.post(
+            f"/client/{client_id}/nutrition/log-food-ajax",
+            data={
+                "food_id": str(food_id),
+                "meal_type": "breakfast",
+                "quantity_grams": "200",
+                "logged_for": "2026-03-21",
+                "note": "morning",
+            },
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        payload = resp.get_json()
+        self.assertTrue(payload["success"])
+        meal = payload["nutrition_summary"]["meal_sections"][0]
+        self.assertEqual(meal["label"], "Breakfast")
+        self.assertEqual(meal["items"][0]["food_name"], "Skyr (Plain)")
+        self.assertEqual(meal["items"][0]["note"], "morning")
+
+    def test_custom_food_save_clears_label_draft_session(self):
+        client_id = self._create_client(name="Elena")
+        self._create_user("elena_user", "pass123", role="client", client_id=client_id)
+        self._login("elena_user", "pass123")
+
+        with self.client.session_transaction() as sess:
+            sess[f"nutrition_label_draft_{client_id}"] = {
+                "name": "Scanned Protein",
+                "brand": "Draft Brand",
+                "serving_label": "Scanned from label",
+                "calories_per_100g": "99",
+                "protein_per_100g": "12",
+                "carbs_per_100g": "4",
+                "fat_per_100g": "1",
+            }
+
+        resp = self.client.post(
+            f"/client/{client_id}/nutrition/foods/add",
+            data={
+                "name": "Saved Protein",
+                "brand": "Fresh Brand",
+                "serving_label": "100g",
+                "calories_per_100g": "120",
+                "protein_per_100g": "20",
+                "carbs_per_100g": "5",
+                "fat_per_100g": "2",
+                "nutrition_date": "2026-03-21",
+            },
+            follow_redirects=True,
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        with self.client.session_transaction() as sess:
+            self.assertNotIn(f"nutrition_label_draft_{client_id}", sess)
+        self.assertNotIn(b'value="Scanned Protein"', resp.data)
 
     @patch("app.Image.open")
     @patch("app.label_scan_enabled", return_value=True)

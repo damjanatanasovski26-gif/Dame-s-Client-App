@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, session, Response, send_file, abort
+from flask import Flask, render_template, request, redirect, url_for, session, Response, send_file, abort, jsonify
 from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import or_
@@ -765,6 +765,7 @@ def set_nutrition_label_draft(client_id: int, draft: dict | None):
         session[key] = draft
     else:
         session.pop(key, None)
+    session.modified = True
 
 
 def get_nutrition_label_draft(client_id: int):
@@ -1135,9 +1136,9 @@ def build_nutrition_summary(logs: list[FoodLogEntry], calorie_target: int | None
 
     goal = calorie_target or 0
     # Calculate macro goals based on calorie target
-    protein_goal = round((goal * 0.35) / 4, 1) if goal > 0 else 0
-    carbs_goal = round((goal * 0.40) / 4, 1) if goal > 0 else 0
-    fat_goal = round((goal * 0.25) / 9, 1) if goal > 0 else 0
+    protein_goal = round((goal * 0.35) / 4) if goal > 0 else 0
+    carbs_goal = round((goal * 0.40) / 4) if goal > 0 else 0
+    fat_goal = round((goal * 0.25) / 9) if goal > 0 else 0
 
     if goal > 0:
         ratio = totals["calories"] / goal
@@ -1171,6 +1172,47 @@ def build_nutrition_summary(logs: list[FoodLogEntry], calorie_target: int | None
         "tone": tone,
         "status": status,
         "has_logs": bool(logs),
+    }
+
+
+def serialize_food_log(log: FoodLogEntry):
+    return {
+        "id": log.id,
+        "food_name": log.food_name,
+        "quantity_grams": log.quantity_grams,
+        "calories": log.calories,
+        "protein": log.protein,
+        "carbs": log.carbs,
+        "fat": log.fat,
+        "note": log.note or "",
+    }
+
+
+def serialize_meal_sections(meal_sections: list[dict]):
+    return [
+        {
+            "key": meal["key"],
+            "label": meal["label"],
+            "calories": meal["calories"],
+            "items": [serialize_food_log(item) for item in meal["items"]],
+        }
+        for meal in meal_sections
+    ]
+
+
+def nutrition_summary_payload(nutrition_summary: dict):
+    return {
+        "totals": nutrition_summary["totals"],
+        "goal": nutrition_summary["goal"],
+        "protein_goal": nutrition_summary["protein_goal"],
+        "carbs_goal": nutrition_summary["carbs_goal"],
+        "fat_goal": nutrition_summary["fat_goal"],
+        "percent": nutrition_summary["percent"],
+        "ring_percent": nutrition_summary["ring_percent"],
+        "tone": nutrition_summary["tone"],
+        "status": nutrition_summary["status"],
+        "meal_sections": serialize_meal_sections(nutrition_summary["meal_sections"]),
+        "has_logs": nutrition_summary["has_logs"],
     }
 
 
@@ -2324,19 +2366,7 @@ def update_calorie_target_ajax(client_id):
         return jsonify({
             "success": True,
             "message": "Daily calorie target cleared.",
-            "nutrition_summary": {
-                "totals": nutrition_summary["totals"],
-                "goal": nutrition_summary["goal"],
-                "protein_goal": nutrition_summary["protein_goal"],
-                "carbs_goal": nutrition_summary["carbs_goal"],
-                "fat_goal": nutrition_summary["fat_goal"],
-                "percent": nutrition_summary["percent"],
-                "ring_percent": nutrition_summary["ring_percent"],
-                "tone": nutrition_summary["tone"],
-                "status": nutrition_summary["status"],
-                "meal_sections": nutrition_summary["meal_sections"],
-                "has_logs": nutrition_summary["has_logs"]
-            }
+            "nutrition_summary": nutrition_summary_payload(nutrition_summary),
         })
 
     try:
@@ -2360,19 +2390,7 @@ def update_calorie_target_ajax(client_id):
     return jsonify({
         "success": True,
         "message": "Daily calorie target updated!",
-        "nutrition_summary": {
-            "totals": nutrition_summary["totals"],
-            "goal": nutrition_summary["goal"],
-            "protein_goal": nutrition_summary["protein_goal"],
-            "carbs_goal": nutrition_summary["carbs_goal"],
-            "fat_goal": nutrition_summary["fat_goal"],
-            "percent": nutrition_summary["percent"],
-            "ring_percent": nutrition_summary["ring_percent"],
-            "tone": nutrition_summary["tone"],
-            "status": nutrition_summary["status"],
-            "meal_sections": nutrition_summary["meal_sections"],
-            "has_logs": nutrition_summary["has_logs"]
-        }
+        "nutrition_summary": nutrition_summary_payload(nutrition_summary),
     })
 
 
@@ -2608,8 +2626,7 @@ def add_food_log_entry_ajax(client_id):
     db.session.add(log_entry)
     db.session.commit()
 
-    # Clear the nutrition label draft after successful logging
-    session.pop(nutrition_label_draft_session_key(client.id), None)
+    set_nutrition_label_draft(client.id, None)
 
     # Get updated nutrition summary
     food_logs = (
@@ -2622,19 +2639,7 @@ def add_food_log_entry_ajax(client_id):
     return jsonify({
         "success": True,
         "message": "Food logged successfully!",
-        "nutrition_summary": {
-            "totals": nutrition_summary["totals"],
-            "goal": nutrition_summary["goal"],
-            "protein_goal": nutrition_summary["protein_goal"],
-            "carbs_goal": nutrition_summary["carbs_goal"],
-            "fat_goal": nutrition_summary["fat_goal"],
-            "percent": nutrition_summary["percent"],
-            "ring_percent": nutrition_summary["ring_percent"],
-            "tone": nutrition_summary["tone"],
-            "status": nutrition_summary["status"],
-            "meal_sections": nutrition_summary["meal_sections"],
-            "has_logs": nutrition_summary["has_logs"]
-        }
+        "nutrition_summary": nutrition_summary_payload(nutrition_summary),
     })
 
 
