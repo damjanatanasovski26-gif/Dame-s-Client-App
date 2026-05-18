@@ -1035,6 +1035,125 @@ def parse_label_text_by_rows(label_text: str):
         if row.strip()
     ]
 
+    candidates = {
+        "calories": [],
+        "protein": [],
+        "carbs": [],
+        "fat": [],
+    }
+
+    calorie_keywords = (
+        "energy",
+        "energia",
+        "energjia",
+        "енерг",
+        "kcal",
+    )
+
+    protein_keywords = (
+        "protein",
+        "proteini",
+        "proteina",
+        "протеин",
+        "белков",
+    )
+
+    carbs_keywords = (
+        "carbohydrate",
+        "carbs",
+        "ugljeni",
+        "јаглехид",
+        "karbohid",
+    )
+
+    fat_keywords = (
+        "fat",
+        "fats",
+        "mast",
+        "масти",
+        "yndyr",
+    )
+
+    for index, row in enumerate(rows):
+
+        next_row = rows[index + 1] if index + 1 < len(rows) else ""
+        combined = f"{row} {next_row}"
+
+        numbers = re.findall(r"\d+(?:[.,]\d+)?", combined)
+        parsed_numbers = []
+
+        for num in numbers:
+            try:
+                parsed_numbers.append(float(num.replace(",", ".")))
+            except:
+                pass
+
+        if not parsed_numbers:
+            continue
+
+        # calories
+        if any(keyword in combined for keyword in calorie_keywords):
+
+            kcal_matches = re.findall(
+                r"(\d+(?:[.,]\d+)?)\s*kcal",
+                combined,
+                re.IGNORECASE,
+            )
+
+            if kcal_matches:
+                try:
+                    candidates["calories"].append(
+                        float(kcal_matches[0].replace(",", "."))
+                    )
+                except:
+                    pass
+
+        # protein
+        elif any(keyword in combined for keyword in protein_keywords):
+
+            valid = [
+                n for n in parsed_numbers
+                if 0 < n <= 100
+            ]
+
+            if valid:
+                candidates["protein"].append(max(valid))
+
+        # carbs
+        elif any(keyword in combined for keyword in carbs_keywords):
+
+            valid = [
+                n for n in parsed_numbers
+                if 0 <= n <= 100
+            ]
+
+            if valid:
+                candidates["carbs"].append(max(valid))
+
+        # fat
+        elif any(keyword in combined for keyword in fat_keywords):
+
+            valid = [
+                n for n in parsed_numbers
+                if 0 <= n <= 100
+            ]
+
+            if valid:
+                candidates["fat"].append(max(valid))
+
+    return {
+        "calories": round(candidates["calories"][0]) if candidates["calories"] else None,
+        "protein": round(candidates["protein"][0], 1) if candidates["protein"] else None,
+        "carbs": round(candidates["carbs"][0], 1) if candidates["carbs"] else None,
+        "fat": round(candidates["fat"][0], 1) if candidates["fat"] else None,
+    }
+
+    rows = [
+        row.strip().lower()
+        for row in re.split(r"[\n\r]+", label_text or "")
+        if row.strip()
+    ]
+
     expanded_rows = rows[:]
 
     for i in range(len(rows) - 1):
@@ -1049,6 +1168,8 @@ def parse_label_text_by_rows(label_text: str):
         "carbs": [],
         "fat": [],
     }
+
+    rows = [row.strip().lower() for row in re.split(r"[\n\r]+", label_text or "") if row.strip()]
     for row in rows:
         kcal_match = re.search(r"(\d[\d\s.,]{0,7})\s*kcal", row, re.IGNORECASE)
         if kcal_match:
