@@ -1027,7 +1027,7 @@ def choose_ocr_value(candidates: list[float], *, require_consensus: bool = False
     return best_value
 
 
-def parse_label_text_by_rows(label_text: str):
+def legacy_parse_label_text_by_rows(label_text: str):
 
     rows = [
         row.strip().lower()
@@ -1203,6 +1203,116 @@ def parse_label_text_by_rows(label_text: str):
         "protein": choose_ocr_value(candidates["protein"], require_consensus=True),
         "carbs": choose_ocr_value(candidates["carbs"], require_consensus=True),
         "fat": choose_ocr_value(candidates["fat"], require_consensus=True),
+    }
+
+
+def classify_nutrition_row(row: str):
+    text = (row or "").lower()
+    if line_has_any(text, ("saturated", "saturates", "\u0437\u0430\u0441\u0438\u0442", "ngop")):
+        return "saturated_fat"
+    if line_has_any(text, ("sugar", "sugars", "\u0448\u0435\u045c\u0435\u0440", "sheqer")):
+        return "sugars"
+    if line_has_any(text, ("energy", "energia", "energjia", "\u0435\u043d\u0435\u0440\u0433", "kcal")):
+        return "calories"
+    if line_has_any(text, ("protein", "proteina", "proteini", "\u043f\u0440\u043e\u0442\u0435\u0438\u043d", "\u0440\u043e\u0442\u0435\u0438\u043d")):
+        return "protein"
+    if line_has_any(text, ("carb", "karbo", "ugljeni", "jagle", "\u0458\u0430\u0433\u043b\u0435", "\u0458armex")):
+        return "carbs"
+    if line_has_any(text, ("fat", "fats", "masti", "mactu", "macru", "\u043c\u0430\u0441\u0442\u0438", "yndyr", "mast")):
+        return "fat"
+    if line_has_any(text, ("salt", "sol", "\u0441\u043e\u043b")):
+        return "salt"
+    return None
+
+
+def find_nutrition_label_mentions(label_text: str):
+    label_patterns = (
+        ("saturated_fat", r"\b(?:saturated|saturates|ngop)\b|\u0437\u0430\u0441\u0438\u0442"),
+        ("sugars", r"\b(?:sugar|sugars|sheqer)\b|\u0448\u0435\u045c\u0435\u0440"),
+        ("calories", r"\b(?:energy|energia|energjia)\b|\u0435\u043d\u0435\u0440\u0433"),
+        ("protein", r"\b(?:protein|proteina|proteini)\b|\u043f\u0440\u043e\u0442\u0435\u0438\u043d|\u0440\u043e\u0442\u0435\u0438\u043d"),
+        ("carbs", r"\b(?:carbohydrate|carbohydrates|carbs|karbo\w*|ugljeni|jagle\w*)\b|\u0458\u0430\u0433\u043b\u0435"),
+        ("fat", r"\b(?:fat|fats|masti|mactu|macru|mast\w*|yndyr\w*)\b|\u043c\u0430\u0441\u0442\u0438"),
+        ("salt", r"\b(?:salt|sol)\b|\u0441\u043e\u043b"),
+    )
+    mentions = []
+    text = (label_text or "").lower()
+    for label, pattern in label_patterns:
+        for match in re.finditer(pattern, text, re.IGNORECASE):
+            if label == "fat" and "saturated" in text[max(0, match.start() - 14):match.start()]:
+                continue
+            mentions.append((match.start(), label))
+    mentions.sort(key=lambda item: item[0])
+    return [label for _, label in mentions]
+
+
+def find_nutrition_value_mentions(label_text: str):
+    mentions = []
+    text = label_text or ""
+    for match in re.finditer(r"(\d[\d\s.,]{0,7})\s*kcal", text, re.IGNORECASE):
+        value = clean_ocr_number(match.group(1))
+        if value is not None:
+            mentions.append((match.start(), "calories", value))
+    for match in re.finditer(r"(\d[\d\s.,]{0,7})\s*(?:g|q|9|\u0433|\u0431)\b", text, re.IGNORECASE):
+        value = clean_ocr_number(match.group(1))
+        prefix = text[max(0, match.start() - 8):match.start()].lower()
+        if value is not None and not (round(value, 1) == 100.0 and "per" in prefix):
+            mentions.append((match.start(), "grams", value))
+    mentions.sort(key=lambda item: item[0])
+    return mentions
+
+
+def add_column_order_candidates(label_text: str, candidates: dict):
+    labels = find_nutrition_label_mentions(label_text)
+    values = find_nutrition_value_mentions(label_text)
+    if len(values) < 3 or len(labels) < 3:
+        return
+
+    gram_labels = [label for label in labels if label != "calories"]
+    gram_values = [value for _, unit, value in values if unit == "grams"]
+    if "calories" in labels:
+        kcal_values = [value for _, unit, value in values if unit == "calories"]
+        if kcal_values:
+            candidates["calories"].append(kcal_values[-1])
+
+    for label, value in zip(gram_labels, gram_values):
+        if label in ("fat", "carbs", "protein") and not candidates.get(label):
+            candidates[label].append(value)
+
+
+def parse_label_text_by_rows(label_text: str):
+    rows = [row.strip().lower() for row in re.split(r"[\n\r]+", label_text or "") if row.strip()]
+    candidates = {
+        "calories": [],
+        "protein": [],
+        "carbs": [],
+        "fat": [],
+    }
+
+    for index, row in enumerate(rows):
+        label = classify_nutrition_row(row)
+        if label == "calories":
+            search_text = f"{row} {rows[index + 1] if index + 1 < len(rows) else ''}"
+            kcal_match = re.search(r"(\d[\d\s.,]{0,7})\s*kcal", search_text, re.IGNORECASE)
+            if kcal_match:
+                candidates["calories"].append(clean_ocr_number(kcal_match.group(1)))
+            continue
+
+        if label not in ("fat", "carbs", "protein"):
+            continue
+
+        values = extract_macro_values_from_line(row)
+        if not values and index + 1 < len(rows) and classify_nutrition_row(rows[index + 1]) is None:
+            values = extract_macro_values_from_line(rows[index + 1])
+        candidates[label].extend(values)
+
+    add_column_order_candidates(label_text, candidates)
+
+    return {
+        "calories": choose_ocr_value(candidates["calories"]),
+        "protein": choose_ocr_value(candidates["protein"]),
+        "carbs": choose_ocr_value(candidates["carbs"]),
+        "fat": choose_ocr_value(candidates["fat"]),
     }
 
 

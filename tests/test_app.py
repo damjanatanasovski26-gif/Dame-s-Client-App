@@ -366,6 +366,32 @@ class TrainerAppTests(unittest.TestCase):
         self.assertEqual(parsed["fat"], 6.0)
         self.assertEqual(parsed["protein"], 2.0)
 
+    def test_parse_label_text_pairs_columnar_google_vision_label_values(self):
+        parsed = parse_label_text(
+            "PER 100 g\n"
+            "Energy\n"
+            "Fat\n"
+            "of which\n"
+            "- Saturates\n"
+            "Carbohydrate\n"
+            "of which\n"
+            "- Sugars\n"
+            "Protein\n"
+            "Salt\n"
+            "1583 kJ/\n"
+            "373 kcal\n"
+            "2,4 g\n"
+            "1,6 g\n"
+            "9,9 g\n"
+            "5,3 g\n"
+            "78 g\n"
+            "0,5 g"
+        )
+        self.assertEqual(parsed["calories"], 373.0)
+        self.assertEqual(parsed["fat"], 2.4)
+        self.assertEqual(parsed["carbs"], 9.9)
+        self.assertEqual(parsed["protein"], 78.0)
+
     def test_seed_library_replaces_old_prepared_seed_items_with_raw_ingredients(self):
         with app.app_context():
             db.session.add(FoodItem(
