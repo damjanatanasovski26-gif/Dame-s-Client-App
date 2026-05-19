@@ -1,7 +1,7 @@
 from flask import Flask, render_template, request, redirect, url_for, session, Response, send_file, abort, jsonify
 from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 import click
 from datetime import datetime, date, timedelta, timezone
 import calendar
@@ -2151,6 +2151,23 @@ def client_profile(client_id):
         .order_by(FoodItem.name.asc(), FoodItem.brand.asc(), FoodItem.id.asc())
         .all()
     )
+    food_usage_rows = (
+        db.session.query(
+            FoodLogEntry.food_id,
+            func.count(FoodLogEntry.id),
+            func.max(FoodLogEntry.created_at),
+        )
+        .filter(FoodLogEntry.client_id == client.id)
+        .group_by(FoodLogEntry.food_id)
+        .all()
+    )
+    food_usage_stats = {
+        food_id: {
+            "count": int(count or 0),
+            "last_used": last_used.isoformat() if last_used else "",
+        }
+        for food_id, count, last_used in food_usage_rows
+    }
     food_logs = (
         FoodLogEntry.query.filter_by(client_id=client.id, logged_for=nutrition_date)
         .order_by(FoodLogEntry.created_at.desc(), FoodLogEntry.id.desc())
@@ -2224,6 +2241,7 @@ def client_profile(client_id):
         photos=photos,
         goals=goals,
         foods=foods,
+        food_usage_stats=food_usage_stats,
         food_logs=food_logs,
         nutrition_date=nutrition_date,
         nutrition_summary=nutrition_summary,
@@ -3109,6 +3127,68 @@ def scan_food_label(client_id):
     if parsed["calories"] is None and parsed["protein"] is None and parsed["carbs"] is None and parsed["fat"] is None:
         return nutrition_redirect(client.id, err="Could not read the label cleanly. Review the manual form below and fill in the missing values.", logged_for=logged_for)
     return nutrition_redirect(client.id, msg="Label scanned. Review the custom food form below and save the values.", logged_for=logged_for, anchor="customFoodForm")
+
+
+@app.route("/client/<int:client_id>/nutrition/scan-label-ajax", methods=["POST"])
+@login_required
+def scan_food_label_ajax(client_id):
+    if not is_admin() and current_client_id() != client_id:
+        return jsonify({"success": False, "error": "Forbidden"}), 403
+
+    client = get_or_404(Client, client_id)
+    if not label_scan_enabled():
+        return jsonify({
+            "success": False,
+            "error": "Label OCR is not enabled yet. Add GOOGLE_VISION_API_KEY or install Tesseract OCR first.",
+        }), 400
+
+    label_file = request.files.get("label_photo")
+    if not label_file or not label_file.filename:
+        return jsonify({"success": False, "error": "Choose a nutrition label image first."}), 400
+    if not allowed_photo_file(label_file.filename):
+        return jsonify({"success": False, "error": "Use a JPG, PNG, or WEBP image for label scanning."}), 400
+
+    label_name = (request.form.get("label_name") or "").strip()
+    brand = (request.form.get("label_brand") or "").strip() or None
+    safe_name = secure_filename(label_file.filename)
+    unique_name = f"{uuid.uuid4().hex}_{safe_name}"
+    target_path = os.path.join(app.config["UPLOAD_LABEL_DIR"], unique_name)
+    label_file.save(target_path)
+
+    try:
+        text = scan_label_file_text(target_path)
+    except RuntimeError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 400
+    except Exception:
+        return jsonify({"success": False, "error": "Could not read that label image."}), 400
+    finally:
+        try:
+            os.remove(target_path)
+        except OSError:
+            pass
+
+    parsed = parse_label_text(text)
+    if not label_name:
+        label_name = os.path.splitext(safe_name)[0].replace("_", " ").strip() or "Scanned Label Food"
+
+    draft = {
+        "name": label_name[:120],
+        "brand": brand or "",
+        "serving_label": "Scanned from label",
+        "calories_per_100g": "" if parsed["calories"] is None else str(round(parsed["calories"], 1)),
+        "protein_per_100g": "" if parsed["protein"] is None else str(round(parsed["protein"], 1)),
+        "carbs_per_100g": "" if parsed["carbs"] is None else str(round(parsed["carbs"], 1)),
+        "fat_per_100g": "" if parsed["fat"] is None else str(round(parsed["fat"], 1)),
+        "ocr_text": text[:4000],
+    }
+    set_nutrition_label_draft(client.id, draft)
+    has_any_value = any(parsed[key] is not None for key in ("calories", "protein", "carbs", "fat"))
+    return jsonify({
+        "success": True,
+        "message": "Label scanned. Review and save the food.",
+        "draft": draft,
+        "needs_review": not has_any_value,
+    })
 
 
 @app.route("/client/<int:client_id>/nutrition/logs/delete/<int:log_id>", methods=["POST"])

@@ -1,742 +1,693 @@
 {% set daily_totals = nutrition_summary.totals %}
+{% set energy_goal = nutrition_summary.goal or 0 %}
+{% set protein_goal = nutrition_summary.protein_goal or 0 %}
+{% set carbs_goal = nutrition_summary.carbs_goal or 0 %}
+{% set fat_goal = nutrition_summary.fat_goal or 0 %}
+{% set energy_ratio = (daily_totals.calories / energy_goal * 100) if energy_goal else 0 %}
+{% set protein_ratio = (daily_totals.protein / protein_goal * 100) if protein_goal else 0 %}
+{% set carbs_ratio = (daily_totals.carbs / carbs_goal * 100) if carbs_goal else 0 %}
+{% set fat_ratio = (daily_totals.fat / fat_goal * 100) if fat_goal else 0 %}
+{% set consumed_macro_kcal = daily_totals.protein * 4 + daily_totals.carbs * 4 + daily_totals.fat * 9 %}
+{% set consumed_protein_slice = (daily_totals.protein * 4 / consumed_macro_kcal * 100) if consumed_macro_kcal else 0 %}
+{% set consumed_carbs_slice = consumed_protein_slice + ((daily_totals.carbs * 4 / consumed_macro_kcal * 100) if consumed_macro_kcal else 0) %}
+{% set meal_keys = [("breakfast", "Breakfast"), ("lunch", "Lunch"), ("dinner", "Dinner"), ("snack", "Snack")] %}
 
-<div class="card nutrition-hero nutrition-hero-{{ nutrition_summary.tone }}">
-  <div class="nutrition-hero-copy">
-    <div class="nutrition-kicker">Daily Fuel</div>
-    <h3 style="margin-bottom:8px;">Calories for {{ nutrition_date.strftime("%d/%m/%Y") }}</h3>
-    <div class="nutrition-target-line">
-      <span class="nutrition-big-number">{{ daily_totals.calories|round|int }}</span>
-      <span class="muted">kcal eaten{% if nutrition_summary.goal %} / {{ nutrition_summary.goal }} target{% endif %}</span>
-    </div>
-    <div class="nutrition-status nutrition-status-{{ nutrition_summary.tone }}">{{ nutrition_summary.status }}</div>
-  </div>
-
-  <div class="calorie-ring-wrap">
-    <div class="calorie-ring calorie-ring-{{ nutrition_summary.tone }}" style="--progress: {{ nutrition_summary.ring_percent }};">
-      <div class="calorie-ring-inner">
-        <b>{{ nutrition_summary.percent }}%</b>
-        <span>goal</span>
-      </div>
-    </div>
-  </div>
-</div>
-
-<div class="stats-grid nutrition-metrics-grid">
-  {% set protein_ratio = (daily_totals.protein / nutrition_summary.protein_goal * 100) if nutrition_summary.protein_goal else 0 %}
-  <div class="card nutrition-metric-card {% if protein_ratio >= 100 %}macro-over{% elif protein_ratio > 0 %}macro-progress{% endif %}" {% if nutrition_summary.protein_goal %}style="--macro-progress: {{ protein_ratio if protein_ratio < 100 else 100 }};"{% endif %}>
-    <span class="muted">Protein</span>
-    <div class="nutrition-metric-value">{{ daily_totals.protein }}g</div>
-    <div class="nutrition-metric-progress"><span class="nutrition-metric-progress-fill"></span></div>
-    <div class="nutrition-metric-goal-label muted" {% if not nutrition_summary.protein_goal %}style="display:none;"{% endif %}>{{ nutrition_summary.protein_goal }}g goal</div>
-  </div>
-  {% set carbs_ratio = (daily_totals.carbs / nutrition_summary.carbs_goal * 100) if nutrition_summary.carbs_goal else 0 %}
-  <div class="card nutrition-metric-card {% if carbs_ratio >= 100 %}macro-over{% elif carbs_ratio > 0 %}macro-progress{% endif %}" {% if nutrition_summary.carbs_goal %}style="--macro-progress: {{ carbs_ratio if carbs_ratio < 100 else 100 }};"{% endif %}>
-    <span class="muted">Carbs</span>
-    <div class="nutrition-metric-value">{{ daily_totals.carbs }}g</div>
-    <div class="nutrition-metric-progress"><span class="nutrition-metric-progress-fill"></span></div>
-    <div class="nutrition-metric-goal-label muted" {% if not nutrition_summary.carbs_goal %}style="display:none;"{% endif %}>{{ nutrition_summary.carbs_goal }}g goal</div>
-  </div>
-  {% set fat_ratio = (daily_totals.fat / nutrition_summary.fat_goal * 100) if nutrition_summary.fat_goal else 0 %}
-  <div class="card nutrition-metric-card {% if fat_ratio >= 100 %}macro-over{% elif fat_ratio > 0 %}macro-progress{% endif %}" {% if nutrition_summary.fat_goal %}style="--macro-progress: {{ fat_ratio if fat_ratio < 100 else 100 }};"{% endif %}>
-    <span class="muted">Fat</span>
-    <div class="nutrition-metric-value">{{ daily_totals.fat }}g</div>
-    <div class="nutrition-metric-progress"><span class="nutrition-metric-progress-fill"></span></div>
-    <div class="nutrition-metric-goal-label muted" {% if not nutrition_summary.fat_goal %}style="display:none;"{% endif %}>{{ nutrition_summary.fat_goal }}g goal</div>
-  </div>
-</div>
-
-<div class="card nutrition-day-card">
-  <div class="nutrition-toolbar">
-    <div>
-      <div class="nutrition-kicker">Nutrition Day</div>
-      <h3 style="margin-bottom:8px;">{{ nutrition_date.strftime("%d/%m/%Y") }}</h3>
-      <div class="muted">Review your daily goal and date, then log food without clutter.</div>
-    </div>
-    <div class="nutrition-goal-summary">
+<div class="nutrition-app" id="nutritionApp">
+  <section class="nutrition-view is-active" id="nutritionDiaryView" aria-label="Nutrition diary">
+    <header class="nutrition-app-header">
+      <button class="nutrition-round-btn" type="button" data-date-step="-1" aria-label="Previous day">&lt;</button>
       <div>
-        <div class="nutrition-goal-label">Daily goal</div>
-        <div class="nutrition-goal-value">{{ client.daily_calorie_target or "Not set" }} kcal</div>
+        <h2>Today</h2>
+        <span>{{ nutrition_date.strftime("%d/%m/%Y") }}</span>
       </div>
-      <button
-        type="button"
-        class="btn secondary"
-        id="toggleNutritionGoalEdit"
-        data-closed-text="{% if client.daily_calorie_target %}Change target{% else %}Set target{% endif %}"
-        data-open-text="Hide target"
-      >
-        {% if client.daily_calorie_target %}Change target{% else %}Set target{% endif %}
-      </button>
-    </div>
-  </div>
-  <div class="nutrition-goal-form-wrap">
-    <form class="form nutrition-goal-form{% if not client.daily_calorie_target %} nutrition-goal-form--expanded{% endif %}" id="nutritionGoalForm" action="{{ url_for('update_calorie_target', client_id=client.id) }}" method="POST">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <div class="nutrition-date-form">
-        <input class="input" type="date" name="nutrition_date" value="{{ nutrition_date.isoformat() }}">
-        <button class="btn secondary" type="button" id="openNutritionDay">Open Day</button>
-      </div>
-      <label class="label">Daily calorie target</label>
-      <div class="nutrition-inline-form">
-        <input class="input" type="number" name="daily_calorie_target" min="1" placeholder="e.g. 2200" value="{{ client.daily_calorie_target or '' }}">
-        <button class="btn" type="submit">Save target</button>
-      </div>
-    </form>
-  </div>
-</div>
+      <button class="nutrition-round-btn" type="button" data-date-step="1" aria-label="Next day">&gt;</button>
+    </header>
 
-<div class="nutrition-grid">
-  <div class="card nutrition-card-highlight">
-    <h3>Scan Nutrition Label</h3>
-    <div class="muted" style="margin-bottom:12px;">
-      Upload a label photo to extract calories, protein, carbs, and fat per 100g.
-      {% if label_scan_provider %}Using {{ label_scan_provider }}.{% endif %}
-      {% if not label_scan_enabled %}OCR support is not configured on this environment yet.{% endif %}
+    <section class="nutrition-rings-card">
+      <div class="nutrition-calorie-ring" data-ring="energy" style="--ring-progress: {{ energy_ratio if energy_ratio < 100 else 100 }}; --protein-slice: {{ consumed_protein_slice }}; --carbs-slice: {{ consumed_carbs_slice }};">
+        <div>
+          <b class="nutrition-ring-current">{{ daily_totals.calories|round|int }}</b>
+          <span>of <span class="nutrition-ring-goal">{{ energy_goal }}</span> kcal</span>
+          <small hidden>{{ energy_goal }} target</small>
+        </div>
+      </div>
+      <div class="nutrition-mini-rings">
+        <div class="nutrition-mini-ring nutrition-mini-ring-protein" data-ring="protein" style="--ring-progress: {{ protein_ratio if protein_ratio < 100 else 100 }};">
+          <div><b class="nutrition-ring-current">{{ daily_totals.protein }}</b><span>Protein</span><small><span class="nutrition-ring-goal">{{ protein_goal }}</span>g</small></div>
+        </div>
+        <div class="nutrition-mini-ring nutrition-mini-ring-carbs" data-ring="carbs" style="--ring-progress: {{ carbs_ratio if carbs_ratio < 100 else 100 }};">
+          <div><b class="nutrition-ring-current">{{ daily_totals.carbs }}</b><span>Carbs</span><small><span class="nutrition-ring-goal">{{ carbs_goal }}</span>g</small></div>
+        </div>
+        <div class="nutrition-mini-ring nutrition-mini-ring-fat" data-ring="fat" style="--ring-progress: {{ fat_ratio if fat_ratio < 100 else 100 }};">
+          <div><b class="nutrition-ring-current">{{ daily_totals.fat }}</b><span>Fat</span><small><span class="nutrition-ring-goal">{{ fat_goal }}</span>g</small></div>
+        </div>
+      </div>
+      {% if is_admin %}
+        <button class="nutrition-admin-target" type="button" data-open-target>Change Daily Calories</button>
+      {% endif %}
+    </section>
+
+    <section class="nutrition-meals" aria-label="Meals">
+      {% for meal_key, meal_label in meal_keys %}
+        {% set meal = namespace(section=None) %}
+        {% for section in nutrition_summary.meal_sections %}
+          {% if section["key"] == meal_key %}
+            {% set meal.section = section %}
+          {% endif %}
+        {% endfor %}
+        <article class="nutrition-meal-card" data-meal-section="{{ meal_key }}">
+          <div class="nutrition-meal-top">
+            <button class="nutrition-meal-plus" type="button" data-open-meal-actions data-meal="{{ meal_key }}" aria-label="Add {{ meal_label }}">+</button>
+            <div>
+              <h3>{{ meal_label }}</h3>
+              <span>{{ meal.section["calories"]|round|int if meal.section else 0 }} kcal</span>
+            </div>
+          </div>
+          <div class="nutrition-meal-action-rail" hidden>
+            <button type="button" data-open-food-list data-meal="{{ meal_key }}" aria-label="Add Food" title="Add Food"><span class="nutrition-logo nutrition-logo-food"></span></button>
+            <button type="button" data-scan-camera data-meal="{{ meal_key }}" aria-label="Scan Food Label" title="Scan Food Label"><span class="nutrition-logo nutrition-logo-scan"></span></button>
+            <button type="button" data-upload-label data-meal="{{ meal_key }}" aria-label="Upload Label Photo" title="Upload Label Photo"><span class="nutrition-logo nutrition-logo-upload"></span></button>
+          </div>
+          <div class="nutrition-meal-entries">
+            {% if meal.section %}
+              {% for item in meal.section["items"] %}
+                <div class="nutrition-entry-row">
+                  <div>
+                    <b>{{ item.food_name }}</b>
+                    <span>{{ item.quantity_grams }}g</span>
+                  </div>
+                  <div>
+                    <b>{{ item.calories }} kcal</b>
+                    <form class="nutrition-delete-form" action="{{ url_for('delete_food_log_entry', client_id=client.id, log_id=item.id) }}" method="POST">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                      <button type="submit">Delete</button>
+                    </form>
+                  </div>
+                </div>
+              {% endfor %}
+            {% else %}
+              <p>No foods logged yet.</p>
+            {% endif %}
+          </div>
+        </article>
+      {% endfor %}
+    </section>
+  </section>
+
+  <nav class="nutrition-action-footer" aria-label="Nutrition quick actions">
+    <button class="nutrition-footer-plus" type="button" data-open-footer-actions aria-label="Add nutrition item">+</button>
+    <div class="nutrition-footer-menu" hidden>
+      <button type="button" data-open-food-list data-meal="snack" aria-label="Add Food" title="Add Food"><span class="nutrition-logo nutrition-logo-food"></span></button>
+      <button type="button" data-scan-camera data-meal="snack" aria-label="Scan Food Label" title="Scan Food Label"><span class="nutrition-logo nutrition-logo-scan"></span></button>
+      <button type="button" data-upload-label data-meal="snack" aria-label="Upload Label Photo" title="Upload Label Photo"><span class="nutrition-logo nutrition-logo-upload"></span></button>
     </div>
-    <form class="form" id="nutritionScanForm" action="{{ url_for('scan_food_label', client_id=client.id) }}" method="POST" enctype="multipart/form-data">
+  </nav>
+
+  <section class="nutrition-view nutrition-panel" id="nutritionFoodView" aria-label="Add food">
+    <header class="nutrition-panel-header">
+      <button class="nutrition-round-btn" type="button" data-back-diary aria-label="Back">&lt;</button>
+      <div>
+        <h2>Add Food</h2>
+        <span id="nutritionFoodMealLabel">Snack</span>
+      </div>
+      <button class="nutrition-sort-btn" type="button" id="nutritionSortToggle" data-sort="az">A to Z</button>
+    </header>
+    <div class="nutrition-search-field">
+      <span aria-hidden="true"></span>
+      <input type="search" id="nutritionFoodSearch" placeholder="Search saved foods" autocomplete="off">
+    </div>
+    <div class="nutrition-food-tabs" role="tablist">
+      <button class="is-active" type="button" data-food-tab="all">All</button>
+      <button type="button" data-food-tab="recent">Recent</button>
+      <button type="button" data-food-tab="frequent">Frequent</button>
+      <button type="button" data-food-tab="custom">Custom</button>
+    </div>
+    <div>
+      <div class="nutrition-food-results" id="nutritionFoodList">
+        {% for food in foods %}
+          {% set usage = food_usage_stats.get(food.id, {}) %}
+          <button
+            class="nutrition-food-result"
+            type="button"
+            data-food-id="{{ food.id }}"
+            data-food-name="{{ food.name }}{% if food.brand %} - {{ food.brand }}{% endif %}"
+            data-custom="{{ 1 if food.client_id else 0 }}"
+            data-frequency="{{ usage.get('count', 0) }}"
+            data-recent="{{ usage.get('last_used', '') }}"
+            data-search="{{ (food.name ~ ' ' ~ (food.brand or ''))|lower }}"
+            data-calories="{{ food.calories_per_100g }}"
+            data-protein="{{ food.protein_per_100g }}"
+            data-carbs="{{ food.carbs_per_100g }}"
+            data-fat="{{ food.fat_per_100g }}"
+          >
+            <span>
+              <b>{{ food.name }}{% if food.brand %}, {{ food.brand }}{% endif %}</b>
+              <small>{{ food.calories_per_100g|round|int }} kcal / 100g</small>
+            </span>
+            <em>{% if food.client_id %}Custom{% else %}Library{% endif %}</em>
+          </button>
+        {% endfor %}
+      </div>
+      <div class="nutrition-picker-empty" id="nutritionPickerEmpty" hidden>No foods match this view.</div>
+    </div>
+  </section>
+
+  <section class="nutrition-view nutrition-panel" id="nutritionFoodDetailView" aria-label="Log selected food">
+    <header class="nutrition-panel-header">
+      <button class="nutrition-round-btn" type="button" data-open-food-list aria-label="Back">&lt;</button>
+      <div>
+        <h2 id="nutritionDetailFoodTitle">Food</h2>
+        <span>Log by grams</span>
+      </div>
+      <span></span>
+    </header>
+    <form id="nutritionLogForm" class="nutrition-detail-form" action="{{ url_for('add_food_log_entry', client_id=client.id) }}" method="POST">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="logged_for" value="{{ nutrition_date.isoformat() }}">
+      <input type="hidden" name="food_id" id="nutritionFoodId">
+      <input type="hidden" name="food_name" id="nutritionFoodName">
+      <label class="nutrition-detail-field">
+        <span>Amount</span>
+        <input type="number" name="quantity_grams" id="nutritionDetailAmount" min="1" step="0.1" placeholder="Enter grams" required>
+        <small>Amount is in grams.</small>
+      </label>
+      <label class="nutrition-detail-field">
+        <span>Group</span>
+        <select name="meal_type" id="nutritionMealType">
+          <option value="breakfast">Breakfast</option>
+          <option value="lunch">Lunch</option>
+          <option value="dinner">Dinner</option>
+          <option value="snack" selected>Snack</option>
+        </select>
+      </label>
+      <section class="nutrition-energy-card">
+        <h3>Energy Summary</h3>
+        <div class="nutrition-energy-content">
+          <div class="nutrition-energy-donut" id="nutritionEnergyDonut">
+            <div><b id="nutritionDetailCalories">0</b><span>kcal</span></div>
+          </div>
+          <div class="nutrition-energy-macros">
+            <div class="protein">Protein (<span id="nutritionProteinPercent">0</span>%) - <b id="nutritionDetailProtein">0g</b></div>
+            <div class="carbs">Net Carbs (<span id="nutritionCarbsPercent">0</span>%) - <b id="nutritionDetailCarbs">0g</b></div>
+            <div class="fat">Fat (<span id="nutritionFatPercent">0</span>%) - <b id="nutritionDetailFat">0g</b></div>
+          </div>
+        </div>
+      </section>
+      <button class="nutrition-detail-submit" type="submit">Add to Diary</button>
+    </form>
+  </section>
+
+  <section class="nutrition-view nutrition-panel" id="nutritionReviewView" aria-label="Review scanned food">
+    <header class="nutrition-panel-header">
+      <button class="nutrition-round-btn" type="button" data-back-diary aria-label="Back">&lt;</button>
+      <div>
+        <h2>Review Food</h2>
+        <span>Fill missing values, then save</span>
+      </div>
+      <span></span>
+    </header>
+    <form class="nutrition-review-form" id="customFoodForm" action="{{ url_for('add_food_item', client_id=client.id) }}" method="POST" autocomplete="off">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="nutrition_date" value="{{ nutrition_date.isoformat() }}">
-      <div class="grid-2">
-        <div>
-          <label class="label">Product name</label>
-          <input class="input" name="label_name" maxlength="120" placeholder="Product name">
-        </div>
-        <div>
-          <label class="label">Brand</label>
-          <input class="input" name="label_brand" maxlength="120" placeholder="Brand (optional)">
-        </div>
+      <label>Food name<input name="name" maxlength="120" value="{{ nutrition_label_draft.get('name', '') }}" required></label>
+      <label>Brand<input name="brand" maxlength="120" value="{{ nutrition_label_draft.get('brand', '') }}"></label>
+      <input type="hidden" name="serving_label" value="{{ nutrition_label_draft.get('serving_label', '') }}">
+      <div class="nutrition-review-grid">
+        <label>Calories / 100g<input type="number" name="calories_per_100g" min="0" step="0.1" value="{{ nutrition_label_draft.get('calories_per_100g', '') }}" required></label>
+        <label>Protein / 100g<input type="number" name="protein_per_100g" min="0" step="0.1" value="{{ nutrition_label_draft.get('protein_per_100g', '') }}" required></label>
+        <label>Carbs / 100g<input type="number" name="carbs_per_100g" min="0" step="0.1" value="{{ nutrition_label_draft.get('carbs_per_100g', '') }}" required></label>
+        <label>Fat / 100g<input type="number" name="fat_per_100g" min="0" step="0.1" value="{{ nutrition_label_draft.get('fat_per_100g', '') }}" required></label>
       </div>
-      <div>
-        <label class="label">Label photo</label>
-        <input class="nutrition-file-input" id="nutritionLabelPhoto" type="file" name="label_photo" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" {% if not label_scan_enabled %}disabled{% endif %} required>
-        <div class="nutrition-file-picker">
-          <button class="btn secondary" id="chooseNutritionLabelPhoto" type="button" {% if not label_scan_enabled %}disabled{% endif %}>Choose Photo</button>
-          <button class="btn secondary" id="takeNutritionLabelPhoto" type="button" {% if not label_scan_enabled %}disabled{% endif %}>Take Photo</button>
-          <div class="nutrition-file-name" id="nutritionLabelFileName">No photo selected</div>
-        </div>
-        <div class="muted nutrition-file-hint">JPG, PNG, or WEBP. On mobile, Take Photo opens the camera after permission.</div>
+      <div class="nutrition-save-extra">
+        <select name="log_meal_type" id="nutritionReviewMeal">
+          <option value="breakfast">Breakfast</option>
+          <option value="lunch">Lunch</option>
+          <option value="dinner">Dinner</option>
+          <option value="snack" selected>Snack</option>
+        </select>
+        <label class="nutrition-review-serving">Serving size
+          <input type="number" name="log_quantity_grams" min="1" step="0.1" placeholder="grams to log">
+          <small hidden>Please enter serving size.</small>
+        </label>
       </div>
-      <button class="btn" id="nutritionScanSubmit" type="submit" {% if not label_scan_enabled %}disabled{% endif %}>Scan Label</button>
+      <div class="nutrition-review-actions">
+        <button type="submit" name="save_action" value="save">Save to Database</button>
+        <button type="submit" name="save_action" value="save_and_log">Save and Log</button>
+      </div>
     </form>
-  </div>
-
-  <div class="nutrition-right-column">
-    <div class="card">
-      <h3>Log Food</h3>
-      <form id="nutritionLogForm" class="form" action="{{ url_for('add_food_log_entry', client_id=client.id) }}" method="POST">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <input type="hidden" name="logged_for" value="{{ nutrition_date.isoformat() }}">
-        <input type="hidden" name="food_id" id="nutritionFoodId">
-
-        <label class="label">Food</label>
-        <input
-          class="input"
-          type="search"
-          id="nutritionFoodSearch"
-          name="food_name"
-          list="nutritionFoodsList"
-          placeholder="Search saved foods"
-          autocomplete="off"
-          required
-        >
-        <datalist id="nutritionFoodsList">
-          {% for food in foods %}
-            <option
-              value="{{ food.name }}{% if food.brand %} - {{ food.brand }}{% endif %}"
-              data-food-id="{{ food.id }}"
-            >
-              {{ food.calories_per_100g|round|int }} kcal / 100g
-            </option>
-          {% endfor %}
-        </datalist>
-        <div class="muted" id="nutritionFoodHint">Choose a saved item from the search list.</div>
-
-        <div class="grid-2">
-          <div>
-            <label class="label">Meal</label>
-            <select class="input" name="meal_type">
-              <option value="breakfast">Breakfast</option>
-              <option value="lunch">Lunch</option>
-              <option value="dinner">Dinner</option>
-              <option value="snack" selected>Snack</option>
-            </select>
-          </div>
-          <div>
-            <label class="label">Quantity (g)</label>
-            <input class="input" type="number" name="quantity_grams" min="1" step="0.1" placeholder="e.g. 150" required>
-          </div>
-        </div>
-
-        <label class="label">Note</label>
-        <input class="input" name="note" maxlength="200" placeholder="Optional note (post workout, pre-bed, etc.)">
-        <button class="btn" type="submit">Log Food</button>
-      </form>
-
-      {% if not foods %}
-        <div class="empty-state" style="margin-top:12px;">No saved foods yet. Add one below first.</div>
-      {% endif %}
-    </div>
-
-    <div class="card">
-      <h3>Save Custom Food</h3>
-      <form class="form" id="customFoodForm" action="{{ url_for('add_food_item', client_id=client.id) }}" method="POST" autocomplete="off">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <input type="hidden" name="nutrition_date" value="{{ nutrition_date.isoformat() }}">
-
-        <div class="grid-2">
-          <div>
-            <label class="label">Food name</label>
-            <input class="input {% if nutrition_label_draft.get('ocr_text') and nutrition_label_draft.get('name') %}nutrition-scanned-field{% endif %}" name="name" maxlength="120" placeholder="Chicken breast" value="{{ nutrition_label_draft.get('name', '') }}" autocomplete="off" required>
-          </div>
-          <div>
-            <label class="label">Brand (optional)</label>
-            <input class="input {% if nutrition_label_draft.get('ocr_text') and nutrition_label_draft.get('brand') %}nutrition-scanned-field{% endif %}" name="brand" maxlength="120" placeholder="Local market / brand" value="{{ nutrition_label_draft.get('brand', '') }}" autocomplete="off">
-          </div>
-        </div>
-
-        <label class="label">Serving note (optional)</label>
-        <input class="input {% if nutrition_label_draft.get('ocr_text') and nutrition_label_draft.get('serving_label') %}nutrition-scanned-field{% endif %}" name="serving_label" maxlength="80" placeholder="1 slice = 32g" value="{{ nutrition_label_draft.get('serving_label', '') }}" autocomplete="off">
-
-        <div class="grid-2">
-          <div>
-            <label class="label">Calories / 100g</label>
-            <input class="input {% if nutrition_label_draft.get('ocr_text') and nutrition_label_draft.get('calories_per_100g') %}nutrition-scanned-field{% elif nutrition_label_draft.get('ocr_text') %}nutrition-review-field{% endif %}" type="number" name="calories_per_100g" min="0" step="0.1" value="{{ nutrition_label_draft.get('calories_per_100g', '') }}" required>
-            {% if nutrition_label_draft.get('ocr_text') and not nutrition_label_draft.get('calories_per_100g') %}<div class="nutrition-field-note">Review needed</div>{% endif %}
-          </div>
-          <div>
-            <label class="label">Protein / 100g</label>
-            <input class="input {% if nutrition_label_draft.get('ocr_text') and nutrition_label_draft.get('protein_per_100g') %}nutrition-scanned-field{% elif nutrition_label_draft.get('ocr_text') %}nutrition-review-field{% endif %}" type="number" name="protein_per_100g" min="0" step="0.1" value="{{ nutrition_label_draft.get('protein_per_100g', '') }}" required>
-            {% if nutrition_label_draft.get('ocr_text') and not nutrition_label_draft.get('protein_per_100g') %}<div class="nutrition-field-note">Review needed</div>{% endif %}
-          </div>
-          <div>
-            <label class="label">Carbs / 100g</label>
-            <input class="input {% if nutrition_label_draft.get('ocr_text') and nutrition_label_draft.get('carbs_per_100g') %}nutrition-scanned-field{% elif nutrition_label_draft.get('ocr_text') %}nutrition-review-field{% endif %}" type="number" name="carbs_per_100g" min="0" step="0.1" value="{{ nutrition_label_draft.get('carbs_per_100g', '') }}" required>
-            {% if nutrition_label_draft.get('ocr_text') and not nutrition_label_draft.get('carbs_per_100g') %}<div class="nutrition-field-note">Review needed</div>{% endif %}
-          </div>
-          <div>
-            <label class="label">Fat / 100g</label>
-            <input class="input {% if nutrition_label_draft.get('ocr_text') and nutrition_label_draft.get('fat_per_100g') %}nutrition-scanned-field{% elif nutrition_label_draft.get('ocr_text') %}nutrition-review-field{% endif %}" type="number" name="fat_per_100g" min="0" step="0.1" value="{{ nutrition_label_draft.get('fat_per_100g', '') }}" required>
-            {% if nutrition_label_draft.get('ocr_text') and not nutrition_label_draft.get('fat_per_100g') %}<div class="nutrition-field-note">Review needed</div>{% endif %}
-          </div>
-        </div>
-
-        {% if nutrition_label_draft.get('ocr_text') %}
-          <div class="nutrition-detected">
-            <div class="nutrition-detected-head">Detected per 100g</div>
-            <div class="nutrition-detected-grid">
-              <div><span>Calories</span><b>{{ nutrition_label_draft.get('calories_per_100g') or 'Review' }}</b></div>
-              <div><span>Protein</span><b>{{ nutrition_label_draft.get('protein_per_100g') or 'Review' }}{% if nutrition_label_draft.get('protein_per_100g') %}g{% endif %}</b></div>
-              <div><span>Carbs</span><b>{{ nutrition_label_draft.get('carbs_per_100g') or 'Review' }}{% if nutrition_label_draft.get('carbs_per_100g') %}g{% endif %}</b></div>
-              <div><span>Fat</span><b>{{ nutrition_label_draft.get('fat_per_100g') or 'Review' }}{% if nutrition_label_draft.get('fat_per_100g') %}g{% endif %}</b></div>
-            </div>
-          </div>
-          <details class="nutrition-ocr-details">
-            <summary>OCR text preview</summary>
-            <textarea class="input nutrition-ocr-preview" rows="8" readonly>{{ nutrition_label_draft.get('ocr_text', '') }}</textarea>
-          </details>
-        {% endif %}
-
-        <div class="nutrition-save-log-panel">
-          <div class="grid-2">
-            <div>
-              <label class="label">Meal</label>
-              <select class="input" name="log_meal_type">
-                <option value="breakfast">Breakfast</option>
-                <option value="lunch">Lunch</option>
-                <option value="dinner">Dinner</option>
-                <option value="snack" selected>Snack</option>
-              </select>
-            </div>
-            <div>
-              <label class="label">Quantity to log (g)</label>
-              <input class="input" type="number" name="log_quantity_grams" min="1" step="0.1" placeholder="e.g. 150">
-            </div>
-          </div>
-          <label class="label">Log note</label>
-          <input class="input" name="log_note" maxlength="200" placeholder="Optional note for today's log">
-        </div>
-        <div class="nutrition-save-actions">
-          <button class="btn secondary" type="submit" name="save_action" value="save">Save Food</button>
-          <button class="btn" type="submit" name="save_action" value="save_and_log">Save &amp; Log</button>
-        </div>
-      </form>
-    </div>
-  </div>
+  </section>
 </div>
 
-<div class="card">
-  <h3>Meals for the Day</h3>
-  <div class="nutrition-meal-list">
-    {% if nutrition_summary.meal_sections %}
-      {% for meal in nutrition_summary.meal_sections %}
-        <div class="nutrition-meal-card">
-          <div class="nutrition-meal-head">
-            <strong>{{ meal["label"] }}</strong>
-            <span>{{ meal["calories"]|round|int }} kcal</span>
-          </div>
-          {% for item in meal["items"] %}
-            <div class="nutrition-log-row">
-              <div>
-                <div><b>{{ item.food_name }}</b></div>
-                <div class="muted">{{ item.quantity_grams }}g{% if item.note %} | {{ item.note }}{% endif %}</div>
-              </div>
-              <div class="nutrition-log-meta">
-                <span>{{ item.calories }} kcal</span>
-                <span>{{ item.protein }}P / {{ item.carbs }}C / {{ item.fat }}F</span>
-                <form class="nutrition-delete-form" action="{{ url_for('delete_food_log_entry', client_id=client.id, log_id=item.id) }}" method="POST" style="margin:0;">
-                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                  <button class="btn danger" type="submit">Delete</button>
-                </form>
-              </div>
-            </div>
-          {% endfor %}
-        </div>
-      {% endfor %}
-    {% else %}
-      <div class="empty-state">No foods logged for this day yet.</div>
-    {% endif %}
-  </div>
+<div class="nutrition-target-modal" id="nutritionTargetModal" {% if client.daily_calorie_target or is_admin %}hidden{% endif %}>
+  <form id="nutritionTargetModalForm" action="{{ url_for('update_calorie_target', client_id=client.id) }}" method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="nutrition_date" value="{{ nutrition_date.isoformat() }}">
+    <h3>Set Your Daily Calories</h3>
+    <p>This keeps the rings useful. You can adjust it later with your trainer.</p>
+    <output id="nutritionTargetOutput">{{ client.daily_calorie_target or 2200 }} kcal</output>
+    <input type="range" name="daily_calorie_target" id="nutritionTargetSlider" min="1200" max="5000" step="50" value="{{ client.daily_calorie_target or 2200 }}">
+    <button type="submit">Save Target</button>
+  </form>
 </div>
+
+<div class="nutrition-target-modal" id="nutritionAdminTargetModal" hidden>
+  <form id="nutritionAdminTargetForm" action="{{ url_for('update_calorie_target', client_id=client.id) }}" method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="nutrition_date" value="{{ nutrition_date.isoformat() }}">
+    <h3>Daily Calories</h3>
+    <output id="nutritionAdminTargetOutput">{{ client.daily_calorie_target or 2200 }} kcal</output>
+    <input type="range" name="daily_calorie_target" id="nutritionAdminTargetSlider" min="1200" max="5000" step="50" value="{{ client.daily_calorie_target or 2200 }}">
+    <button type="submit">Save Target</button>
+    <button type="button" data-close-target>Cancel</button>
+  </form>
+</div>
+
+<form id="nutritionScanForm" action="{{ url_for('scan_food_label_ajax', client_id=client.id) }}" method="POST" enctype="multipart/form-data" hidden>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="nutrition_date" value="{{ nutrition_date.isoformat() }}">
+  <input type="hidden" name="label_name" value="">
+  <input type="hidden" name="label_brand" value="">
+  <input id="nutritionCameraInput" type="file" name="label_photo" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" {% if not label_scan_enabled %}disabled{% endif %}>
+</form>
 
 <script>
   (function () {
+    const nutritionDayUrl = "{{ url_for('client_profile', client_id=client.id, tab='nutrition') }}";
+    const views = {
+      diary: document.getElementById("nutritionDiaryView"),
+      food: document.getElementById("nutritionFoodView"),
+      detail: document.getElementById("nutritionFoodDetailView"),
+      review: document.getElementById("nutritionReviewView"),
+    };
+    const mealInput = document.getElementById("nutritionMealType");
+    const reviewMeal = document.getElementById("nutritionReviewMeal");
     const searchInput = document.getElementById("nutritionFoodSearch");
-    const hiddenInput = document.getElementById("nutritionFoodId");
-    const hint = document.getElementById("nutritionFoodHint");
-    const list = document.getElementById("nutritionFoodsList");
-    if (!searchInput || !hiddenInput || !hint || !list) return;
+    const sortToggle = document.getElementById("nutritionSortToggle");
+    const foodRows = Array.from(document.querySelectorAll(".nutrition-food-result"));
+    const foodIdInput = document.getElementById("nutritionFoodId");
+    const foodNameInput = document.getElementById("nutritionFoodName");
+    const detailTitle = document.getElementById("nutritionDetailFoodTitle");
+    const detailAmount = document.getElementById("nutritionDetailAmount");
+    const detailCalories = document.getElementById("nutritionDetailCalories");
+    const detailProtein = document.getElementById("nutritionDetailProtein");
+    const detailCarbs = document.getElementById("nutritionDetailCarbs");
+    const detailFat = document.getElementById("nutritionDetailFat");
+    const proteinPercent = document.getElementById("nutritionProteinPercent");
+    const carbsPercent = document.getElementById("nutritionCarbsPercent");
+    const fatPercent = document.getElementById("nutritionFatPercent");
+    const energyDonut = document.getElementById("nutritionEnergyDonut");
+    const emptyState = document.getElementById("nutritionPickerEmpty");
+    const cameraInput = document.getElementById("nutritionCameraInput");
+    const scanForm = document.getElementById("nutritionScanForm");
+    const actionFooter = document.querySelector(".nutrition-action-footer");
+    let activeTab = "all";
+    let activeMeal = "snack";
+    let selectedFood = null;
 
-    const options = Array.from(list.querySelectorAll("option")).map(function (option) {
-      return {
-        value: option.getAttribute("value") || "",
-        id: option.getAttribute("data-food-id") || "",
-      };
+    function showView(name) {
+      Object.values(views).forEach(view => view?.classList.remove("is-active"));
+      views[name]?.classList.add("is-active");
+      if (actionFooter) actionFooter.hidden = name !== "diary";
+      document.querySelectorAll(".nutrition-meal-action-rail").forEach(rail => { rail.hidden = true; });
+      document.querySelectorAll(".nutrition-meal-card").forEach(card => card.classList.remove("nutrition-meal-card-open"));
+      const footerMenu = document.querySelector(".nutrition-footer-menu");
+      if (footerMenu && name !== "diary") footerMenu.hidden = true;
+      window.scrollTo({top: 0, behavior: "smooth"});
+    }
+
+    function setMeal(meal) {
+      activeMeal = meal || "snack";
+      if (mealInput) mealInput.value = activeMeal;
+      if (reviewMeal) reviewMeal.value = activeMeal;
+      const label = document.getElementById("nutritionFoodMealLabel");
+      if (label) label.textContent = activeMeal.charAt(0).toUpperCase() + activeMeal.slice(1);
+    }
+
+    document.querySelectorAll("[data-back-diary]").forEach(button => {
+      button.addEventListener("click", () => showView("diary"));
     });
 
-    function syncSelectedFood() {
-      const rawValue = (searchInput.value || "").trim().toLowerCase();
-      const match = options.find(function (option) {
-        return option.value.trim().toLowerCase() === rawValue;
+    document.querySelectorAll("[data-date-step]").forEach(button => {
+      button.addEventListener("click", function () {
+        const current = new Date("{{ nutrition_date.isoformat() }}T00:00:00");
+        current.setDate(current.getDate() + Number(button.dataset.dateStep || 0));
+        const url = new URL(nutritionDayUrl, window.location.origin);
+        url.searchParams.set("nutrition_date", current.toISOString().slice(0, 10));
+        window.location.href = url.toString();
       });
-      if (match) {
-        hiddenInput.value = match.id;
-        hint.textContent = "Saved food selected.";
-        return;
-      }
+    });
 
-      hiddenInput.value = "";
-      if (!rawValue) {
-        hint.textContent = "Choose a saved item from the search list.";
+    document.addEventListener("click", function (event) {
+      const opener = event.target.closest("[data-open-meal-actions]");
+      if (!opener) return;
+      const card = opener.closest(".nutrition-meal-card");
+      const rail = card.querySelector(".nutrition-meal-action-rail");
+      const willOpen = Boolean(rail && rail.hidden);
+      document.querySelectorAll(".nutrition-meal-card").forEach(item => {
+        if (item !== card) item.classList.remove("nutrition-meal-card-open");
+      });
+      document.querySelectorAll(".nutrition-meal-action-rail").forEach(rail => {
+        if (rail !== card.querySelector(".nutrition-meal-action-rail")) rail.hidden = true;
+      });
+      if (rail) {
+        rail.hidden = !rail.hidden;
+        card.classList.toggle("nutrition-meal-card-open", willOpen);
+      }
+    });
+
+    document.querySelectorAll("[data-open-food-list]").forEach(button => {
+      button.addEventListener("click", function () {
+        if (button.dataset.meal) setMeal(button.dataset.meal);
+        const footerMenu = document.querySelector(".nutrition-footer-menu");
+        if (footerMenu) footerMenu.hidden = true;
+        showView("food");
+        filterFoods();
+        window.setTimeout(() => searchInput?.focus(), 80);
+      });
+    });
+
+    document.querySelector("[data-open-footer-actions]")?.addEventListener("click", function () {
+      const menu = document.querySelector(".nutrition-footer-menu");
+      if (menu) menu.hidden = !menu.hidden;
+    });
+
+    function startScan(meal, useCamera) {
+      setMeal(meal);
+      const footerMenu = document.querySelector(".nutrition-footer-menu");
+      if (footerMenu) footerMenu.hidden = true;
+      if (!cameraInput || cameraInput.disabled) {
+        showMessage("Label scanning is not configured yet.", "error");
         return;
       }
-      const partialMatch = options.find(function (option) {
-        return option.value.toLowerCase().indexOf(rawValue) !== -1;
+      if (useCamera) cameraInput.setAttribute("capture", "environment");
+      else cameraInput.removeAttribute("capture");
+      cameraInput.value = "";
+      cameraInput.click();
+    }
+
+    document.querySelectorAll("[data-scan-camera]").forEach(button => {
+      button.addEventListener("click", () => startScan(button.dataset.meal, true));
+    });
+    document.querySelectorAll("[data-upload-label]").forEach(button => {
+      button.addEventListener("click", () => startScan(button.dataset.meal, false));
+    });
+
+    cameraInput?.addEventListener("change", function () {
+      if (!cameraInput.files || !cameraInput.files[0]) return;
+      const formData = new FormData(scanForm);
+      showMessage("Scanning label...", "success");
+      fetch(scanForm.action, {
+        method: "POST",
+        body: formData,
+        headers: {"X-Requested-With": "XMLHttpRequest"}
+      })
+      .then(handleJsonResponse)
+      .then(data => {
+        fillReviewForm(data.draft || {});
+        showView("review");
+        showMessage(data.message || "Label scanned.", "success");
+      })
+      .catch(error => showMessage(error.message || "Could not scan that image.", "error"));
+    });
+
+    function fillReviewForm(draft) {
+      const form = document.getElementById("customFoodForm");
+      if (!form) return;
+      ["name", "brand", "serving_label", "calories_per_100g", "protein_per_100g", "carbs_per_100g", "fat_per_100g"].forEach(name => {
+        const input = form.elements[name];
+        if (input) input.value = draft[name] || "";
       });
-      if (partialMatch) {
-        hint.textContent = "Matching saved food found. Choose the exact item from the list.";
-      } else {
-        hint.textContent = "No saved food match found yet.";
+      if (reviewMeal) reviewMeal.value = activeMeal;
+    }
+
+    function rowMatchesTab(row) {
+      if (activeTab === "recent") return Boolean(row.dataset.recent);
+      if (activeTab === "frequent") return Number(row.dataset.frequency || 0) > 0;
+      if (activeTab === "custom") return row.dataset.custom === "1";
+      return true;
+    }
+
+    function sortRows(rows) {
+      const sortMode = sortToggle?.dataset.sort || "az";
+      rows.sort((a, b) => {
+        if (sortMode === "recent") return (b.dataset.recent || "").localeCompare(a.dataset.recent || "");
+        if (sortMode === "frequent") return Number(b.dataset.frequency || 0) - Number(a.dataset.frequency || 0);
+        return (a.dataset.foodName || "").localeCompare(b.dataset.foodName || "");
+      });
+      const list = document.getElementById("nutritionFoodList");
+      rows.forEach(row => list?.appendChild(row));
+    }
+
+    function filterFoods() {
+      const query = (searchInput?.value || "").trim().toLowerCase();
+      const visibleRows = [];
+      foodRows.forEach(row => {
+        const visible = rowMatchesTab(row) && (!query || (row.dataset.search || "").includes(query));
+        row.hidden = !visible;
+        if (visible) visibleRows.push(row);
+      });
+      sortRows(visibleRows);
+      if (emptyState) emptyState.hidden = visibleRows.length > 0;
+    }
+
+    document.querySelectorAll("[data-food-tab]").forEach(tab => {
+      tab.addEventListener("click", function () {
+        document.querySelectorAll("[data-food-tab]").forEach(item => item.classList.remove("is-active"));
+        tab.classList.add("is-active");
+        activeTab = tab.dataset.foodTab || "all";
+        if (sortToggle) {
+          sortToggle.dataset.sort = activeTab === "recent" ? "recent" : activeTab === "frequent" ? "frequent" : "az";
+          sortToggle.textContent = activeTab === "recent" ? "Recent" : activeTab === "frequent" ? "Frequent" : "A to Z";
+        }
+        filterFoods();
+      });
+    });
+    searchInput?.addEventListener("input", filterFoods);
+    sortToggle?.addEventListener("click", function () {
+      const current = sortToggle.dataset.sort || "az";
+      const next = current === "az" ? "recent" : current === "recent" ? "frequent" : "az";
+      sortToggle.dataset.sort = next;
+      sortToggle.textContent = next === "az" ? "A to Z" : next === "recent" ? "Recent" : "Frequent";
+      filterFoods();
+    });
+
+    foodRows.forEach(row => {
+      row.addEventListener("click", function () {
+        foodRows.forEach(item => item.classList.remove("is-selected"));
+        row.classList.add("is-selected");
+        selectedFood = {
+          id: row.dataset.foodId || "",
+          name: row.dataset.foodName || "",
+          calories: Number(row.dataset.calories || 0),
+          protein: Number(row.dataset.protein || 0),
+          carbs: Number(row.dataset.carbs || 0),
+          fat: Number(row.dataset.fat || 0),
+        };
+        if (foodIdInput) foodIdInput.value = row.dataset.foodId || "";
+        if (foodNameInput) foodNameInput.value = row.dataset.foodName || "";
+        if (detailTitle) detailTitle.textContent = row.dataset.foodName || "Food";
+        if (detailAmount) detailAmount.value = "";
+        updateDetailSummary();
+        showView("detail");
+      });
+    });
+
+    detailAmount?.addEventListener("input", updateDetailSummary);
+
+    function updateDetailSummary() {
+      const grams = Number(detailAmount?.value || 0);
+      const factor = grams > 0 ? grams / 100 : 0;
+      const protein = selectedFood ? selectedFood.protein * factor : 0;
+      const carbs = selectedFood ? selectedFood.carbs * factor : 0;
+      const fat = selectedFood ? selectedFood.fat * factor : 0;
+      const calories = selectedFood ? selectedFood.calories * factor : 0;
+      const macroCalories = protein * 4 + carbs * 4 + fat * 9;
+      const proteinPct = macroCalories ? Math.round((protein * 4 / macroCalories) * 100) : 0;
+      const carbsPct = macroCalories ? Math.round((carbs * 4 / macroCalories) * 100) : 0;
+      const fatPct = macroCalories ? Math.max(0, 100 - proteinPct - carbsPct) : 0;
+      if (detailCalories) detailCalories.textContent = Math.round(calories);
+      if (detailProtein) detailProtein.textContent = `${roundMacro(protein)}g`;
+      if (detailCarbs) detailCarbs.textContent = `${roundMacro(carbs)}g`;
+      if (detailFat) detailFat.textContent = `${roundMacro(fat)}g`;
+      if (proteinPercent) proteinPercent.textContent = proteinPct;
+      if (carbsPercent) carbsPercent.textContent = carbsPct;
+      if (fatPercent) fatPercent.textContent = fatPct;
+      if (energyDonut) {
+        energyDonut.style.setProperty("--protein-slice", proteinPct);
+        energyDonut.style.setProperty("--carbs-slice", proteinPct + carbsPct);
       }
     }
 
-    searchInput.addEventListener("input", syncSelectedFood);
-    searchInput.addEventListener("change", syncSelectedFood);
-  })();
-</script>
-
-<script>
-  (function () {
-    const form = document.getElementById("nutritionScanForm");
-    const fileInput = document.getElementById("nutritionLabelPhoto");
-    const chooseButton = document.getElementById("chooseNutritionLabelPhoto");
-    const cameraButton = document.getElementById("takeNutritionLabelPhoto");
-    const fileName = document.getElementById("nutritionLabelFileName");
-    const submitButton = document.getElementById("nutritionScanSubmit");
-    if (!form || !fileInput || !chooseButton || !cameraButton || !fileName || !submitButton) return;
-
-    function openPicker(useCamera) {
-      if (useCamera) {
-        fileInput.setAttribute("capture", "environment");
-      } else {
-        fileInput.removeAttribute("capture");
-      }
-      fileInput.click();
+    function roundMacro(value) {
+      return Math.round(value * 10) / 10;
     }
 
-    chooseButton.addEventListener("click", function () {
-      openPicker(false);
+    document.getElementById("nutritionLogForm")?.addEventListener("submit", function (event) {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const formData = new FormData(form);
+      fetch("{{ url_for('add_food_log_entry_ajax', client_id=client.id) }}", {
+        method: "POST",
+        body: formData,
+        headers: {"X-Requested-With": "XMLHttpRequest"}
+      })
+      .then(handleJsonResponse)
+      .then(data => {
+        updateNutritionSummary(data.nutrition_summary);
+        form.reset();
+        foodRows.forEach(row => row.classList.remove("is-selected"));
+        showView("diary");
+        showMessage(data.message, "success");
+      })
+      .catch(error => showMessage(error.message || "Could not log food.", "error"));
     });
 
-    cameraButton.addEventListener("click", function () {
-      openPicker(true);
+    document.getElementById("customFoodForm")?.addEventListener("submit", function (event) {
+      const submitter = event.submitter;
+      const quantity = event.currentTarget.elements["log_quantity_grams"];
+      const error = event.currentTarget.querySelector(".nutrition-review-serving small");
+      if (!submitter || submitter.value !== "save_and_log") return;
+      if (quantity && !quantity.value) {
+        event.preventDefault();
+        quantity.classList.add("nutrition-input-error");
+        if (error) error.hidden = false;
+        quantity.focus();
+      }
+    });
+    document.querySelector('#customFoodForm input[name="log_quantity_grams"]')?.addEventListener("input", function (event) {
+      event.target.classList.remove("nutrition-input-error");
+      const error = document.querySelector(".nutrition-review-serving small");
+      if (error) error.hidden = true;
     });
 
-    fileInput.addEventListener("change", function () {
-      const file = fileInput.files && fileInput.files[0];
-      fileName.textContent = file ? file.name : "No photo selected";
-    });
-
-    form.addEventListener("submit", function () {
-      submitButton.disabled = true;
-      chooseButton.disabled = true;
-      cameraButton.disabled = true;
-      submitButton.textContent = "Scanning...";
-    });
-  })();
-</script>
-
-<script>
-  (function () {
     document.addEventListener("submit", function (event) {
       const form = event.target;
       if (!form.classList || !form.classList.contains("nutrition-delete-form")) return;
-      if (!window.confirm("Delete this logged food?")) {
-        event.preventDefault();
-      }
+      if (!window.confirm("Delete this logged food?")) event.preventDefault();
     });
-  })();
-</script>
-
-<script>
-  (function () {
-    const toggleButton = document.getElementById("toggleNutritionGoalEdit");
-    const goalForm = document.getElementById("nutritionGoalForm");
-    if (!toggleButton || !goalForm) return;
-
-    const updateButtonText = function () {
-      const openText = toggleButton.dataset.openText || "Hide target";
-      const closedText = toggleButton.dataset.closedText || "Change target";
-      toggleButton.textContent = goalForm.classList.contains("nutrition-goal-form--expanded") ? openText : closedText;
-    };
-
-    updateButtonText();
-
-    toggleButton.addEventListener("click", function () {
-      goalForm.classList.toggle("nutrition-goal-form--expanded");
-      updateButtonText();
-    });
-  })();
-
-  // AJAX form handling
-  (function () {
-    const nutritionDayUrl = "{{ url_for('client_profile', client_id=client.id, tab='nutrition') }}";
-    const openDayButton = document.getElementById("openNutritionDay");
-    if (openDayButton) {
-      openDayButton.addEventListener("click", function () {
-        const dateInput = document.querySelector('#nutritionGoalForm input[name="nutrition_date"]');
-        const selectedDate = dateInput ? dateInput.value : "";
-        const url = new URL(nutritionDayUrl, window.location.origin);
-        if (selectedDate) {
-          url.searchParams.set("nutrition_date", selectedDate);
-        }
-        window.location.href = url.toString();
-      });
-    }
 
     function handleJsonResponse(response) {
       return response.json().catch(() => {
         throw new Error("Unexpected server response.");
       }).then(data => {
-        if (!response.ok || !data.success) {
-          throw new Error(data.error || "Something went wrong.");
-        }
+        if (!response.ok || !data.success) throw new Error(data.error || "Something went wrong.");
         return data;
       });
     }
 
-    // Food logging form
-    const nutritionLogForm = document.getElementById("nutritionLogForm");
-    if (nutritionLogForm) {
-      nutritionLogForm.addEventListener("submit", function (e) {
-        e.preventDefault();
-
-        const formData = new FormData(this);
-        const submitButton = this.querySelector('button[type="submit"]');
-        const originalText = submitButton.textContent;
-
-        // Disable button and show loading
-        submitButton.disabled = true;
-        submitButton.textContent = "Logging...";
-
-        fetch("{{ url_for('add_food_log_entry_ajax', client_id=client.id) }}", {
-          method: "POST",
-          body: formData,
-          headers: {
-            "X-Requested-With": "XMLHttpRequest"
-          }
-        })
-        .then(handleJsonResponse)
-        .then(data => {
-          updateNutritionSummary(data.nutrition_summary);
-          clearFoodLogForm();
-          showMessage(data.message, "success");
-        })
-        .catch(error => {
-          console.error("Error:", error);
-          showMessage(error.message || "An error occurred. Please try again.", "error");
-        })
-        .finally(() => {
-          // Re-enable button
-          submitButton.disabled = false;
-          submitButton.textContent = originalText;
-        });
-      });
-    }
-
-    // Calorie target form
-    const goalForm = document.getElementById("nutritionGoalForm");
-    if (goalForm) {
-      goalForm.addEventListener("submit", function (e) {
-        e.preventDefault();
-
-        const formData = new FormData(this);
-        const submitButton = this.querySelector('button[type="submit"]');
-        const originalText = submitButton.textContent;
-
-        // Disable button and show loading
-        submitButton.disabled = true;
-        submitButton.textContent = "Saving...";
-
-        fetch("{{ url_for('update_calorie_target_ajax', client_id=client.id) }}", {
-          method: "POST",
-          body: formData,
-          headers: {
-            "X-Requested-With": "XMLHttpRequest"
-          }
-        })
-        .then(handleJsonResponse)
-        .then(data => {
-          updateNutritionSummary(data.nutrition_summary);
-          updateGoalDisplay(data.nutrition_summary.goal);
-          showMessage(data.message, "success");
-        })
-        .catch(error => {
-          console.error("Error:", error);
-          showMessage(error.message || "An error occurred. Please try again.", "error");
-        })
-        .finally(() => {
-          // Re-enable button
-          submitButton.disabled = false;
-          submitButton.textContent = originalText;
-        });
-      });
+    function setRing(name, current, goal) {
+      const ring = document.querySelector(`[data-ring="${name}"]`);
+      if (!ring) return;
+      const ratio = goal ? Math.min(current / goal * 100, 100) : 0;
+      ring.style.setProperty("--ring-progress", ratio);
+      const currentEl = ring.querySelector(".nutrition-ring-current");
+      const goalEl = ring.querySelector(".nutrition-ring-goal");
+      if (currentEl) currentEl.textContent = name === "energy" ? Math.round(current) : current;
+      if (goalEl) goalEl.textContent = goal || 0;
     }
 
     function updateNutritionSummary(summary) {
-      // Update calorie hero
-      const calorieValue = document.querySelector(".nutrition-big-number");
-      if (calorieValue) {
-        calorieValue.textContent = Math.round(summary.totals.calories);
-      }
-
-      const calorieTarget = document.querySelector(".nutrition-target-line span:last-child");
-      if (calorieTarget) {
-        calorieTarget.textContent = summary.goal ? `kcal eaten / ${summary.goal} target` : "kcal eaten";
-      }
-
-      const statusElement = document.querySelector(".nutrition-status");
-      if (statusElement) {
-        statusElement.textContent = summary.status;
-        statusElement.className = `nutrition-status nutrition-status-${summary.tone}`;
-      }
-
-      const calorieRing = document.querySelector(".calorie-ring");
-      if (calorieRing) {
-        calorieRing.style.setProperty("--progress", summary.ring_percent);
-        calorieRing.className = `calorie-ring calorie-ring-${summary.tone}`;
-      }
-
-      const calorieRingInner = document.querySelector(".calorie-ring-inner b");
-      if (calorieRingInner) {
-        calorieRingInner.textContent = `${summary.percent}%`;
-      }
-
-      const heroCard = document.querySelector(".nutrition-hero");
-      if (heroCard) {
-        heroCard.className = `card nutrition-hero nutrition-hero-${summary.tone}`;
-      }
-
-      // Update macro cards
-      updateMacroCard("protein", summary.totals.protein, summary.protein_goal);
-      updateMacroCard("carbs", summary.totals.carbs, summary.carbs_goal);
-      updateMacroCard("fat", summary.totals.fat, summary.fat_goal);
-
-      // Update meal sections
-      updateMealSections(summary.meal_sections);
+      setRing("energy", summary.totals.calories, summary.goal || 0);
+      setRing("protein", summary.totals.protein, summary.protein_goal || 0);
+      setRing("carbs", summary.totals.carbs, summary.carbs_goal || 0);
+      setRing("fat", summary.totals.fat, summary.fat_goal || 0);
+      updateConsumedMacroRing(summary.totals);
+      updateMeals(summary.meal_sections || []);
     }
 
-    function updateGoalDisplay(goal) {
-      const goalValue = document.querySelector(".nutrition-goal-value");
-      if (goalValue) {
-        goalValue.textContent = goal ? `${goal} kcal` : "Not set";
-      }
-
-      const calorieTarget = document.querySelector(".nutrition-target-line span:last-child");
-      if (calorieTarget) {
-        calorieTarget.textContent = goal ? `kcal eaten / ${goal} target` : "kcal eaten";
-      }
+    function updateConsumedMacroRing(totals) {
+      const ring = document.querySelector('[data-ring="energy"]');
+      if (!ring) return;
+      const protein = Number(totals.protein || 0);
+      const carbs = Number(totals.carbs || 0);
+      const fat = Number(totals.fat || 0);
+      const macroCalories = protein * 4 + carbs * 4 + fat * 9;
+      const proteinPct = macroCalories ? (protein * 4 / macroCalories) * 100 : 0;
+      const carbsPct = macroCalories ? proteinPct + (carbs * 4 / macroCalories) * 100 : 0;
+      ring.style.setProperty("--protein-slice", proteinPct);
+      ring.style.setProperty("--carbs-slice", carbsPct);
     }
 
-    function updateMacroCard(macro, current, goal) {
-      const card = document.querySelector(`.nutrition-metric-card:nth-child(${macro === "protein" ? 1 : macro === "carbs" ? 2 : 3})`);
-      if (!card) return;
-
-      const valueElement = card.querySelector(".nutrition-metric-value");
-      if (valueElement) {
-        valueElement.textContent = `${current}g`;
-      }
-
-      const goalElement = card.querySelector(".nutrition-metric-goal-label");
-      if (goalElement) {
-        if (goal) {
-          goalElement.textContent = `${goal}g goal`;
-          goalElement.style.display = "";
-        } else {
-          goalElement.style.display = "none";
+    function updateMeals(mealSections) {
+      const mealMap = new Map(mealSections.map(section => [section.key, section]));
+      document.querySelectorAll("[data-meal-section]").forEach(card => {
+        const meal = mealMap.get(card.dataset.mealSection);
+        const kcal = card.querySelector(".nutrition-meal-top span");
+        const entries = card.querySelector(".nutrition-meal-entries");
+        if (kcal) kcal.textContent = `${Math.round(meal ? meal.calories : 0)} kcal`;
+        if (!entries) return;
+        entries.textContent = "";
+        if (!meal || !meal.items.length) {
+          const p = document.createElement("p");
+          p.textContent = "No foods logged yet.";
+          entries.appendChild(p);
+          return;
         }
-      }
-
-      // Update classes and styles for animation
-      card.className = "card nutrition-metric-card";
-      if (goal) {
-        const ratio = (current / goal * 100);
-        if (ratio >= 100) {
-          card.classList.add("macro-over");
-          card.style.setProperty("--macro-progress", "100");
-        } else if (ratio > 0) {
-          card.classList.add("macro-progress");
-          card.style.setProperty("--macro-progress", Math.min(ratio, 100));
-        }
-      }
-    }
-
-    function updateMealSections(mealSections) {
-      const mealList = document.querySelector(".nutrition-meal-list");
-      if (!mealList) return;
-
-      if (!mealSections || mealSections.length === 0) {
-        mealList.textContent = "";
-        const emptyState = document.createElement("div");
-        emptyState.className = "empty-state";
-        emptyState.textContent = "No foods logged for this day yet.";
-        mealList.appendChild(emptyState);
-        return;
-      }
-
-      const csrfToken = "{{ csrf_token() }}";
-      mealList.textContent = "";
-
-      mealSections.forEach(meal => {
-        const mealCard = document.createElement("div");
-        mealCard.className = "nutrition-meal-card";
-
-        const mealHead = document.createElement("div");
-        mealHead.className = "nutrition-meal-head";
-        const mealLabel = document.createElement("strong");
-        mealLabel.textContent = meal.label;
-        const mealCalories = document.createElement("span");
-        mealCalories.textContent = `${Math.round(meal.calories)} kcal`;
-        mealHead.append(mealLabel, mealCalories);
-        mealCard.appendChild(mealHead);
-
         meal.items.forEach(item => {
           const row = document.createElement("div");
-          row.className = "nutrition-log-row";
-
+          row.className = "nutrition-entry-row";
           const details = document.createElement("div");
-          const nameWrap = document.createElement("div");
           const name = document.createElement("b");
-          name.textContent = item.food_name;
-          nameWrap.appendChild(name);
-
-          const note = document.createElement("div");
-          note.className = "muted";
-          note.textContent = `${item.quantity_grams}g${item.note ? ` | ${item.note}` : ""}`;
-          details.append(nameWrap, note);
+          const grams = document.createElement("span");
+          name.textContent = item.food_name || "Food";
+          grams.textContent = `${item.quantity_grams}g`;
+          details.append(name, grams);
 
           const meta = document.createElement("div");
-          meta.className = "nutrition-log-meta";
-          const calories = document.createElement("span");
+          const calories = document.createElement("b");
           calories.textContent = `${item.calories} kcal`;
-          const macros = document.createElement("span");
-          macros.textContent = `${item.protein}P / ${item.carbs}C / ${item.fat}F`;
-
           const form = document.createElement("form");
+          form.className = "nutrition-delete-form";
           form.method = "POST";
           form.action = `/client/{{ client.id }}/nutrition/logs/delete/${item.id}`;
-          form.className = "nutrition-delete-form";
-          form.style.margin = "0";
-
           const token = document.createElement("input");
           token.type = "hidden";
           token.name = "csrf_token";
-          token.value = csrfToken;
-
-          const deleteButton = document.createElement("button");
-          deleteButton.className = "btn danger";
-          deleteButton.type = "submit";
-          deleteButton.textContent = "Delete";
-          form.append(token, deleteButton);
-
-          meta.append(calories, macros, form);
+          token.value = "{{ csrf_token() }}";
+          const button = document.createElement("button");
+          button.type = "submit";
+          button.textContent = "Delete";
+          form.append(token, button);
+          meta.append(calories, form);
           row.append(details, meta);
-          mealCard.appendChild(row);
+          entries.appendChild(row);
         });
-
-        mealList.appendChild(mealCard);
       });
     }
 
-    function clearFoodLogForm() {
-      const form = document.getElementById("nutritionLogForm");
-      if (!form) return;
-
-      // Clear all inputs except hidden ones
-      const inputs = form.querySelectorAll('input:not([type="hidden"]), select, textarea');
-      inputs.forEach(input => {
-        if (input.type === "number") {
-          input.value = "";
-        } else if (input.tagName === "SELECT") {
-          input.value = "snack"; // Reset to default snack
-        } else {
-          input.value = "";
-        }
-      });
-
-      // Reset hidden food ID
-      const foodIdInput = document.getElementById("nutritionFoodId");
-      if (foodIdInput) {
-        foodIdInput.value = "";
-      }
-
-      // Reset hint text
-      const hint = document.getElementById("nutritionFoodHint");
-      if (hint) {
-        hint.textContent = "Choose a saved item from the search list.";
-      }
+    function bindTargetModal(modalId, sliderId, outputId) {
+      const modal = document.getElementById(modalId);
+      const slider = document.getElementById(sliderId);
+      const output = document.getElementById(outputId);
+      if (!modal || !slider || !output) return;
+      const sync = () => { output.textContent = `${slider.value} kcal`; };
+      slider.addEventListener("input", sync);
+      sync();
     }
+    bindTargetModal("nutritionTargetModal", "nutritionTargetSlider", "nutritionTargetOutput");
+    bindTargetModal("nutritionAdminTargetModal", "nutritionAdminTargetSlider", "nutritionAdminTargetOutput");
+    document.querySelector("[data-open-target]")?.addEventListener("click", function () {
+      document.getElementById("nutritionAdminTargetModal").hidden = false;
+    });
+    document.querySelector("[data-close-target]")?.addEventListener("click", function () {
+      document.getElementById("nutritionAdminTargetModal").hidden = true;
+    });
 
     function showMessage(message, type) {
-      // Remove existing messages
-      const existingMessages = document.querySelectorAll(".nutrition-message");
-      existingMessages.forEach(msg => msg.remove());
-
-      // Create new message
+      document.querySelectorAll(".nutrition-message").forEach(msg => msg.remove());
       const messageDiv = document.createElement("div");
       messageDiv.className = `nutrition-message nutrition-message-${type}`;
       messageDiv.textContent = message;
-
-      // Add to page
       const container = document.querySelector(".container");
       if (container) {
         container.insertBefore(messageDiv, container.firstChild);
-
-        // Auto-remove after 3 seconds
-        setTimeout(() => {
-          if (messageDiv.parentNode) {
-            messageDiv.remove();
-          }
-        }, 3000);
+        setTimeout(() => messageDiv.remove(), 3000);
       }
     }
+
+    filterFoods();
+    {% if nutrition_label_draft.get('ocr_text') %}
+      showView("review");
+    {% endif %}
   })();
 </script>
