@@ -13,6 +13,13 @@
 {% set meal_keys = [("breakfast", "Breakfast"), ("lunch", "Lunch"), ("dinner", "Dinner"), ("snack", "Snack")] %}
 
 <div class="nutrition-app" id="nutritionApp">
+  <a class="nutrition-hub-link" href="{{ url_for('client_profile', client_id=client.id, tab='info') }}">Back to Trainer's Hub</a>
+  {% if err %}
+    <div class="nutrition-message-inline nutrition-message-error">{{ err }}</div>
+  {% endif %}
+  {% if msg %}
+    <div class="nutrition-message-inline nutrition-message-success">{{ msg }}</div>
+  {% endif %}
   <section class="nutrition-view is-active" id="nutritionDiaryView" aria-label="Nutrition diary">
     <header class="nutrition-app-header">
       <button class="nutrition-round-btn" type="button" data-date-step="-1" aria-label="Previous day">&lt;</button>
@@ -337,22 +344,52 @@
       });
     });
 
-    document.addEventListener("click", function (event) {
-      const opener = event.target.closest("[data-open-meal-actions]");
-      if (!opener) return;
-      const card = opener.closest(".nutrition-meal-card");
-      const rail = card.querySelector(".nutrition-meal-action-rail");
-      const willOpen = Boolean(rail && rail.hidden);
-      document.querySelectorAll(".nutrition-meal-card").forEach(item => {
-        if (item !== card) item.classList.remove("nutrition-meal-card-open");
+    function closeMealActions(exceptCard) {
+      document.querySelectorAll(".nutrition-meal-card").forEach(card => {
+        if (card !== exceptCard) card.classList.remove("nutrition-meal-card-open");
       });
       document.querySelectorAll(".nutrition-meal-action-rail").forEach(rail => {
-        if (rail !== card.querySelector(".nutrition-meal-action-rail")) rail.hidden = true;
+        if (!exceptCard || rail !== exceptCard.querySelector(".nutrition-meal-action-rail")) rail.hidden = true;
       });
-      if (rail) {
-        rail.hidden = !rail.hidden;
-        card.classList.toggle("nutrition-meal-card-open", willOpen);
+    }
+
+    function positionMealRail(button, rail) {
+      if (!button || !rail) return;
+      rail.hidden = false;
+      const buttonRect = button.getBoundingClientRect();
+      const railWidth = rail.offsetWidth || 126;
+      const railHeight = rail.offsetHeight || 170;
+      const margin = 10;
+      const preferredLeft = buttonRect.left - railWidth + 28;
+      const left = Math.max(margin, Math.min(preferredLeft, window.innerWidth - railWidth - margin));
+      const preferredTop = buttonRect.top - 56;
+      const top = Math.max(margin, Math.min(preferredTop, window.innerHeight - railHeight - margin));
+      rail.style.left = `${left}px`;
+      rail.style.top = `${top}px`;
+    }
+
+    document.addEventListener("click", function (event) {
+      const opener = event.target.closest("[data-open-meal-actions]");
+      if (!opener) {
+        if (!event.target.closest(".nutrition-meal-action-rail")) closeMealActions();
+        return;
       }
+      event.preventDefault();
+      event.stopPropagation();
+      const card = opener.closest(".nutrition-meal-card");
+      const rail = card.querySelector(".nutrition-meal-action-rail");
+      if (!rail) return;
+      const willOpen = rail.hidden;
+      closeMealActions(card);
+      rail.hidden = !willOpen;
+      card.classList.toggle("nutrition-meal-card-open", willOpen);
+      if (willOpen) positionMealRail(opener, rail);
+    });
+
+    window.addEventListener("resize", () => closeMealActions());
+    window.addEventListener("scroll", () => closeMealActions(), {passive: true});
+    document.addEventListener("keydown", event => {
+      if (event.key === "Escape") closeMealActions();
     });
 
     document.querySelectorAll("[data-open-food-list]").forEach(button => {
@@ -360,6 +397,7 @@
         if (button.dataset.meal) setMeal(button.dataset.meal);
         const footerMenu = document.querySelector(".nutrition-footer-menu");
         if (footerMenu) footerMenu.hidden = true;
+        closeMealActions();
         showView("food");
         filterFoods();
         window.setTimeout(() => searchInput?.focus(), 80);
@@ -368,11 +406,13 @@
 
     document.querySelector("[data-open-footer-actions]")?.addEventListener("click", function () {
       const menu = document.querySelector(".nutrition-footer-menu");
+      closeMealActions();
       if (menu) menu.hidden = !menu.hidden;
     });
 
     function startScan(meal, useCamera) {
       setMeal(meal);
+      closeMealActions();
       const footerMenu = document.querySelector(".nutrition-footer-menu");
       if (footerMenu) footerMenu.hidden = true;
       if (!cameraInput || cameraInput.disabled) {

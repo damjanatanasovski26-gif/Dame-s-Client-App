@@ -2204,6 +2204,7 @@ def client_profile(client_id):
         "client.html",
         client=client,
         tab=tab,
+        page_class="nutrition-shell" if tab == "nutrition" else "",
         err=err,
         msg=msg,
         is_admin=is_admin(),

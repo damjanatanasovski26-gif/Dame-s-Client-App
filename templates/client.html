@@ -1,120 +1,88 @@
 {% extends "base.html" %}
 {% set title = client.name %}
+{% set is_nutrition_tab = tab == "nutrition" %}
+{% set page_class = "nutrition-shell" if is_nutrition_tab else "" %}
 
 {% block content %}
 
-<div class="topbar">
-  <h1>Trainer App</h1>
-  <div class="actions">
-    <a href="{{ url_for('index') }}" class="btn secondary">Back to Dashboard</a>
-    <a href="{{ url_for('logout') }}" class="btn danger">Log out</a>
-  </div>
-</div>
-
-<div class="card">
-  <h2 style="margin:0 0 6px 0;">{{ client.name }}</h2>
-
-  <div class="muted">
-    Phone: {{ client.phone or "-" }}
-    | Plan: {{ client.plan or "-" }}
-    | {{ sessions_per_week or 0 }}/week
-    {% if bonus and bonus > 0 %} | rollover: {{ bonus }} {% endif %}
+{% if not is_nutrition_tab %}
+  <div class="topbar">
+    <h1>Trainer App</h1>
+    <div class="actions">
+      <a href="{{ url_for('index') }}" class="btn secondary">Back to Dashboard</a>
+      <a href="{{ url_for('logout') }}" class="btn danger">Log out</a>
+    </div>
   </div>
 
-  {% if current_status %}
-    <div class="muted" style="margin-top:8px;">
-      Status:
-      <span class="payment-badge payment-badge-{{ payment_status_tone }}">{{ payment_status_label }}</span>
-      |
-      Paid: {{ current_status.amount_paid }} MKD
-      | Start: {{ current_status.start_date.strftime("%d/%m/%Y") }}
-      | Months: {{ current_status.months }}
-      | Paid until: {{ current_status.paid_until.strftime("%d/%m/%Y") }}
-      | Days left:
-      {% if current_status.days_left >= 0 %}
-        <b style="color:var(--success);">{{ current_status.days_left }}</b>
-      {% else %}
-        <b style="color:var(--danger);">OVERDUE {{ (-current_status.days_left) }}</b>
-      {% endif %}
+  <div class="card">
+    <h2 style="margin:0 0 6px 0;">{{ client.name }}</h2>
+
+    <div class="muted">
+      Phone: {{ client.phone or "-" }}
+      | Plan: {{ client.plan or "-" }}
+      | {{ sessions_per_week or 0 }}/week
+      {% if bonus and bonus > 0 %} | rollover: {{ bonus }} {% endif %}
+    </div>
+
+    {% if current_status %}
+      <div class="muted" style="margin-top:8px;">
+        Status:
+        <span class="payment-badge payment-badge-{{ payment_status_tone }}">{{ payment_status_label }}</span>
+        |
+        Paid: {{ current_status.amount_paid }} MKD
+        | Start: {{ current_status.start_date.strftime("%d/%m/%Y") }}
+        | Months: {{ current_status.months }}
+        | Paid until: {{ current_status.paid_until.strftime("%d/%m/%Y") }}
+        | Days left:
+        {% if current_status.days_left >= 0 %}
+          <b style="color:var(--success);">{{ current_status.days_left }}</b>
+        {% else %}
+          <b style="color:var(--danger);">OVERDUE {{ (-current_status.days_left) }}</b>
+        {% endif %}
+      </div>
+    {% endif %}
+  </div>
+{% endif %}
+
+{% if not is_nutrition_tab %}
+  {% if err %}
+    <div class="card alert error">
+      <b style="color:var(--danger);">Error:</b> {{ err }}
     </div>
   {% endif %}
-</div>
 
-<div class="card">
-  <h3>Client Summary</h3>
-  <div class="stats-grid">
-    <div><b>Sessions Left</b><div class="muted">{{ remaining }} / {{ allowed }} this week</div></div>
-    <div><b>Total Sessions</b><div class="muted">{{ total_sessions }}</div></div>
-    <div><b>Weight Change</b><div class="muted">
-      {% if weight_change is not none %}
-        {{ weight_change }} kg
-      {% else %}
-        -
-      {% endif %}
-    </div></div>
-  </div>
-  <div class="muted" style="margin-top:10px;">
-    Milestones: {{ milestones|join(" | ") }}
-  </div>
-  <div class="stats-grid" style="margin-top:10px;">
-    <div><b>30-Day Sessions</b><div class="muted">{{ sessions_30d }}</div></div>
-    <div><b>30-Day Adherence</b><div class="muted">{{ adherence_30d }}%</div></div>
-    <div><b>30-Day Weight Change</b><div class="muted">
-      {% if weight_change_30d is not none %}
-        {{ weight_change_30d }} kg
-      {% else %}
-        -
-      {% endif %}
-    </div></div>
-  </div>
-  <div class="actions" style="margin-top:12px;">
-    <a class="btn secondary" href="{{ url_for('client_profile', client_id=client.id, tab='sessions') }}#logSessionForm">Quick Log Session</a>
-    <a class="btn secondary" href="{{ url_for('client_profile', client_id=client.id, tab='stats') }}#statsEntryForm">Quick Add Weight</a>
-    <a class="btn secondary" href="{{ url_for('client_profile', client_id=client.id, tab='nutrition') }}#nutritionLogForm">Quick Log Food</a>
-    {% if is_admin %}
-      <a class="btn secondary" href="{{ url_for('client_profile', client_id=client.id, tab='payments') }}#paymentEntryForm">Quick Add Payment</a>
-    {% endif %}
-    <a class="btn secondary" href="{{ url_for('export_client_report_pdf', client_id=client.id) }}">Download Report PDF</a>
-  </div>
-</div>
-
-{% if err %}
-  <div class="card alert error">
-    <b style="color:var(--danger);">Error:</b> {{ err }}
-  </div>
-{% endif %}
-
-{% if msg %}
-  <div class="card alert success">
-    <b style="color:var(--success);">OK:</b> {{ msg }}
-  </div>
-{% endif %}
-
-{% if must_change_password and not is_admin %}
-  <div class="card alert error">
-    <b style="color:var(--danger);">Action required:</b> Set a new password in the Info tab before using other tabs.
-  </div>
-{% endif %}
-
-<div class="tabs">
-  <a class="tab {% if tab=='info' %}active{% endif %}" href="{{ url_for('client_profile', client_id=client.id, tab='info') }}">
-     Info
-  </a>
-  <a class="tab {% if tab=='stats' %}active{% endif %}" href="{{ url_for('client_profile', client_id=client.id, tab='stats') }}">
-     Stats
-  </a>
-  <a class="tab {% if tab=='sessions' %}active{% endif %}" href="{{ url_for('client_profile', client_id=client.id, tab='sessions') }}">
-     Sessions
-  </a>
-  <a class="tab {% if tab=='nutrition' %}active{% endif %}" href="{{ url_for('client_profile', client_id=client.id, tab='nutrition') }}">
-     Nutrition
-  </a>
-  {% if is_admin %}
-    <a class="tab {% if tab=='payments' %}active{% endif %}" href="{{ url_for('client_profile', client_id=client.id, tab='payments') }}">
-       Payments
-    </a>
+  {% if msg %}
+    <div class="card alert success">
+      <b style="color:var(--success);">OK:</b> {{ msg }}
+    </div>
   {% endif %}
-</div>
+
+  {% if must_change_password and not is_admin %}
+    <div class="card alert error">
+      <b style="color:var(--danger);">Action required:</b> Set a new password in the Info tab before using other tabs.
+    </div>
+  {% endif %}
+
+  <div class="tabs">
+    <a class="tab {% if tab=='info' %}active{% endif %}" href="{{ url_for('client_profile', client_id=client.id, tab='info') }}">
+       Info
+    </a>
+    <a class="tab {% if tab=='stats' %}active{% endif %}" href="{{ url_for('client_profile', client_id=client.id, tab='stats') }}">
+       Stats
+    </a>
+    <a class="tab {% if tab=='sessions' %}active{% endif %}" href="{{ url_for('client_profile', client_id=client.id, tab='sessions') }}">
+       Sessions
+    </a>
+    <a class="tab {% if tab=='nutrition' %}active{% endif %}" href="{{ url_for('client_profile', client_id=client.id, tab='nutrition') }}">
+       Nutrition
+    </a>
+    {% if is_admin %}
+      <a class="tab {% if tab=='payments' %}active{% endif %}" href="{{ url_for('client_profile', client_id=client.id, tab='payments') }}">
+         Payments
+      </a>
+    {% endif %}
+  </div>
+{% endif %}
 
 {% if tab == "info" %}
   {% include "tabs/info.html" %}
@@ -128,6 +96,7 @@
   {% include "tabs/payments.html" %}
 {% endif %}
 
+{% if not is_nutrition_tab %}
 <script>
   (function () {
     if (localStorage.getItem("trainer_client_onboarding_seen") === "1") return;
@@ -162,8 +131,9 @@
     </div>
   </div>
 </div>
+{% endif %}
 
-{% if not is_admin and pending_today_appointments %}
+{% if not is_nutrition_tab and not is_admin and pending_today_appointments %}
 <div id="appointmentModal" class="modal-backdrop show" aria-hidden="false">
   <div class="modal-card">
     <h3 style="margin-bottom:8px;">Appointment Request Today</h3>
