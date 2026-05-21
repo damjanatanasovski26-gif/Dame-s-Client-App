@@ -311,9 +311,17 @@
     const cameraInput = document.getElementById("nutritionCameraInput");
     const scanForm = document.getElementById("nutritionScanForm");
     const actionFooter = document.querySelector(".nutrition-action-footer");
+    const nutritionApp = document.getElementById("nutritionApp");
     let activeTab = "all";
     let activeMeal = "snack";
     let selectedFood = null;
+
+    document.querySelectorAll(".nutrition-meal-card").forEach(card => {
+      const rail = card.querySelector(".nutrition-meal-action-rail");
+      if (!rail || !nutritionApp) return;
+      rail.dataset.ownerMeal = card.dataset.mealSection || "";
+      nutritionApp.appendChild(rail);
+    });
 
     function showView(name) {
       Object.values(views).forEach(view => view?.classList.remove("is-active"));
@@ -353,8 +361,13 @@
         if (card !== exceptCard) card.classList.remove("nutrition-meal-card-open");
       });
       document.querySelectorAll(".nutrition-meal-action-rail").forEach(rail => {
-        if (!exceptCard || rail !== exceptCard.querySelector(".nutrition-meal-action-rail")) rail.hidden = true;
+        if (!exceptCard || rail.dataset.ownerMeal !== exceptCard.dataset.mealSection) rail.hidden = true;
       });
+    }
+
+    function getMealRail(card) {
+      if (!card) return null;
+      return document.querySelector(`.nutrition-meal-action-rail[data-owner-meal="${card.dataset.mealSection}"]`);
     }
 
     function positionMealRail(button, rail) {
@@ -381,7 +394,7 @@
       event.preventDefault();
       event.stopPropagation();
       const card = opener.closest(".nutrition-meal-card");
-      const rail = card.querySelector(".nutrition-meal-action-rail");
+      const rail = getMealRail(card);
       if (!rail) return;
       const willOpen = rail.hidden;
       closeMealActions(card);

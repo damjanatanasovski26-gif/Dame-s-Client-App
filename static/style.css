@@ -2473,16 +2473,17 @@ body.nutrition-shell .nutrition-view{
   border-radius:22px;
   background:var(--nutrition-panel);
   overflow:visible;
-  transition:transform .18s ease, border-color .18s ease, background .18s ease;
+  transition:border-color .18s ease, background .18s ease, box-shadow .18s ease;
 }
 
 .nutrition-meal-card:hover{
-  transform:translateY(-1px);
   border-color:#50566d;
+  box-shadow:0 10px 28px rgba(0,0,0,.14);
 }
 
 .nutrition-meal-card-open{
   z-index:80;
+  border-color:#5b6178;
 }
 
 .nutrition-meal-top{
