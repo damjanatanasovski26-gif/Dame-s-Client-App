@@ -155,7 +155,11 @@
           </button>
         {% endfor %}
       </div>
-      <div class="nutrition-picker-empty" id="nutritionPickerEmpty" hidden>No foods match this view.</div>
+      <div class="nutrition-picker-empty" id="nutritionPickerEmpty" hidden>
+        <b>No saved food matches your search.</b>
+        <span>You can add it manually with calories and macros per 100g.</span>
+        <button type="button" data-open-manual-food>Add Custom Food</button>
+      </div>
     </div>
   </section>
 
@@ -208,8 +212,8 @@
     <header class="nutrition-panel-header">
       <button class="nutrition-round-btn" type="button" data-back-diary aria-label="Back">&lt;</button>
       <div>
-        <h2>Review Food</h2>
-        <span>Fill missing values, then save</span>
+        <h2 id="nutritionReviewTitle">Review Food</h2>
+        <span id="nutritionReviewSubtitle">Fill missing values, then save</span>
       </div>
       <span></span>
     </header>
@@ -357,12 +361,12 @@
       if (!button || !rail) return;
       rail.hidden = false;
       const buttonRect = button.getBoundingClientRect();
-      const railWidth = rail.offsetWidth || 126;
-      const railHeight = rail.offsetHeight || 170;
+      const railWidth = rail.offsetWidth || 104;
+      const railHeight = rail.offsetHeight || 134;
       const margin = 10;
-      const preferredLeft = buttonRect.left - railWidth + 28;
+      const preferredLeft = buttonRect.left - railWidth + 18;
       const left = Math.max(margin, Math.min(preferredLeft, window.innerWidth - railWidth - margin));
-      const preferredTop = buttonRect.top - 56;
+      const preferredTop = buttonRect.top - 36;
       const top = Math.max(margin, Math.min(preferredTop, window.innerHeight - railHeight - margin));
       rail.style.left = `${left}px`;
       rail.style.top = `${top}px`;
@@ -410,6 +414,23 @@
       if (menu) menu.hidden = !menu.hidden;
     });
 
+    document.querySelectorAll("[data-open-manual-food]").forEach(button => {
+      button.addEventListener("click", function () {
+        const suggestedName = (searchInput?.value || "").trim();
+        fillReviewForm({
+          name: suggestedName,
+          brand: "",
+          serving_label: "",
+          calories_per_100g: "",
+          protein_per_100g: "",
+          carbs_per_100g: "",
+          fat_per_100g: "",
+        }, "manual");
+        showView("review");
+        window.setTimeout(() => document.querySelector('#customFoodForm input[name="name"]')?.focus(), 80);
+      });
+    });
+
     function startScan(meal, useCamera) {
       setMeal(meal);
       closeMealActions();
@@ -443,14 +464,14 @@
       })
       .then(handleJsonResponse)
       .then(data => {
-        fillReviewForm(data.draft || {});
+        fillReviewForm(data.draft || {}, "scan");
         showView("review");
         showMessage(data.message || "Label scanned.", "success");
       })
       .catch(error => showMessage(error.message || "Could not scan that image.", "error"));
     });
 
-    function fillReviewForm(draft) {
+    function fillReviewForm(draft, mode) {
       const form = document.getElementById("customFoodForm");
       if (!form) return;
       ["name", "brand", "serving_label", "calories_per_100g", "protein_per_100g", "carbs_per_100g", "fat_per_100g"].forEach(name => {
@@ -458,6 +479,14 @@
         if (input) input.value = draft[name] || "";
       });
       if (reviewMeal) reviewMeal.value = activeMeal;
+      const title = document.getElementById("nutritionReviewTitle");
+      const subtitle = document.getElementById("nutritionReviewSubtitle");
+      if (title) title.textContent = mode === "manual" ? "Custom Food" : "Review Food";
+      if (subtitle) {
+        subtitle.textContent = mode === "manual"
+          ? "Enter macros per 100g, then save"
+          : "Fill missing values, then save";
+      }
     }
 
     function rowMatchesTab(row) {
@@ -721,9 +750,19 @@
       const container = document.querySelector(".container");
       if (container) {
         container.insertBefore(messageDiv, container.firstChild);
-        setTimeout(() => messageDiv.remove(), 3000);
+        setTimeout(() => {
+          messageDiv.classList.add("nutrition-message-hide");
+          messageDiv.addEventListener("animationend", () => messageDiv.remove(), {once: true});
+        }, 1800);
       }
     }
+
+    window.setTimeout(() => {
+      document.querySelectorAll(".nutrition-message-inline").forEach(message => {
+        message.classList.add("nutrition-message-hide");
+        message.addEventListener("animationend", () => message.remove(), {once: true});
+      });
+    }, 1800);
 
     filterFoods();
     {% if nutrition_label_draft.get('ocr_text') %}

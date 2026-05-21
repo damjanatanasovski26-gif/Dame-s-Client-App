@@ -2124,9 +2124,37 @@ tr:last-child td{ border-bottom:0; }
 }
 
 .nutrition-picker-empty{
-  padding:24px 0;
-  color:var(--muted);
-  text-align:center;
+  display:grid;
+  gap:10px;
+  justify-items:start;
+  margin-top:18px;
+  padding:18px;
+  border:1px dashed var(--nutrition-line, var(--line));
+  border-radius:20px;
+  background:rgba(255,255,255,.045);
+  color:var(--nutrition-text, var(--text));
+  text-align:left;
+}
+
+.nutrition-picker-empty b{
+  font-size:18px;
+}
+
+.nutrition-picker-empty span{
+  color:var(--nutrition-muted, var(--muted));
+}
+
+.nutrition-picker-empty button{
+  min-height:44px;
+  border:0;
+  border-radius:999px;
+  background:var(--nutrition-accent, var(--accent));
+  color:#fff;
+  padding:0 16px;
+  font:inherit;
+  font-weight:900;
+  appearance:none;
+  -webkit-tap-highlight-color:transparent;
 }
 
 .nutrition-sheet-form{
@@ -2504,12 +2532,13 @@ body.nutrition-shell .nutrition-view{
   top:10px;
   z-index:110;
   display:block;
-  width:126px;
-  height:172px;
+  width:104px;
+  height:134px;
   border-radius:999px;
   background:transparent;
   box-shadow:none;
-  animation:nutritionMenuIn .18s ease-out both;
+  transform-origin:80% 50%;
+  animation:nutritionMenuIn .22s cubic-bezier(.18,.89,.32,1.28) both;
 }
 
 .nutrition-meal-action-rail[hidden],
@@ -2522,8 +2551,8 @@ body.nutrition-shell .nutrition-view{
 
 .nutrition-meal-action-rail button{
   position:absolute;
-  width:60px;
-  height:60px;
+  width:48px;
+  height:48px;
   min-height:0;
   border:0;
   border-radius:50%;
@@ -2534,26 +2563,29 @@ body.nutrition-shell .nutrition-view{
   place-items:center;
   padding:0;
   font:inherit;
-  box-shadow:0 10px 22px rgba(0,0,0,.28);
-  transition:transform .15s ease, background .15s ease, box-shadow .15s ease;
+  box-shadow:0 9px 18px rgba(0,0,0,.28);
+  transition:transform .16s ease, background .16s ease, box-shadow .16s ease, opacity .16s ease;
   appearance:none;
   -webkit-tap-highlight-color:transparent;
   user-select:none;
 }
 
 .nutrition-meal-action-rail button:nth-child(1){
-  right:6px;
+  right:4px;
   top:0;
+  animation:nutritionBubbleIn .2s cubic-bezier(.18,.89,.32,1.28) .02s both;
 }
 
 .nutrition-meal-action-rail button:nth-child(2){
   left:0;
-  top:56px;
+  top:43px;
+  animation:nutritionBubbleIn .2s cubic-bezier(.18,.89,.32,1.28) .07s both;
 }
 
 .nutrition-meal-action-rail button:nth-child(3){
-  right:6px;
+  right:4px;
   bottom:0;
+  animation:nutritionBubbleIn .2s cubic-bezier(.18,.89,.32,1.28) .12s both;
 }
 
 .nutrition-meal-action-rail button:hover{
@@ -2563,8 +2595,8 @@ body.nutrition-shell .nutrition-view{
 }
 
 .nutrition-logo{
-  width:28px;
-  height:28px;
+  width:24px;
+  height:24px;
   display:block;
   position:relative;
   background-position:center;
@@ -3007,8 +3039,13 @@ body.nutrition-shell .nutrition-view{
 }
 
 @keyframes nutritionMenuIn{
-  from{ opacity:0; transform:translateY(-6px) scale(.98); }
-  to{ opacity:1; transform:translateY(0) scale(1); }
+  from{ opacity:0; transform:translate(-6px, 8px) scale(.72); }
+  to{ opacity:1; transform:translate(0, 0) scale(1); }
+}
+
+@keyframes nutritionBubbleIn{
+  from{ opacity:0; transform:translate(18px, 12px) scale(.65); }
+  to{ opacity:1; transform:translate(0, 0) scale(1); }
 }
 
 @keyframes nutritionFooterMenuIn{
@@ -3061,6 +3098,15 @@ body.nutrition-shell .nutrition-view{
   border-radius:14px;
   color:#fff;
   font-weight:800;
+  animation:nutritionInlineToastIn 0.3s ease-out;
+}
+
+.nutrition-message-hide{
+  animation:nutritionToastOut .24s ease-in forwards !important;
+}
+
+.nutrition-message-inline.nutrition-message-hide{
+  animation:nutritionInlineToastOut .24s ease-in forwards !important;
 }
 
 .nutrition-target-modal{
@@ -3445,4 +3491,17 @@ body.nutrition-shell .nutrition-view{
 @keyframes slideDown{
   from{ transform:translateX(-50%) translateY(-100%); opacity:0; }
   to{ transform:translateX(-50%) translateY(0); opacity:1; }
+}
+
+@keyframes nutritionToastOut{
+  to{ opacity:0; transform:translateX(-50%) translateY(-12px); }
+}
+
+@keyframes nutritionInlineToastIn{
+  from{ opacity:0; transform:translateY(-12px); }
+  to{ opacity:1; transform:translateY(0); }
+}
+
+@keyframes nutritionInlineToastOut{
+  to{ opacity:0; transform:translateY(-10px); }
 }
