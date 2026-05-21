@@ -420,12 +420,12 @@
       if (!button || !rail) return;
       rail.hidden = false;
       const buttonRect = button.getBoundingClientRect();
-      const railWidth = rail.offsetWidth || 134;
-      const railHeight = rail.offsetHeight || 134;
+      const railWidth = rail.offsetWidth || 118;
+      const railHeight = rail.offsetHeight || 118;
       const margin = 10;
-      const preferredLeft = buttonRect.right + 8;
+      const preferredLeft = buttonRect.right + 18;
       const left = Math.max(margin, Math.min(preferredLeft, window.innerWidth - railWidth - margin));
-      const preferredTop = buttonRect.top - 36;
+      const preferredTop = buttonRect.top - 32;
       const top = Math.max(margin, Math.min(preferredTop, window.innerHeight - railHeight - margin));
       rail.style.left = `${left}px`;
       rail.style.top = `${top}px`;

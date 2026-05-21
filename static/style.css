@@ -2613,8 +2613,8 @@ body.nutrition-shell .nutrition-view{
   top:10px;
   z-index:110;
   display:block;
-  width:134px;
-  height:134px;
+  width:118px;
+  height:118px;
   border-radius:999px;
   background:transparent;
   box-shadow:none;
@@ -2632,8 +2632,8 @@ body.nutrition-shell .nutrition-view{
 
 .nutrition-meal-action-rail button{
   position:absolute;
-  width:48px;
-  height:48px;
+  width:46px;
+  height:46px;
   min-height:0;
   border:0;
   border-radius:50%;
@@ -2652,19 +2652,19 @@ body.nutrition-shell .nutrition-view{
 }
 
 .nutrition-meal-action-rail button:nth-child(1){
-  left:0;
+  left:10px;
   top:0;
   animation:nutritionBubbleIn .2s cubic-bezier(.18,.89,.32,1.28) .02s both;
 }
 
 .nutrition-meal-action-rail button:nth-child(2){
   right:0;
-  top:43px;
+  top:36px;
   animation:nutritionBubbleIn .2s cubic-bezier(.18,.89,.32,1.28) .07s both;
 }
 
 .nutrition-meal-action-rail button:nth-child(3){
-  left:0;
+  left:10px;
   bottom:0;
   animation:nutritionBubbleIn .2s cubic-bezier(.18,.89,.32,1.28) .12s both;
 }
