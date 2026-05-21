@@ -251,6 +251,31 @@ h3{ margin:0 0 14px; font-size:18px; font-weight:700; }
   background:var(--danger);
   color:#fff !important;
 }
+
+.input::placeholder,
+textarea::placeholder{
+  color:color-mix(in srgb, var(--muted) 78%, transparent 22%);
+  font-size:.94em;
+}
+
+input,
+select,
+textarea,
+button{
+  max-width:100%;
+}
+
+td,
+.card,
+.muted{
+  overflow-wrap:anywhere;
+}
+
+button,
+.btn,
+.tab{
+  -webkit-tap-highlight-color:transparent;
+}
 .btn.danger:hover{ background:var(--danger-hover); }
 
 .btn:disabled,
@@ -2748,7 +2773,7 @@ body.nutrition-shell .nutrition-view{
 
 .nutrition-search-field{
   display:grid;
-  grid-template-columns:42px 1fr;
+  grid-template-columns:50px minmax(0, 1fr);
   align-items:center;
   min-height:58px;
   border-radius:999px;
@@ -2761,7 +2786,7 @@ body.nutrition-shell .nutrition-view{
   display:block;
   width:16px;
   height:16px;
-  margin-left:18px;
+  margin-left:20px;
   border:3px solid var(--nutrition-text);
   border-radius:50%;
   box-shadow:9px 9px 0 -6px var(--nutrition-text);
@@ -2782,7 +2807,15 @@ body.nutrition-shell .nutrition-view{
 
 .nutrition-search-field input{
   background:transparent;
-  padding-left:4px;
+  padding-left:10px;
+  padding-right:18px;
+}
+
+.nutrition-search-field input::placeholder,
+.nutrition-review-form input::placeholder{
+  color:var(--nutrition-muted);
+  font-size:14px;
+  font-weight:600;
 }
 
 .nutrition-food-tabs{
@@ -3196,9 +3229,23 @@ body.nutrition-shell .nutrition-view{
 
 .nutrition-review-form label{
   display:grid;
-  gap:7px;
+  gap:6px;
   color:var(--nutrition-muted);
+  font-size:14px;
   font-weight:800;
+}
+
+.nutrition-macro-note{
+  margin:0;
+  color:var(--nutrition-muted);
+  font-size:12px;
+  font-weight:700;
+}
+
+.nutrition-review-form input,
+.nutrition-review-form select{
+  font-size:15px;
+  font-weight:700;
 }
 
 .nutrition-review-grid,
@@ -3566,6 +3613,20 @@ body.nutrition-shell .nutrition-view{
   .input{
     font-size:16px;
   }
+  .input::placeholder,
+  textarea::placeholder{
+    font-size:14px;
+  }
+  .table-wrap{
+    max-width:100%;
+  }
+  .actions{
+    gap:8px;
+  }
+  .btn{
+    white-space:normal;
+    text-align:center;
+  }
   .password-wrap .input{
     padding-right:42px;
   }
@@ -3616,6 +3677,34 @@ body.nutrition-shell .nutrition-view{
   }
   .nutrition-detected-grid{
     grid-template-columns:1fr;
+  }
+  .nutrition-search-field{
+    grid-template-columns:46px minmax(0, 1fr);
+    min-height:54px;
+  }
+  .nutrition-search-field span::before{
+    margin-left:18px;
+  }
+  .nutrition-search-field input{
+    padding-left:12px;
+    font-size:16px;
+  }
+  .nutrition-review-form{
+    gap:11px;
+  }
+  .nutrition-review-grid{
+    gap:10px;
+  }
+  .nutrition-review-form label{
+    font-size:13px;
+  }
+  .nutrition-review-form input,
+  .nutrition-review-form select{
+    min-height:46px;
+    font-size:15px;
+  }
+  .nutrition-macro-note{
+    font-size:12px;
   }
 }
 

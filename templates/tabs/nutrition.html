@@ -223,11 +223,12 @@
       <label>Food name<input name="name" maxlength="120" value="{{ nutrition_label_draft.get('name', '') }}" required></label>
       <label>Brand<input name="brand" maxlength="120" value="{{ nutrition_label_draft.get('brand', '') }}"></label>
       <input type="hidden" name="serving_label" value="{{ nutrition_label_draft.get('serving_label', '') }}">
+      <p class="nutrition-macro-note">Nutrition values are entered per 100g.</p>
       <div class="nutrition-review-grid">
-        <label>Calories / 100g<input type="number" name="calories_per_100g" min="0" step="0.1" value="{{ nutrition_label_draft.get('calories_per_100g', '') }}" required></label>
-        <label>Protein / 100g<input type="number" name="protein_per_100g" min="0" step="0.1" value="{{ nutrition_label_draft.get('protein_per_100g', '') }}" required></label>
-        <label>Carbs / 100g<input type="number" name="carbs_per_100g" min="0" step="0.1" value="{{ nutrition_label_draft.get('carbs_per_100g', '') }}" required></label>
-        <label>Fat / 100g<input type="number" name="fat_per_100g" min="0" step="0.1" value="{{ nutrition_label_draft.get('fat_per_100g', '') }}" required></label>
+        <label>Calories<input type="number" name="calories_per_100g" min="0" step="0.1" placeholder="kcal" value="{{ nutrition_label_draft.get('calories_per_100g', '') }}" required></label>
+        <label>Protein<input type="number" name="protein_per_100g" min="0" step="0.1" placeholder="g" value="{{ nutrition_label_draft.get('protein_per_100g', '') }}" required></label>
+        <label>Carbs<input type="number" name="carbs_per_100g" min="0" step="0.1" placeholder="g" value="{{ nutrition_label_draft.get('carbs_per_100g', '') }}" required></label>
+        <label>Fat<input type="number" name="fat_per_100g" min="0" step="0.1" placeholder="g" value="{{ nutrition_label_draft.get('fat_per_100g', '') }}" required></label>
       </div>
       <div class="nutrition-save-extra">
         <select name="log_meal_type" id="nutritionReviewMeal">
