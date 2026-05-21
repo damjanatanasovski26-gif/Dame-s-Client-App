@@ -2308,6 +2308,24 @@ body.nutrition-shell .nutrition-view{
   user-select:none;
 }
 
+.nutrition-round-btn{
+  position:relative;
+}
+
+.nutrition-date-prev::before,
+.nutrition-back-btn::before{
+  content:"";
+  position:absolute;
+  left:17px;
+  top:14px;
+  width:12px;
+  height:12px;
+  border-left:3px solid currentColor;
+  border-bottom:3px solid currentColor;
+  transform:rotate(45deg);
+  border-radius:2px;
+}
+
 .nutrition-round-btn:hover,
 .nutrition-sort-btn:hover{
   transform:translateY(-1px);
@@ -3176,10 +3194,10 @@ body.nutrition-shell .nutrition-view{
   }
   .nutrition-hub-link{
     right:10px;
-    max-width:142px;
+    max-width:126px;
     min-height:34px;
-    padding:0 10px;
-    font-size:11px;
+    padding:0 9px;
+    font-size:10px;
   }
   .nutrition-app-header{
     padding-top:28px;

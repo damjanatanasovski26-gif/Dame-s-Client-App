@@ -22,12 +22,12 @@
   {% endif %}
   <section class="nutrition-view is-active" id="nutritionDiaryView" aria-label="Nutrition diary">
     <header class="nutrition-app-header">
-      <button class="nutrition-round-btn" type="button" data-date-step="-1" aria-label="Previous day">&lt;</button>
+      <button class="nutrition-round-btn nutrition-date-prev" type="button" data-date-step="-1" aria-label="Previous day"></button>
       <div>
         <h2>Today</h2>
         <span>{{ nutrition_date.strftime("%d/%m/%Y") }}</span>
       </div>
-      <button class="nutrition-round-btn" type="button" data-date-step="1" aria-label="Next day">&gt;</button>
+      <span aria-hidden="true"></span>
     </header>
 
     <section class="nutrition-rings-card">
@@ -112,7 +112,7 @@
 
   <section class="nutrition-view nutrition-panel" id="nutritionFoodView" aria-label="Add food">
     <header class="nutrition-panel-header">
-      <button class="nutrition-round-btn" type="button" data-back-diary aria-label="Back">&lt;</button>
+      <button class="nutrition-round-btn nutrition-back-btn" type="button" data-back-diary aria-label="Back"></button>
       <div>
         <h2>Add Food</h2>
         <span id="nutritionFoodMealLabel">Snack</span>
@@ -165,7 +165,7 @@
 
   <section class="nutrition-view nutrition-panel" id="nutritionFoodDetailView" aria-label="Log selected food">
     <header class="nutrition-panel-header">
-      <button class="nutrition-round-btn" type="button" data-open-food-list aria-label="Back">&lt;</button>
+      <button class="nutrition-round-btn nutrition-back-btn" type="button" data-open-food-list aria-label="Back"></button>
       <div>
         <h2 id="nutritionDetailFoodTitle">Food</h2>
         <span>Log by grams</span>
@@ -210,7 +210,7 @@
 
   <section class="nutrition-view nutrition-panel" id="nutritionReviewView" aria-label="Review scanned food">
     <header class="nutrition-panel-header">
-      <button class="nutrition-round-btn" type="button" data-back-diary aria-label="Back">&lt;</button>
+      <button class="nutrition-round-btn nutrition-back-btn" type="button" data-back-diary aria-label="Back"></button>
       <div>
         <h2 id="nutritionReviewTitle">Review Food</h2>
         <span id="nutritionReviewSubtitle">Fill missing values, then save</span>
@@ -377,7 +377,7 @@
       const railWidth = rail.offsetWidth || 104;
       const railHeight = rail.offsetHeight || 134;
       const margin = 10;
-      const preferredLeft = buttonRect.left - railWidth + 18;
+      const preferredLeft = buttonRect.left - railWidth + 46;
       const left = Math.max(margin, Math.min(preferredLeft, window.innerWidth - railWidth - margin));
       const preferredTop = buttonRect.top - 36;
       const top = Math.max(margin, Math.min(preferredTop, window.innerHeight - railHeight - margin));
