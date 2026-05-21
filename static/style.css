@@ -2204,6 +2204,7 @@ tr:last-child td{ border-bottom:0; }
   box-shadow:0 24px 60px rgba(4,8,18,.34);
   -webkit-tap-highlight-color:transparent;
   touch-action:manipulation;
+  position:relative;
 }
 
 body.nutrition-shell{
@@ -2239,7 +2240,7 @@ body.nutrition-shell .nutrition-view{
 }
 
 .nutrition-hub-link{
-  position:fixed;
+  position:absolute;
   right:12px;
   top:calc(10px + env(safe-area-inset-top));
   z-index:95;
@@ -2255,6 +2256,10 @@ body.nutrition-shell .nutrition-view{
   text-decoration:none;
   box-shadow:0 10px 28px rgba(0,0,0,.28);
   backdrop-filter:blur(10px);
+}
+
+.nutrition-hub-link[hidden]{
+  display:none !important;
 }
 
 .nutrition-view{
@@ -2922,14 +2927,14 @@ body.nutrition-shell .nutrition-view{
 }
 
 .nutrition-action-footer .nutrition-footer-plus{
-  width:76px;
-  height:76px;
+  width:62px;
+  height:62px;
   border:0;
   border-radius:50%;
   background:#30364d;
   color:#2fd0dc;
   cursor:pointer;
-  font-size:54px;
+  font-size:42px;
   line-height:1;
   border:1px solid #464d64;
   box-shadow:0 12px 28px rgba(0,0,0,.32);
@@ -2947,7 +2952,7 @@ body.nutrition-shell .nutrition-view{
 
 .nutrition-footer-menu{
   position:absolute;
-  bottom:104px;
+  bottom:88px;
   left:50%;
   width:auto;
   transform:translateX(-50%);

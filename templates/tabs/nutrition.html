@@ -311,6 +311,7 @@
     const cameraInput = document.getElementById("nutritionCameraInput");
     const scanForm = document.getElementById("nutritionScanForm");
     const actionFooter = document.querySelector(".nutrition-action-footer");
+    const hubLink = document.querySelector(".nutrition-hub-link");
     const nutritionApp = document.getElementById("nutritionApp");
     let activeTab = "all";
     let activeMeal = "snack";
@@ -328,6 +329,7 @@
       Object.values(views).forEach(view => view?.classList.remove("is-active"));
       views[name]?.classList.add("is-active");
       if (actionFooter) actionFooter.hidden = name !== "diary";
+      if (hubLink) hubLink.hidden = name !== "diary";
       document.querySelectorAll(".nutrition-meal-action-rail").forEach(rail => { rail.hidden = true; });
       document.querySelectorAll(".nutrition-meal-card").forEach(card => card.classList.remove("nutrition-meal-card-open"));
       const footerMenu = document.querySelector(".nutrition-footer-menu");
