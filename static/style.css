@@ -2268,12 +2268,19 @@ body.nutrition-shell .nutrition-view{
   animation:nutritionViewIn .24s ease-out both;
 }
 
-.nutrition-app-header,
 .nutrition-panel-header{
   display:grid;
   grid-template-columns:44px 1fr auto;
   align-items:center;
   gap:12px;
+  margin-bottom:18px;
+  text-align:center;
+}
+
+.nutrition-app-header{
+  display:flex;
+  justify-content:center;
+  align-items:center;
   margin-bottom:18px;
   text-align:center;
 }
@@ -2363,6 +2370,7 @@ body.nutrition-shell .nutrition-view{
 }
 
 .nutrition-rings-card{
+  position:relative;
   display:grid;
   justify-items:center;
   gap:18px;
@@ -2370,6 +2378,60 @@ body.nutrition-shell .nutrition-view{
   border-radius:28px;
   background:#252a3d;
   transition:transform .18s ease, box-shadow .18s ease;
+}
+
+.nutrition-ring-nav{
+  position:absolute;
+  top:112px;
+  width:46px;
+  height:46px;
+  border:0;
+  border-radius:50%;
+  background:#3d4359;
+  color:var(--nutrition-text);
+  cursor:pointer;
+  box-shadow:0 12px 26px rgba(0,0,0,.24);
+  appearance:none;
+  -webkit-tap-highlight-color:transparent;
+  transition:transform .16s ease, background .16s ease, opacity .16s ease;
+}
+
+.nutrition-ring-nav[hidden]{
+  display:none !important;
+}
+
+.nutrition-ring-nav::before{
+  content:"";
+  position:absolute;
+  top:15px;
+  width:12px;
+  height:12px;
+  border-left:3px solid currentColor;
+  border-bottom:3px solid currentColor;
+  border-radius:2px;
+}
+
+.nutrition-ring-nav-prev{
+  left:16px;
+}
+
+.nutrition-ring-nav-prev::before{
+  left:18px;
+  transform:rotate(45deg);
+}
+
+.nutrition-ring-nav-next{
+  right:16px;
+}
+
+.nutrition-ring-nav-next::before{
+  right:18px;
+  transform:rotate(225deg);
+}
+
+.nutrition-ring-nav:hover{
+  background:#50566d;
+  transform:scale(1.04);
 }
 
 .nutrition-rings-card:hover{
@@ -2551,12 +2613,12 @@ body.nutrition-shell .nutrition-view{
   top:10px;
   z-index:110;
   display:block;
-  width:104px;
+  width:134px;
   height:134px;
   border-radius:999px;
   background:transparent;
   box-shadow:none;
-  transform-origin:80% 50%;
+  transform-origin:0 50%;
   animation:nutritionMenuIn .22s cubic-bezier(.18,.89,.32,1.28) both;
 }
 
@@ -2590,19 +2652,19 @@ body.nutrition-shell .nutrition-view{
 }
 
 .nutrition-meal-action-rail button:nth-child(1){
-  right:4px;
+  left:0;
   top:0;
   animation:nutritionBubbleIn .2s cubic-bezier(.18,.89,.32,1.28) .02s both;
 }
 
 .nutrition-meal-action-rail button:nth-child(2){
-  left:0;
+  right:0;
   top:43px;
   animation:nutritionBubbleIn .2s cubic-bezier(.18,.89,.32,1.28) .07s both;
 }
 
 .nutrition-meal-action-rail button:nth-child(3){
-  right:4px;
+  left:0;
   bottom:0;
   animation:nutritionBubbleIn .2s cubic-bezier(.18,.89,.32,1.28) .12s both;
 }
@@ -2864,13 +2926,14 @@ body.nutrition-shell .nutrition-view{
   height:76px;
   border:0;
   border-radius:50%;
-  background:var(--nutrition-accent);
-  color:#fff;
+  background:#30364d;
+  color:#2fd0dc;
   cursor:pointer;
   font-size:54px;
   line-height:1;
-  box-shadow:0 12px 28px rgba(245,100,46,.36);
-  transition:transform .18s ease, box-shadow .18s ease;
+  border:1px solid #464d64;
+  box-shadow:0 12px 28px rgba(0,0,0,.32);
+  transition:transform .18s ease, box-shadow .18s ease, background .18s ease;
   appearance:none;
   -webkit-tap-highlight-color:transparent;
   user-select:none;
@@ -2878,7 +2941,8 @@ body.nutrition-shell .nutrition-view{
 
 .nutrition-action-footer .nutrition-footer-plus:hover{
   transform:scale(1.06);
-  box-shadow:0 16px 34px rgba(245,100,46,.42);
+  background:#3d4359;
+  box-shadow:0 16px 34px rgba(0,0,0,.38);
 }
 
 .nutrition-footer-menu{
@@ -2894,7 +2958,7 @@ body.nutrition-shell .nutrition-view{
   border-radius:999px;
   background:transparent;
   box-shadow:none;
-  animation:nutritionFooterMenuIn .2s ease-out both;
+  animation:nutritionFooterMenuIn .22s cubic-bezier(.18,.89,.32,1.28) both;
 }
 
 .nutrition-footer-menu button{
@@ -2915,6 +2979,18 @@ body.nutrition-shell .nutrition-view{
   appearance:none;
   -webkit-tap-highlight-color:transparent;
   user-select:none;
+}
+
+.nutrition-footer-menu button:nth-child(1){
+  animation:nutritionBubbleIn .2s cubic-bezier(.18,.89,.32,1.28) .02s both;
+}
+
+.nutrition-footer-menu button:nth-child(2){
+  animation:nutritionBubbleIn .2s cubic-bezier(.18,.89,.32,1.28) .07s both;
+}
+
+.nutrition-footer-menu button:nth-child(3){
+  animation:nutritionBubbleIn .2s cubic-bezier(.18,.89,.32,1.28) .12s both;
 }
 
 .nutrition-footer-menu button:hover{

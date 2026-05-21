@@ -1568,6 +1568,15 @@ def nutrition_summary_payload(nutrition_summary: dict):
     }
 
 
+def nutrition_day_label(day: date):
+    today = date.today()
+    if day == today:
+        return "Today"
+    if day == today - timedelta(days=1):
+        return "Yesterday"
+    return day.strftime("%A")
+
+
 def allowed_photo_file(filename: str):
     name = (filename or "").lower()
     return name.endswith(".jpg") or name.endswith(".jpeg") or name.endswith(".png") or name.endswith(".webp")
@@ -2245,6 +2254,8 @@ def client_profile(client_id):
         food_usage_stats=food_usage_stats,
         food_logs=food_logs,
         nutrition_date=nutrition_date,
+        nutrition_today=date.today(),
+        nutrition_day_title=nutrition_day_label(nutrition_date),
         nutrition_summary=nutrition_summary,
         nutrition_search_results=nutrition_search_results,
         nutrition_label_draft=nutrition_label_draft,
@@ -2792,6 +2803,33 @@ def update_calorie_target_ajax(client_id):
     return jsonify({
         "success": True,
         "message": "Daily calorie target updated!",
+        "nutrition_summary": nutrition_summary_payload(nutrition_summary),
+    })
+
+
+@app.route("/client/<int:client_id>/nutrition/day-summary-ajax")
+@login_required
+def nutrition_day_summary_ajax(client_id):
+    if not is_admin() and current_client_id() != client_id:
+        return jsonify({"success": False, "error": "Forbidden"}), 403
+
+    client = get_or_404(Client, client_id)
+    nutrition_date = parse_iso_date(request.args.get("nutrition_date")) or date.today()
+    if nutrition_date > date.today():
+        return jsonify({"success": False, "error": "Future days are not available."}), 400
+
+    food_logs = (
+        FoodLogEntry.query.filter_by(client_id=client.id, logged_for=nutrition_date)
+        .order_by(FoodLogEntry.created_at.desc(), FoodLogEntry.id.desc())
+        .all()
+    )
+    nutrition_summary = build_nutrition_summary(food_logs, client.daily_calorie_target)
+    return jsonify({
+        "success": True,
+        "nutrition_date": nutrition_date.isoformat(),
+        "date_label": nutrition_day_label(nutrition_date),
+        "date_display": nutrition_date.strftime("%d/%m/%Y"),
+        "is_today": nutrition_date == date.today(),
         "nutrition_summary": nutrition_summary_payload(nutrition_summary),
     })
 

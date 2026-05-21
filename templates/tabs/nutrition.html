@@ -22,15 +22,15 @@
   {% endif %}
   <section class="nutrition-view is-active" id="nutritionDiaryView" aria-label="Nutrition diary">
     <header class="nutrition-app-header">
-      <button class="nutrition-round-btn nutrition-date-prev" type="button" data-date-step="-1" aria-label="Previous day"></button>
       <div>
-        <h2>Today</h2>
-        <span>{{ nutrition_date.strftime("%d/%m/%Y") }}</span>
+        <h2 id="nutritionDayTitle">{{ nutrition_day_title }}</h2>
+        <span id="nutritionDayDate">{{ nutrition_date.strftime("%d/%m/%Y") }}</span>
       </div>
-      <span aria-hidden="true"></span>
     </header>
 
     <section class="nutrition-rings-card">
+      <button class="nutrition-ring-nav nutrition-ring-nav-prev" type="button" data-date-step="-1" aria-label="Previous day"></button>
+      <button class="nutrition-ring-nav nutrition-ring-nav-next" type="button" data-date-step="1" aria-label="Next day" {% if nutrition_date >= nutrition_today %}hidden{% endif %}></button>
       <div class="nutrition-calorie-ring" data-ring="energy" style="--ring-progress: {{ energy_ratio if energy_ratio < 100 else 100 }}; --protein-slice: {{ consumed_protein_slice }}; --carbs-slice: {{ consumed_carbs_slice }};">
         <div>
           <b class="nutrition-ring-current">{{ daily_totals.calories|round|int }}</b>
@@ -283,7 +283,7 @@
 
 <script>
   (function () {
-    const nutritionDayUrl = "{{ url_for('client_profile', client_id=client.id, tab='nutrition') }}";
+    const nutritionDaySummaryUrl = "{{ url_for('nutrition_day_summary_ajax', client_id=client.id) }}";
     const views = {
       diary: document.getElementById("nutritionDiaryView"),
       food: document.getElementById("nutritionFoodView"),
@@ -315,6 +315,7 @@
     let activeTab = "all";
     let activeMeal = "snack";
     let selectedFood = null;
+    let activeNutritionDate = "{{ nutrition_date.isoformat() }}";
 
     document.querySelectorAll(".nutrition-meal-card").forEach(card => {
       const rail = card.querySelector(".nutrition-meal-action-rail");
@@ -348,13 +349,58 @@
 
     document.querySelectorAll("[data-date-step]").forEach(button => {
       button.addEventListener("click", function () {
-        const current = new Date("{{ nutrition_date.isoformat() }}T00:00:00");
-        current.setDate(current.getDate() + Number(button.dataset.dateStep || 0));
-        const url = new URL(nutritionDayUrl, window.location.origin);
-        url.searchParams.set("nutrition_date", current.toISOString().slice(0, 10));
-        window.location.href = url.toString();
+        const nextDate = addDays(activeNutritionDate, Number(button.dataset.dateStep || 0));
+        loadNutritionDay(nextDate);
       });
     });
+
+    function parseIsoDate(isoDate) {
+      const parts = String(isoDate || "").split("-").map(Number);
+      return new Date(parts[0], (parts[1] || 1) - 1, parts[2] || 1);
+    }
+
+    function formatIsoDate(dateValue) {
+      const year = dateValue.getFullYear();
+      const month = String(dateValue.getMonth() + 1).padStart(2, "0");
+      const day = String(dateValue.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    }
+
+    function addDays(isoDate, days) {
+      const dateValue = parseIsoDate(isoDate);
+      dateValue.setDate(dateValue.getDate() + days);
+      return formatIsoDate(dateValue);
+    }
+
+    function syncNutritionDateFields(isoDate) {
+      document.querySelectorAll('input[name="nutrition_date"], input[name="logged_for"]').forEach(input => {
+        input.value = isoDate;
+      });
+    }
+
+    function updateDayHeader(data) {
+      const title = document.getElementById("nutritionDayTitle");
+      const dayDate = document.getElementById("nutritionDayDate");
+      const nextButton = document.querySelector(".nutrition-ring-nav-next");
+      if (title) title.textContent = data.date_label || "";
+      if (dayDate) dayDate.textContent = data.date_display || "";
+      if (nextButton) nextButton.hidden = Boolean(data.is_today);
+    }
+
+    function loadNutritionDay(isoDate) {
+      const url = new URL(nutritionDaySummaryUrl, window.location.origin);
+      url.searchParams.set("nutrition_date", isoDate);
+      fetch(url.toString(), {headers: {"X-Requested-With": "XMLHttpRequest"}})
+        .then(handleJsonResponse)
+        .then(data => {
+          activeNutritionDate = data.nutrition_date || isoDate;
+          syncNutritionDateFields(activeNutritionDate);
+          updateDayHeader(data);
+          updateNutritionSummary(data.nutrition_summary);
+          closeMealActions();
+        })
+        .catch(error => showMessage(error.message || "Could not load that day.", "error"));
+    }
 
     function closeMealActions(exceptCard) {
       document.querySelectorAll(".nutrition-meal-card").forEach(card => {
@@ -374,10 +420,10 @@
       if (!button || !rail) return;
       rail.hidden = false;
       const buttonRect = button.getBoundingClientRect();
-      const railWidth = rail.offsetWidth || 104;
+      const railWidth = rail.offsetWidth || 134;
       const railHeight = rail.offsetHeight || 134;
       const margin = 10;
-      const preferredLeft = buttonRect.left - railWidth + 46;
+      const preferredLeft = buttonRect.right + 8;
       const left = Math.max(margin, Math.min(preferredLeft, window.innerWidth - railWidth - margin));
       const preferredTop = buttonRect.top - 36;
       const top = Math.max(margin, Math.min(preferredTop, window.innerHeight - railHeight - margin));
