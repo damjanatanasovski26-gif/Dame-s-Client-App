@@ -211,16 +211,53 @@ h3{ margin:0 0 14px; font-size:18px; font-weight:700; }
   color:#fff;
 }
 
-.account-settings-form{
-  display:grid;
-  gap:12px;
-  margin-top:4px;
-  padding-top:12px;
-  border-top:1px solid var(--line);
+.account-settings-modal[hidden]{
+  display:none !important;
 }
 
-.account-settings-form[hidden]{
-  display:none !important;
+.account-settings-modal{
+  position:fixed;
+  inset:0;
+  z-index:120;
+  display:grid;
+  place-items:center;
+  padding:18px;
+}
+
+.account-settings-backdrop{
+  position:absolute;
+  inset:0;
+  background:rgba(2,6,23,.62);
+  backdrop-filter:blur(8px);
+}
+
+.account-settings-dialog{
+  position:relative;
+  z-index:1;
+  width:min(440px, 100%);
+  max-height:calc(100dvh - 36px);
+  overflow:auto;
+  padding:20px;
+  border:1px solid color-mix(in srgb, var(--line) 78%, transparent 22%);
+  border-radius:24px;
+  background:color-mix(in srgb, var(--surface) 96%, #ffffff 4%);
+  box-shadow:0 28px 80px rgba(2,6,23,.42);
+  animation:modalIn .18s ease-out both;
+}
+
+.account-settings-dialog h3{
+  margin:0 0 14px;
+}
+
+.account-settings-dialog-actions{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+  margin-top:6px;
+}
+
+.modal-open{
+  overflow:hidden;
 }
 
 .account-settings-panel h3{
@@ -3768,6 +3805,11 @@ body.nutrition-shell .nutrition-view{
 @keyframes rise{
   from{ opacity:0; transform:translateY(8px); }
   to{ opacity:1; transform:translateY(0); }
+}
+
+@keyframes modalIn{
+  from{ opacity:0; transform:translateY(10px) scale(.98); }
+  to{ opacity:1; transform:translateY(0) scale(1); }
 }
 
 @media (max-width: 900px){

@@ -92,26 +92,36 @@
     {% endif %}
 
   {% else %}
-    <div class="muted" style="margin-bottom:10px;">
-      You can only edit your phone number. Contact your coach for other changes.
-    </div>
-
-    <form class="form" action="{{ url_for('update_client_phone', client_id=client.id) }}" method="POST" style="max-width:700px;">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="form" style="max-width:700px;">
       <label class="label">Name</label>
       <input class="input" value="{{ client.name }}" disabled>
+    </div>
 
-      <label class="label" style="margin-top:12px;">Phone</label>
-      <input class="input" name="phone" value="{{ client.phone or '' }}" inputmode="tel" pattern="\+?\d+" title="Use only digits and optional leading +" required>
+    {% if client.phone %}
+      <div class="muted" style="margin:14px 0 10px;">
+        You can edit your phone number. Contact your coach for other changes.
+      </div>
+      <form class="form" action="{{ url_for('update_client_phone', client_id=client.id) }}" method="POST" style="max-width:700px;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label class="label" style="margin-top:12px;">Phone</label>
+        <input class="input" name="phone" value="{{ client.phone }}" inputmode="tel" pattern="\+?\d+" title="Use only digits and optional leading +" required>
+        <button class="btn" type="submit" style="margin-top:14px;">Save Phone</button>
+      </form>
+    {% endif %}
 
-      <label class="label" style="margin-top:12px;">Plan</label>
-      <input class="input" value="{{ client.plan or '-' }}" disabled>
+    {% if client.plan or (sessions_per_week and sessions_per_week > 0) %}
+      <div class="form" style="max-width:700px; margin-top:12px;">
+        {% if client.plan %}
+          <label class="label" style="margin-top:12px;">Plan</label>
+        <input class="input" value="{{ client.plan }}" disabled>
+        {% endif %}
 
-      <label class="label" style="margin-top:12px;">Sessions per week</label>
-      <input class="input" value="{{ sessions_per_week or 0 }}" disabled>
-
-      <button class="btn" type="submit" style="margin-top:14px;">Save Phone</button>
-    </form>
+        {% if sessions_per_week and sessions_per_week > 0 %}
+          <label class="label" style="margin-top:12px;">Sessions per week</label>
+          <input class="input" value="{{ sessions_per_week }}" disabled>
+        {% endif %}
+      </div>
+    {% endif %}
 
   {% endif %}
 

@@ -12,62 +12,70 @@
       {% if is_admin %}
         <a href="{{ url_for('index') }}" class="btn secondary">Back to Dashboard</a>
       {% endif %}
-      <details class="account-settings" {% if must_change_password and not is_admin %}open{% endif %}>
+      <details class="account-settings">
         <summary aria-label="Account settings" title="Account settings">
           <img src="{{ url_for('static', filename='images/settings.png') }}?v=1" alt="" aria-hidden="true">
         </summary>
         <div class="account-settings-panel">
           {% if not is_admin %}
-            <button class="account-settings-action" type="button" data-open-account-form>Change Account Settings</button>
+            <button class="account-settings-action" type="button" data-open-account-form>Account Information</button>
           {% endif %}
           <button class="account-settings-action" type="button" data-theme-menu>Dark/Light Mode</button>
           <button class="account-settings-action" type="button" data-install-menu hidden>Install App</button>
           <a href="{{ url_for('logout') }}" class="account-settings-action account-settings-logout">Log out</a>
-
-          {% if not is_admin %}
-            <div class="account-settings-form" {% if not must_change_password %}hidden{% endif %}>
-              <h3>Account Settings</h3>
-              <form class="form" action="{{ url_for('change_client_password', client_id=client.id) }}" method="POST">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <label class="label">Username</label>
-                <input class="input" name="username" value="{{ client_user.username if client_user else '' }}" autocomplete="username" required>
-
-                <label class="label">Current password</label>
-                <div class="password-wrap">
-                  <input id="clientSettingsCurrentPassword" class="input" type="password" name="current_password" autocomplete="current-password">
-                  <button class="password-toggle" type="button" data-password-target="clientSettingsCurrentPassword" aria-label="Show password" aria-pressed="false">&#128065;</button>
-                </div>
-
-                <label class="label">New password</label>
-                <div class="password-wrap">
-                  <input id="clientSettingsNewPassword" class="input" type="password" name="new_password" autocomplete="new-password" minlength="6">
-                  <button class="password-toggle" type="button" data-password-target="clientSettingsNewPassword" aria-label="Show password" aria-pressed="false">&#128065;</button>
-                </div>
-
-                <label class="label">Confirm new password</label>
-                <div class="password-wrap">
-                  <input id="clientSettingsConfirmPassword" class="input" type="password" name="confirm_password" autocomplete="new-password" minlength="6">
-                  <button class="password-toggle" type="button" data-password-target="clientSettingsConfirmPassword" aria-label="Show password" aria-pressed="false">&#128065;</button>
-                </div>
-
-                <button class="btn" type="submit">Save Account</button>
-              </form>
-            </div>
-          {% endif %}
         </div>
       </details>
     </div>
   </div>
 
+  {% if not is_admin %}
+    <div class="account-settings-modal" id="accountSettingsModal" {% if not must_change_password %}hidden{% endif %}>
+      <div class="account-settings-backdrop" data-close-account-form></div>
+      <div class="account-settings-dialog" role="dialog" aria-modal="true" aria-labelledby="accountSettingsTitle">
+        <h3 id="accountSettingsTitle">Account Information</h3>
+        <form class="form" action="{{ url_for('change_client_password', client_id=client.id) }}" method="POST">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <label class="label">Username</label>
+          <input class="input" name="username" value="{{ client_user.username if client_user else '' }}" autocomplete="username" required>
+
+          <label class="label">Current password</label>
+          <div class="password-wrap">
+            <input id="clientSettingsCurrentPassword" class="input" type="password" name="current_password" autocomplete="current-password">
+            <button class="password-toggle" type="button" data-password-target="clientSettingsCurrentPassword" aria-label="Show password" aria-pressed="false">&#128065;</button>
+          </div>
+
+          <label class="label">New password</label>
+          <div class="password-wrap">
+            <input id="clientSettingsNewPassword" class="input" type="password" name="new_password" autocomplete="new-password" minlength="6">
+            <button class="password-toggle" type="button" data-password-target="clientSettingsNewPassword" aria-label="Show password" aria-pressed="false">&#128065;</button>
+          </div>
+
+          <label class="label">Confirm new password</label>
+          <div class="password-wrap">
+            <input id="clientSettingsConfirmPassword" class="input" type="password" name="confirm_password" autocomplete="new-password" minlength="6">
+            <button class="password-toggle" type="button" data-password-target="clientSettingsConfirmPassword" aria-label="Show password" aria-pressed="false">&#128065;</button>
+          </div>
+
+          <div class="account-settings-dialog-actions">
+            <button class="btn secondary" type="button" data-close-account-form>Cancel</button>
+            <button class="btn" type="submit">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  {% endif %}
+
   <div class="card">
     <h2 style="margin:0 0 6px 0;">{{ client.name }}</h2>
 
-    <div class="muted">
-      Phone: {{ client.phone or "-" }}
-      | Plan: {{ client.plan or "-" }}
-      | {{ sessions_per_week or 0 }}/week
-      {% if bonus and bonus > 0 %} | rollover: {{ bonus }} {% endif %}
-    </div>
+    {% set summary_parts = [] %}
+    {% if client.phone %}{% set _ = summary_parts.append("Phone: " ~ client.phone) %}{% endif %}
+    {% if client.plan %}{% set _ = summary_parts.append("Plan: " ~ client.plan) %}{% endif %}
+    {% if sessions_per_week and sessions_per_week > 0 %}{% set _ = summary_parts.append(sessions_per_week ~ "/week") %}{% endif %}
+    {% if bonus and bonus > 0 %}{% set _ = summary_parts.append("rollover: " ~ bonus) %}{% endif %}
+    {% if summary_parts %}
+      <div class="muted">{{ summary_parts|join(" | ") }}</div>
+    {% endif %}
 
     {% if current_status %}
       <div class="muted" style="margin-top:8px;">
@@ -141,16 +149,27 @@
   (function () {
     const settings = document.querySelector(".account-settings");
     if (!settings) return;
-    const formPanel = settings.querySelector(".account-settings-form");
+    const modal = document.getElementById("accountSettingsModal");
+    const firstInput = modal?.querySelector("input");
+    function openAccountModal() {
+      if (!modal) return;
+      settings.open = false;
+      modal.hidden = false;
+      document.body.classList.add("modal-open");
+      window.setTimeout(function () { firstInput?.focus(); }, 80);
+    }
+    function closeAccountModal() {
+      if (!modal) return;
+      modal.hidden = true;
+      document.body.classList.remove("modal-open");
+    }
     settings.querySelector("[data-open-account-form]")?.addEventListener("click", function () {
-      if (!formPanel) return;
-      formPanel.hidden = !formPanel.hidden;
-      if (!formPanel.hidden) {
-        window.setTimeout(function () {
-          formPanel.querySelector("input")?.focus();
-        }, 80);
-      }
+      openAccountModal();
     });
+    document.querySelectorAll("[data-close-account-form]").forEach(function (button) {
+      button.addEventListener("click", closeAccountModal);
+    });
+    if (modal && !modal.hidden) openAccountModal();
   })();
 
   (function () {
