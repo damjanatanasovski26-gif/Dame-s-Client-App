@@ -7,7 +7,7 @@ from unittest.mock import Mock, patch
 
 from werkzeug.security import generate_password_hash
 
-from app import app, db, Client, FoodItem, FoodLogEntry, Measurement, Payment, SessionLog, User, is_probable_nutrition_label, parse_label_text, scan_label_file_text, seed_reference_foods
+from app import app, db, Client, ClientGoal, FoodItem, FoodLogEntry, Measurement, Payment, SessionLog, User, is_probable_nutrition_label, parse_label_text, scan_label_file_text, seed_reference_foods
 
 
 class TrainerAppTests(unittest.TestCase):
@@ -622,6 +622,23 @@ class TrainerAppTests(unittest.TestCase):
             self.assertEqual(log.quantity_grams, 50.0)
             self.assertEqual(log.calories, 100.0)
             self.assertEqual(log.protein, 10.0)
+
+    def test_client_can_add_own_goal(self):
+        client_id = self._create_client(name="Goal Client")
+        self._create_user("goal_user", "pass123", role="client", client_id=client_id)
+        self._login("goal_user", "pass123")
+
+        resp = self.client.post(
+            f"/client/{client_id}/goals/add",
+            data={"title": "Improve consistency"},
+            follow_redirects=True,
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b"Goal added", resp.data)
+        with app.app_context():
+            goal = ClientGoal.query.filter_by(client_id=client_id, title="Improve consistency").first()
+            self.assertIsNotNone(goal)
 
     @patch("app.label_scan_enabled", return_value=True)
     @patch("app.scan_label_file_text", return_value="Energy 99 kcal\nFat 2 g")

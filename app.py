@@ -2717,7 +2717,7 @@ def delete_client_note(client_id, note_id):
 @app.route("/client/<int:client_id>/goals/add", methods=["POST"])
 @login_required
 def add_client_goal(client_id):
-    if not is_admin():
+    if not is_admin() and current_client_id() != client_id:
         return "Forbidden", 403
     client = get_or_404(Client, client_id)
     title = (request.form.get("title") or "").strip()

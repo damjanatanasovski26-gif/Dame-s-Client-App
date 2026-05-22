@@ -1,9 +1,9 @@
-const CACHE_NAME = "trainer-app-v48";
+const CACHE_NAME = "trainer-app-v49";
 const APP_SHELL = [
   "/login",
   "/manifest.webmanifest?v=4",
-  "/static/style.css?v=48",
-  "/static/images/settings.png?v=1",
+  "/static/style.css?v=49",
+  "/static/images/settings.png?v=2",
   "/static/images/coach.png?v=2",
   "/static/images/social/instagram.png",
   "/static/images/social/facebook.png",
