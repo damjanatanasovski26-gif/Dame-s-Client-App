@@ -7,7 +7,7 @@ from unittest.mock import Mock, patch
 
 from werkzeug.security import generate_password_hash
 
-from app import app, db, Client, FoodItem, FoodLogEntry, Measurement, Payment, SessionLog, User, parse_label_text, scan_label_file_text, seed_reference_foods
+from app import app, db, Client, FoodItem, FoodLogEntry, Measurement, Payment, SessionLog, User, is_probable_nutrition_label, parse_label_text, scan_label_file_text, seed_reference_foods
 
 
 class TrainerAppTests(unittest.TestCase):
@@ -454,6 +454,18 @@ class TrainerAppTests(unittest.TestCase):
         self.assertEqual(parsed["carbs"], 11.0)
         self.assertEqual(parsed["protein"], 2.0)
 
+    def test_nutrition_label_detection_rejects_random_app_screen(self):
+        text = (
+            "Today\n"
+            "0 of 2200 kcal\n"
+            "Protein 0g\n"
+            "Carbs 0g\n"
+            "Fat 0g\n"
+            "Breakfast\n"
+            "No foods logged yet."
+        )
+        self.assertFalse(is_probable_nutrition_label(text, parse_label_text(text)))
+
     def test_seed_library_replaces_old_prepared_seed_items_with_raw_ingredients(self):
         with app.app_context():
             db.session.add(FoodItem(
@@ -635,6 +647,34 @@ class TrainerAppTests(unittest.TestCase):
         self.assertIn(b"Review the custom food form below", resp.data)
         self.assertIn(b"Scanned Yogurt", resp.data)
         self.assertIn(b"99.0", resp.data)
+
+    @patch("app.label_scan_enabled", return_value=True)
+    @patch("app.scan_label_file_text", return_value="Today\n0 of 2200 kcal\nProtein 0g\nCarbs 0g\nFat 0g\nBreakfast")
+    def test_label_scan_ajax_rejects_non_label_image_and_opens_manual_form(self, _ocr_mock, _enabled_mock):
+        client_id = self._create_client(name="Noa")
+        self._create_user("noa_user", "pass123", role="client", client_id=client_id)
+        self._login("noa_user", "pass123")
+
+        resp = self.client.post(
+            f"/client/{client_id}/nutrition/scan-label-ajax",
+            data={
+                "label_name": "",
+                "nutrition_date": "2026-03-21",
+                "label_photo": (BytesIO(
+                    b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde"
+                    b"\x00\x00\x00\x0cIDATx\x9cc\xf8\xff\xff?\x00\x05\xfe\x02\xfeA\xa5\x1d\xb6\x00\x00\x00\x00IEND\xaeB`\x82"
+                ), "screen.png"),
+            },
+            content_type="multipart/form-data",
+        )
+
+        self.assertEqual(resp.status_code, 200)
+        payload = resp.get_json()
+        self.assertTrue(payload["success"])
+        self.assertFalse(payload["label_found"])
+        self.assertIn("No nutrition label found", payload["message"])
+        self.assertEqual(payload["draft"]["calories_per_100g"], "")
+        self.assertEqual(payload["draft"]["protein_per_100g"], "")
 
     @patch("app.urlopen")
     def test_google_vision_ocr_is_used_when_api_key_is_configured(self, urlopen_mock):

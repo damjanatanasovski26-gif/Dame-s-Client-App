@@ -526,9 +526,9 @@
       })
       .then(handleJsonResponse)
       .then(data => {
-        fillReviewForm(data.draft || {}, "scan");
+        fillReviewForm(data.draft || {}, data.label_found === false ? "missing-label" : "scan");
         showView("review");
-        showMessage(data.message || "Label scanned.", "success");
+        showMessage(data.message || "Label scanned.", data.label_found === false ? "error" : "success");
       })
       .catch(error => showMessage(error.message || "Could not scan that image.", "error"));
     });
@@ -543,9 +543,15 @@
       if (reviewMeal) reviewMeal.value = activeMeal;
       const title = document.getElementById("nutritionReviewTitle");
       const subtitle = document.getElementById("nutritionReviewSubtitle");
-      if (title) title.textContent = mode === "manual" ? "Custom Food" : "Review Food";
+      if (title) {
+        title.textContent = mode === "manual"
+          ? "Custom Food"
+          : mode === "missing-label"
+            ? "No Nutrition Label Found"
+            : "Review Food";
+      }
       if (subtitle) {
-        subtitle.textContent = mode === "manual"
+        subtitle.textContent = mode === "manual" || mode === "missing-label"
           ? "Enter macros per 100g, then save"
           : "Fill missing values, then save";
       }

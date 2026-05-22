@@ -1347,6 +1347,68 @@ def parse_label_text(label_text: str):
     return values
 
 
+def has_nutrition_label_anchor(label_text: str):
+    text = (label_text or "").lower()
+    return bool(
+        re.search(r"\bnutrition\s+facts?\b", text)
+        or re.search(r"\bper\s*100\s*g\b|\b100\s*g\b", text)
+        or line_has_any(text, (
+            "energy",
+            "energia",
+            "energjia",
+            "vlera energ",
+            "nutrit",
+            "\u043d\u0443\u0442\u0440\u0438\u0442",
+            "\u0435\u043d\u0435\u0440\u0433",
+        ))
+    )
+
+
+def is_probable_nutrition_label(label_text: str, parsed: dict | None = None):
+    parsed = parsed or parse_label_text(label_text)
+    labels = find_nutrition_label_mentions(label_text)
+    core_labels = [label for label in labels if label in ("calories", "fat", "carbs", "protein")]
+    found_values = [
+        value
+        for value in (parsed or {}).values()
+        if value is not None and float(value) > 0
+    ]
+
+    if not has_nutrition_label_anchor(label_text):
+        return False
+    if len(found_values) >= 2 and len(set(core_labels)) >= 2:
+        return True
+    if len(found_values) >= 1 and len(set(core_labels)) >= 3:
+        return True
+    return False
+
+
+def build_nutrition_label_draft(label_name: str, brand: str | None, parsed: dict, ocr_text: str):
+    return {
+        "name": label_name[:120],
+        "brand": brand or "",
+        "serving_label": "Scanned from label",
+        "calories_per_100g": "" if parsed["calories"] is None else str(round(parsed["calories"], 1)),
+        "protein_per_100g": "" if parsed["protein"] is None else str(round(parsed["protein"], 1)),
+        "carbs_per_100g": "" if parsed["carbs"] is None else str(round(parsed["carbs"], 1)),
+        "fat_per_100g": "" if parsed["fat"] is None else str(round(parsed["fat"], 1)),
+        "ocr_text": (ocr_text or "")[:4000],
+    }
+
+
+def build_manual_food_draft(label_name: str, brand: str | None, ocr_text: str = ""):
+    return {
+        "name": label_name[:120],
+        "brand": brand or "",
+        "serving_label": "",
+        "calories_per_100g": "",
+        "protein_per_100g": "",
+        "carbs_per_100g": "",
+        "fat_per_100g": "",
+        "ocr_text": (ocr_text or "")[:4000],
+    }
+
+
 def score_label_text_candidates(label_text: str):
     parsed = parse_label_text(label_text)
     found_values = sum(1 for value in parsed.values() if value is not None)
@@ -3149,18 +3211,19 @@ def scan_food_label(client_id):
 
     parsed = parse_label_text(text)
     if not label_name:
-        label_name = os.path.splitext(safe_name)[0].replace("_", " ").strip() or "Scanned Label Food"
+        label_name = os.path.splitext(safe_name)[0].replace("_", " ").strip() or "Custom Food"
 
-    draft = {
-        "name": label_name[:120],
-        "brand": brand or "",
-        "serving_label": "Scanned from label",
-        "calories_per_100g": "" if parsed["calories"] is None else str(round(parsed["calories"], 1)),
-        "protein_per_100g": "" if parsed["protein"] is None else str(round(parsed["protein"], 1)),
-        "carbs_per_100g": "" if parsed["carbs"] is None else str(round(parsed["carbs"], 1)),
-        "fat_per_100g": "" if parsed["fat"] is None else str(round(parsed["fat"], 1)),
-        "ocr_text": text[:4000],
-    }
+    if not is_probable_nutrition_label(text, parsed):
+        draft = build_manual_food_draft(label_name, brand, text)
+        set_nutrition_label_draft(client.id, draft)
+        return nutrition_redirect(
+            client.id,
+            err="No nutrition label found. Enter the macros manually below.",
+            logged_for=logged_for,
+            anchor="customFoodForm",
+        )
+
+    draft = build_nutrition_label_draft(label_name, brand, parsed, text)
     set_nutrition_label_draft(client.id, draft)
 
     if parsed["calories"] is None and parsed["protein"] is None and parsed["carbs"] is None and parsed["fat"] is None:
@@ -3208,24 +3271,27 @@ def scan_food_label_ajax(client_id):
 
     parsed = parse_label_text(text)
     if not label_name:
-        label_name = os.path.splitext(safe_name)[0].replace("_", " ").strip() or "Scanned Label Food"
+        label_name = os.path.splitext(safe_name)[0].replace("_", " ").strip() or "Custom Food"
 
-    draft = {
-        "name": label_name[:120],
-        "brand": brand or "",
-        "serving_label": "Scanned from label",
-        "calories_per_100g": "" if parsed["calories"] is None else str(round(parsed["calories"], 1)),
-        "protein_per_100g": "" if parsed["protein"] is None else str(round(parsed["protein"], 1)),
-        "carbs_per_100g": "" if parsed["carbs"] is None else str(round(parsed["carbs"], 1)),
-        "fat_per_100g": "" if parsed["fat"] is None else str(round(parsed["fat"], 1)),
-        "ocr_text": text[:4000],
-    }
+    if not is_probable_nutrition_label(text, parsed):
+        draft = build_manual_food_draft(label_name, brand, text)
+        set_nutrition_label_draft(client.id, draft)
+        return jsonify({
+            "success": True,
+            "message": "No nutrition label found. Enter the macros manually.",
+            "draft": draft,
+            "label_found": False,
+            "needs_review": True,
+        })
+
+    draft = build_nutrition_label_draft(label_name, brand, parsed, text)
     set_nutrition_label_draft(client.id, draft)
     has_any_value = any(parsed[key] is not None for key in ("calories", "protein", "carbs", "fat"))
     return jsonify({
         "success": True,
         "message": "Label scanned. Review and save the food.",
         "draft": draft,
+        "label_found": True,
         "needs_review": not has_any_value,
     })
 
