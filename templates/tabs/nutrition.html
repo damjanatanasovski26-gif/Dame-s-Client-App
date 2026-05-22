@@ -31,7 +31,7 @@
     <section class="nutrition-rings-card">
       <button class="nutrition-ring-nav nutrition-ring-nav-prev" type="button" data-date-step="-1" aria-label="Previous day"></button>
       <button class="nutrition-ring-nav nutrition-ring-nav-next" type="button" data-date-step="1" aria-label="Next day" {% if nutrition_date >= nutrition_today %}hidden{% endif %}></button>
-      <div class="nutrition-calorie-ring" data-ring="energy" style="--ring-progress: {{ energy_ratio if energy_ratio < 100 else 100 }}; --protein-slice: {{ consumed_protein_slice }}; --carbs-slice: {{ consumed_carbs_slice }};">
+      <div class="nutrition-calorie-ring {% if energy_goal and daily_totals.calories > energy_goal %}nutrition-calorie-ring-over{% endif %}" data-ring="energy" style="--ring-progress: {{ energy_ratio if energy_ratio < 100 else 100 }};">
         <div>
           <b class="nutrition-ring-current">{{ daily_totals.calories|round|int }}</b>
           <span>of <span class="nutrition-ring-goal">{{ energy_goal }}</span> kcal</span>
@@ -711,6 +711,9 @@
       if (!ring) return;
       const ratio = goal ? Math.min(current / goal * 100, 100) : 0;
       ring.style.setProperty("--ring-progress", ratio);
+      if (name === "energy") {
+        ring.classList.toggle("nutrition-calorie-ring-over", Boolean(goal && Number(current || 0) > Number(goal || 0)));
+      }
       const currentEl = ring.querySelector(".nutrition-ring-current");
       const goalEl = ring.querySelector(".nutrition-ring-goal");
       if (currentEl) currentEl.textContent = name === "energy" ? Math.round(current) : current;
@@ -722,21 +725,7 @@
       setRing("protein", summary.totals.protein, summary.protein_goal || 0);
       setRing("carbs", summary.totals.carbs, summary.carbs_goal || 0);
       setRing("fat", summary.totals.fat, summary.fat_goal || 0);
-      updateConsumedMacroRing(summary.totals);
       updateMeals(summary.meal_sections || []);
-    }
-
-    function updateConsumedMacroRing(totals) {
-      const ring = document.querySelector('[data-ring="energy"]');
-      if (!ring) return;
-      const protein = Number(totals.protein || 0);
-      const carbs = Number(totals.carbs || 0);
-      const fat = Number(totals.fat || 0);
-      const macroCalories = protein * 4 + carbs * 4 + fat * 9;
-      const proteinPct = macroCalories ? (protein * 4 / macroCalories) * 100 : 0;
-      const carbsPct = macroCalories ? proteinPct + (carbs * 4 / macroCalories) * 100 : 0;
-      ring.style.setProperty("--protein-slice", proteinPct);
-      ring.style.setProperty("--carbs-slice", carbsPct);
     }
 
     function updateMeals(mealSections) {

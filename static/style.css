@@ -2479,14 +2479,11 @@ body.nutrition-shell .nutrition-view{
 }
 
 .nutrition-calorie-ring{
-  --protein-slice:0;
-  --carbs-slice:0;
-  background:
-    conic-gradient(
-      #48d17a 0 calc(var(--protein-slice) * 1%),
-      #2fd0dc calc(var(--protein-slice) * 1%) calc(var(--carbs-slice) * 1%),
-      #ef4a22 calc(var(--carbs-slice) * 1%) 100%
-    );
+  background:conic-gradient(#48d17a calc(var(--ring-progress) * 1%), #464b60 0);
+}
+
+.nutrition-calorie-ring-over{
+  background:conic-gradient(#ef4a22 100%, #464b60 0);
 }
 
 .nutrition-mini-ring-protein{
@@ -3408,6 +3405,135 @@ body.nutrition-shell .nutrition-view{
   .nutrition-energy-macros{
     gap:7px;
     font-size:14px;
+  }
+}
+
+@media (min-width: 900px){
+  body.nutrition-shell{
+    background:
+      radial-gradient(900px 420px at 12% -8%, rgba(15, 118, 110, .14), transparent 62%),
+      radial-gradient(740px 360px at 95% -10%, rgba(245, 158, 11, .12), transparent 66%),
+      #0c1020;
+  }
+
+  body.nutrition-shell .container{
+    padding:28px;
+  }
+
+  body.nutrition-shell .nutrition-app{
+    max-width:1180px;
+    min-height:calc(100dvh - 56px);
+    margin:0 auto;
+    border:1px solid rgba(255,255,255,.08);
+    border-radius:28px;
+    background:#0c1020;
+    box-shadow:0 24px 70px rgba(0,0,0,.36);
+  }
+
+  body.nutrition-shell .nutrition-view{
+    min-height:auto;
+    padding:26px;
+  }
+
+  body.nutrition-shell #nutritionDiaryView.is-active{
+    display:grid;
+    grid-template-columns:minmax(360px, 440px) minmax(0, 1fr);
+    align-items:start;
+    gap:22px;
+  }
+
+  #nutritionDiaryView .nutrition-app-header{
+    grid-column:1 / -1;
+    padding-top:0;
+    margin-bottom:0;
+  }
+
+  .nutrition-hub-link{
+    top:18px;
+    right:20px;
+  }
+
+  .nutrition-rings-card{
+    min-height:620px;
+    align-content:center;
+    gap:24px;
+    padding:28px;
+  }
+
+  .nutrition-rings-card:hover{
+    transform:none;
+  }
+
+  .nutrition-calorie-ring{
+    width:240px;
+    height:240px;
+  }
+
+  .nutrition-mini-rings{
+    gap:16px;
+  }
+
+  .nutrition-mini-ring{
+    width:112px;
+    height:112px;
+  }
+
+  .nutrition-ring-nav{
+    top:158px;
+  }
+
+  .nutrition-ring-nav-prev{
+    left:22px;
+  }
+
+  .nutrition-ring-nav-next{
+    right:22px;
+  }
+
+  .nutrition-meals{
+    margin-top:0;
+    gap:14px;
+  }
+
+  .nutrition-meal-card{
+    border-radius:18px;
+  }
+
+  .nutrition-meal-top{
+    min-height:72px;
+    padding:12px 18px;
+  }
+
+  .nutrition-meal-entries{
+    padding:0 18px 14px 72px;
+  }
+
+  .nutrition-action-footer{
+    display:none !important;
+  }
+
+  .nutrition-panel.is-active{
+    max-width:880px;
+    margin:0 auto;
+  }
+
+  #nutritionFoodView.is-active{
+    max-width:960px;
+  }
+
+  #nutritionReviewView.is-active,
+  #nutritionFoodDetailView.is-active{
+    max-width:760px;
+  }
+
+  .nutrition-food-results{
+    border-radius:18px;
+    overflow:hidden;
+    background:rgba(255,255,255,.025);
+  }
+
+  .nutrition-food-result{
+    padding:17px 18px;
   }
 }
 
