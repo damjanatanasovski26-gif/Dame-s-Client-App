@@ -113,31 +113,6 @@
       <button class="btn" type="submit" style="margin-top:14px;">Save Phone</button>
     </form>
 
-    <hr class="sep">
-
-    <h3>Change Password</h3>
-    <form class="form" action="{{ url_for('change_client_password', client_id=client.id) }}" method="POST" style="max-width:700px;">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <label class="label">Current password</label>
-      <div class="password-wrap">
-        <input id="clientCurrentPassword" class="input" type="password" name="current_password" autocomplete="current-password" required>
-        <button class="password-toggle" type="button" data-password-target="clientCurrentPassword" aria-label="Show password" aria-pressed="false">&#128065;</button>
-      </div>
-
-      <label class="label">New password</label>
-      <div class="password-wrap">
-        <input id="clientNewPassword" class="input" type="password" name="new_password" autocomplete="new-password" required>
-        <button class="password-toggle" type="button" data-password-target="clientNewPassword" aria-label="Show password" aria-pressed="false">&#128065;</button>
-      </div>
-
-      <label class="label">Confirm new password</label>
-      <div class="password-wrap">
-        <input id="clientConfirmPassword" class="input" type="password" name="confirm_password" autocomplete="new-password" required>
-        <button class="password-toggle" type="button" data-password-target="clientConfirmPassword" aria-label="Show password" aria-pressed="false">&#128065;</button>
-      </div>
-
-      <button class="btn" type="submit" style="margin-top:14px;">Update Password</button>
-    </form>
   {% endif %}
 
   <hr class="sep">

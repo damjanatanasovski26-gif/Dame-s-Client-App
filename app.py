@@ -3311,26 +3311,42 @@ def change_client_password(client_id):
         return redirect(url_for("client_profile", client_id=client_id, tab="info", err="Client user not found."))
 
     current_password = request.form.get("current_password") or ""
+    new_username = (request.form.get("username") or "").strip()
     new_password = request.form.get("new_password") or ""
     confirm_password = request.form.get("confirm_password") or ""
 
-    if not current_password or not new_password or not confirm_password:
-        return redirect(url_for("client_profile", client_id=client_id, tab="info", err="All password fields are required."))
+    if not new_username:
+        return redirect(url_for("client_profile", client_id=client_id, tab="info", err="Username is required."))
+    if len(new_username) > 80:
+        return redirect(url_for("client_profile", client_id=client_id, tab="info", err="Username is too long."))
+    if not re.fullmatch(r"[A-Za-z0-9._-]+", new_username):
+        return redirect(url_for("client_profile", client_id=client_id, tab="info", err="Username can only contain letters, numbers, dot, underscore, and hyphen."))
 
-    if not check_password_hash(user.password_hash, current_password):
-        return redirect(url_for("client_profile", client_id=client_id, tab="info", err="Current password is incorrect."))
+    changing_username = new_username != user.username
+    changing_password = bool(new_password or confirm_password)
+    if changing_username or changing_password or user.must_change_password:
+        if not current_password:
+            return redirect(url_for("client_profile", client_id=client_id, tab="info", err="Current password is required to update account settings."))
+        if not check_password_hash(user.password_hash, current_password):
+            return redirect(url_for("client_profile", client_id=client_id, tab="info", err="Current password is incorrect."))
 
-    if len(new_password) < 6:
-        return redirect(url_for("client_profile", client_id=client_id, tab="info", err="New password must be at least 6 characters."))
+    if changing_username:
+        existing_user = User.query.filter_by(username=new_username).first()
+        if existing_user and existing_user.id != user.id:
+            return redirect(url_for("client_profile", client_id=client_id, tab="info", err="Username is already taken."))
+        user.username = new_username
 
-    if new_password != confirm_password:
-        return redirect(url_for("client_profile", client_id=client_id, tab="info", err="New password and confirmation do not match."))
+    if changing_password or user.must_change_password:
+        if len(new_password) < 6:
+            return redirect(url_for("client_profile", client_id=client_id, tab="info", err="New password must be at least 6 characters."))
+        if new_password != confirm_password:
+            return redirect(url_for("client_profile", client_id=client_id, tab="info", err="New password and confirmation do not match."))
+        user.password_hash = generate_password_hash(new_password)
+        user.must_change_password = False
 
-    user.password_hash = generate_password_hash(new_password)
-    user.must_change_password = False
     db.session.commit()
 
-    return redirect(url_for("client_profile", client_id=client_id, tab="info", msg="Password updated."))
+    return redirect(url_for("client_profile", client_id=client_id, tab="info", msg="Account settings updated."))
 
 
 

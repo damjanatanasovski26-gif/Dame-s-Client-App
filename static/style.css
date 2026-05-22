@@ -126,6 +126,97 @@ h3{ margin:0 0 14px; font-size:18px; font-weight:700; }
   margin-bottom:18px;
 }
 
+.topbar > .actions{
+  align-items:flex-start;
+}
+
+.account-settings{
+  position:relative;
+  z-index:20;
+}
+
+.account-settings summary{
+  width:46px;
+  height:46px;
+  border:1px solid color-mix(in srgb, var(--line) 80%, transparent 20%);
+  border-radius:50%;
+  display:grid;
+  place-items:center;
+  background:color-mix(in srgb, var(--surface) 88%, transparent 12%);
+  color:var(--text);
+  cursor:pointer;
+  box-shadow:0 10px 24px rgba(2,6,23,.16);
+  list-style:none;
+  user-select:none;
+}
+
+.account-settings summary::-webkit-details-marker{
+  display:none;
+}
+
+.account-settings summary span,
+.account-settings summary span::before,
+.account-settings summary span::after{
+  width:20px;
+  height:20px;
+  display:block;
+  border:3px solid currentColor;
+  border-radius:50%;
+}
+
+.account-settings summary span{
+  position:relative;
+}
+
+.account-settings summary span::before,
+.account-settings summary span::after{
+  content:"";
+  position:absolute;
+  left:50%;
+  top:50%;
+  width:6px;
+  height:26px;
+  border-width:0 3px;
+  border-radius:3px;
+  transform:translate(-50%, -50%);
+}
+
+.account-settings summary span::after{
+  transform:translate(-50%, -50%) rotate(60deg);
+}
+
+.account-settings[open] summary{
+  color:var(--primary);
+  border-color:color-mix(in srgb, var(--primary) 55%, var(--line) 45%);
+}
+
+.account-settings-panel{
+  position:absolute;
+  top:56px;
+  right:0;
+  width:min(360px, calc(100vw - 36px));
+  display:grid;
+  gap:12px;
+  padding:16px;
+  border:1px solid color-mix(in srgb, var(--line) 80%, transparent 20%);
+  border-radius:20px;
+  background:color-mix(in srgb, var(--surface) 96%, #ffffff 4%);
+  box-shadow:0 22px 56px rgba(2,6,23,.28);
+}
+
+.account-settings-panel h3{
+  margin:0;
+}
+
+.account-settings-panel .form{
+  gap:10px;
+}
+
+.account-settings-panel .btn{
+  width:100%;
+  justify-content:center;
+}
+
 .card{
   background:linear-gradient(180deg, color-mix(in srgb, var(--surface) 94%, #ffffff 6%), var(--surface));
   border:1px solid color-mix(in srgb, var(--line) 75%, transparent 25%);
@@ -3687,14 +3778,17 @@ body.nutrition-shell .nutrition-view{
     padding:0 12px;
   }
   .topbar{
-    flex-direction:column;
     align-items:flex-start;
   }
   .topbar .actions{
-    width:100%;
+    width:auto;
+    margin-left:auto;
   }
   .topbar .actions .btn{
     flex:1 1 auto;
+  }
+  .account-settings-panel{
+    right:0;
   }
   .grid-2{ grid-template-columns:1fr; }
   .add-client-grid{ grid-template-columns:1fr; }

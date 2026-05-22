@@ -9,8 +9,45 @@
   <div class="topbar">
     <h1>Trainer App</h1>
     <div class="actions">
-      <a href="{{ url_for('index') }}" class="btn secondary">Back to Dashboard</a>
-      <a href="{{ url_for('logout') }}" class="btn danger">Log out</a>
+      {% if is_admin %}
+        <a href="{{ url_for('index') }}" class="btn secondary">Back to Dashboard</a>
+      {% endif %}
+      <details class="account-settings" {% if must_change_password and not is_admin %}open{% endif %}>
+        <summary aria-label="Account settings" title="Account settings">
+          <span aria-hidden="true"></span>
+        </summary>
+        <div class="account-settings-panel">
+          {% if not is_admin %}
+            <h3>Account Settings</h3>
+            <form class="form" action="{{ url_for('change_client_password', client_id=client.id) }}" method="POST">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <label class="label">Username</label>
+              <input class="input" name="username" value="{{ client_user.username if client_user else '' }}" autocomplete="username" required>
+
+              <label class="label">Current password</label>
+              <div class="password-wrap">
+                <input id="clientSettingsCurrentPassword" class="input" type="password" name="current_password" autocomplete="current-password">
+                <button class="password-toggle" type="button" data-password-target="clientSettingsCurrentPassword" aria-label="Show password" aria-pressed="false">&#128065;</button>
+              </div>
+
+              <label class="label">New password</label>
+              <div class="password-wrap">
+                <input id="clientSettingsNewPassword" class="input" type="password" name="new_password" autocomplete="new-password" minlength="6">
+                <button class="password-toggle" type="button" data-password-target="clientSettingsNewPassword" aria-label="Show password" aria-pressed="false">&#128065;</button>
+              </div>
+
+              <label class="label">Confirm new password</label>
+              <div class="password-wrap">
+                <input id="clientSettingsConfirmPassword" class="input" type="password" name="confirm_password" autocomplete="new-password" minlength="6">
+                <button class="password-toggle" type="button" data-password-target="clientSettingsConfirmPassword" aria-label="Show password" aria-pressed="false">&#128065;</button>
+              </div>
+
+              <button class="btn" type="submit">Save Account</button>
+            </form>
+          {% endif %}
+          <a href="{{ url_for('logout') }}" class="btn danger">Log out</a>
+        </div>
+      </details>
     </div>
   </div>
 
