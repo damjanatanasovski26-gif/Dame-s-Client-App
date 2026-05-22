@@ -1,44 +1,44 @@
 <div class="card">
   <h3>Body Measurements</h3>
 
-  <form id="statsEntryForm" class="form" action="{{ url_for('add_measurement', client_id=client.id) }}" method="POST" style="max-width:900px;">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div class="grid-2">
-      <input class="input" name="weight" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Weight (kg)">
+  <details class="measurement-entry-panel">
+    <summary class="btn secondary">Add Body Measurements</summary>
+    <form id="statsEntryForm" class="form" action="{{ url_for('add_measurement', client_id=client.id) }}" method="POST" style="max-width:900px; margin-top:14px;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="grid-2">
+        <input class="input" name="weight" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Weight (kg)">
 
-      <input class="input" name="chest" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Chest (cm)">
-      <input class="input" name="waist" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Waist (cm)">
-      <input class="input" name="stomach" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Stomach (cm)">
-      <input class="input" name="glutes" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Glutes (cm)">
+        <input class="input" name="chest" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Chest (cm)">
+        <input class="input" name="waist" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Waist (cm)">
+        <input class="input" name="stomach" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Stomach (cm)">
+        <input class="input" name="glutes" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Glutes (cm)">
 
-      <input class="input" name="arm_left" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Arm Left (cm)">
-      <input class="input" name="arm_right" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Arm Right (cm)">
+        <input class="input" name="arm_left" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Arm Left (cm)">
+        <input class="input" name="arm_right" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Arm Right (cm)">
 
-      <input class="input" name="quad_left" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Quad Left (cm)">
-      <input class="input" name="quad_right" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Quad Right (cm)">
+        <input class="input" name="quad_left" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Quad Left (cm)">
+        <input class="input" name="quad_right" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Quad Right (cm)">
 
-      <input class="input" name="calf_left" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Calf Left (cm)">
-      <input class="input" name="calf_right" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Calf Right (cm)">
-    </div>
+        <input class="input" name="calf_left" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Calf Left (cm)">
+        <input class="input" name="calf_right" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Calf Right (cm)">
+      </div>
 
-    <button class="btn" type="submit">Add Measurement</button>
-  </form>
+      <button class="btn" type="submit">Save Measurements</button>
+    </form>
+  </details>
 </div>
 
 <div class="card">
   <h3>Progress Photos</h3>
   <form id="progressPhotoForm" class="form" action="{{ url_for('upload_progress_photo', client_id=client.id) }}" method="POST" enctype="multipart/form-data" style="max-width:700px;">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <label class="label">Photo file</label>
     <input class="nutrition-file-input" id="progressPhotoFile" type="file" name="photo" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" required>
     <div class="nutrition-file-picker">
-      <button class="btn secondary" id="chooseProgressPhoto" type="button">Choose Photo</button>
-      <button class="btn secondary" id="takeProgressPhoto" type="button">Take Photo</button>
+      <button class="btn secondary" id="chooseProgressPhoto" type="button">Choose from Gallery</button>
+      <button class="btn secondary" id="takeProgressPhoto" type="button">Use Camera</button>
       <div class="nutrition-file-name" id="progressPhotoFileName">No photo selected</div>
     </div>
     <div class="muted nutrition-file-hint">JPG, PNG, or WEBP. Max 8 MB.</div>
-    <label class="label">Note</label>
-    <input class="input" name="note" maxlength="200" placeholder="Optional note (front/side/back, lighting, etc.)">
     <button class="btn" id="progressPhotoSubmit" type="submit">Upload Photo</button>
   </form>
 
@@ -48,7 +48,6 @@
         <div class="photo-card">
           <img src="{{ url_for('static', filename='uploads/progress/' ~ p.file_name) }}" alt="Progress photo">
           <div class="muted" style="margin-top:8px;">{{ p.created_at.strftime("%d/%m/%Y %H:%M") }}</div>
-          <div class="muted">{{ p.note or "-" }}</div>
           {% if is_admin %}
             <form action="{{ url_for('delete_progress_photo', client_id=client.id, photo_id=p.id) }}" method="POST" style="margin-top:8px;" onsubmit="return confirm('Delete this progress photo?');">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

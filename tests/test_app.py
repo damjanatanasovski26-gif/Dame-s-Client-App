@@ -645,7 +645,7 @@ class TrainerAppTests(unittest.TestCase):
         )
         self.assertEqual(resp.status_code, 200)
         self.assertIn(b"Review the custom food form below", resp.data)
-        self.assertIn(b"Scanned Yogurt", resp.data)
+        self.assertNotIn(b'value="Scanned Yogurt"', resp.data)
         self.assertIn(b"99.0", resp.data)
 
     @patch("app.label_scan_enabled", return_value=True)

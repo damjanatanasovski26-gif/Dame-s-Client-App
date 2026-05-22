@@ -70,9 +70,6 @@
     <a class="tab {% if tab=='stats' %}active{% endif %}" href="{{ url_for('client_profile', client_id=client.id, tab='stats') }}">
        Stats
     </a>
-    <a class="tab {% if tab=='sessions' %}active{% endif %}" href="{{ url_for('client_profile', client_id=client.id, tab='sessions') }}">
-       Sessions
-    </a>
     <a class="tab {% if tab=='nutrition' %}active{% endif %}" href="{{ url_for('client_profile', client_id=client.id, tab='nutrition') }}">
        Nutrition
     </a>
@@ -88,8 +85,6 @@
   {% include "tabs/info.html" %}
 {% elif tab == "stats" %}
   {% include "tabs/stats.html" %}
-{% elif tab == "sessions" %}
-  {% include "tabs/sessions.html" %}
 {% elif tab == "nutrition" %}
   {% include "tabs/nutrition.html" %}
 {% elif tab == "payments" and is_admin %}
@@ -100,7 +95,7 @@
 <script>
   (function () {
     if (localStorage.getItem("trainer_client_onboarding_seen") === "1") return;
-    const showOnTabs = ["info", "stats", "sessions"];
+    const showOnTabs = ["info", "stats"];
     const current = "{{ tab }}";
     if (showOnTabs.indexOf(current) === -1) return;
     const modal = document.getElementById("onboardingModal");

@@ -230,22 +230,31 @@
         <label>Carbs<input type="number" name="carbs_per_100g" min="0" step="0.1" placeholder="g" value="{{ nutrition_label_draft.get('carbs_per_100g', '') }}" required></label>
         <label>Fat<input type="number" name="fat_per_100g" min="0" step="0.1" placeholder="g" value="{{ nutrition_label_draft.get('fat_per_100g', '') }}" required></label>
       </div>
-      <div class="nutrition-save-extra">
-        <select name="log_meal_type" id="nutritionReviewMeal">
-          <option value="breakfast">Breakfast</option>
-          <option value="lunch">Lunch</option>
-          <option value="dinner">Dinner</option>
-          <option value="snack" selected>Snack</option>
-        </select>
-        <label class="nutrition-review-serving">Serving size
-          <input type="number" name="log_quantity_grams" min="1" step="0.1" placeholder="grams to log">
-          <small hidden>Please enter serving size.</small>
-        </label>
-      </div>
       <div class="nutrition-review-actions">
         <button type="submit" name="save_action" value="save">Save to Database</button>
-        <button type="submit" name="save_action" value="save_and_log">Save and Log</button>
       </div>
+      <section class="nutrition-log-now">
+        <div>
+          <h3>Log it now</h3>
+          <p>Choose a diary group and serving size only if you want this food added to today.</p>
+        </div>
+        <div class="nutrition-save-extra">
+          <label>
+            Group
+            <select name="log_meal_type" id="nutritionReviewMeal">
+              <option value="breakfast">Breakfast</option>
+              <option value="lunch">Lunch</option>
+              <option value="dinner">Dinner</option>
+              <option value="snack" selected>Snack</option>
+            </select>
+          </label>
+          <label class="nutrition-review-serving">Serving size
+            <input type="number" name="log_quantity_grams" min="1" step="0.1" placeholder="grams to log">
+            <small hidden>Please enter serving size.</small>
+          </label>
+        </div>
+        <button class="nutrition-log-now-submit" type="submit" name="save_action" value="save_and_log">Save and Log</button>
+      </section>
     </form>
   </section>
 </div>

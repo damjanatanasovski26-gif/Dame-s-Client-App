@@ -2808,6 +2808,20 @@ body.nutrition-shell .nutrition-view{
   padding-right:18px;
 }
 
+.nutrition-search-field:focus-within{
+  box-shadow:none;
+}
+
+.nutrition-search-field input:focus{
+  outline:0;
+}
+
+.nutrition-review-form input:focus,
+.nutrition-review-form select:focus{
+  outline:0;
+  box-shadow:none;
+}
+
 .nutrition-search-field input::placeholder,
 .nutrition-review-form input::placeholder{
   color:var(--nutrition-muted);
@@ -3254,13 +3268,48 @@ body.nutrition-shell .nutrition-view{
 
 .nutrition-review-actions{
   display:grid;
-  grid-template-columns:1fr 1fr;
   gap:10px;
-  margin-top:6px;
+  margin-top:8px;
 }
 
 .nutrition-review-actions button:first-child{
   background:var(--nutrition-panel-2);
+}
+
+.nutrition-log-now{
+  display:grid;
+  gap:12px;
+  margin-top:4px;
+  padding:14px;
+  border:1px solid var(--nutrition-line);
+  border-radius:22px;
+  background:rgba(255,255,255,.025);
+}
+
+.nutrition-log-now h3{
+  margin:0;
+  color:var(--nutrition-text);
+  font-size:18px;
+}
+
+.nutrition-log-now p{
+  margin:4px 0 0;
+  color:var(--nutrition-muted);
+  font-size:13px;
+}
+
+.nutrition-log-now-submit{
+  width:100%;
+}
+
+.measurement-entry-panel summary{
+  display:inline-flex;
+  list-style:none;
+  cursor:pointer;
+}
+
+.measurement-entry-panel summary::-webkit-details-marker{
+  display:none;
 }
 
 .nutrition-message-inline{

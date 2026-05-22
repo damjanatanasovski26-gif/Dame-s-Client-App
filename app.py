@@ -1385,7 +1385,7 @@ def is_probable_nutrition_label(label_text: str, parsed: dict | None = None):
 
 def build_nutrition_label_draft(label_name: str, brand: str | None, parsed: dict, ocr_text: str):
     return {
-        "name": label_name[:120],
+        "name": "",
         "brand": brand or "",
         "serving_label": "Scanned from label",
         "calories_per_100g": "" if parsed["calories"] is None else str(round(parsed["calories"], 1)),
@@ -1398,7 +1398,7 @@ def build_nutrition_label_draft(label_name: str, brand: str | None, parsed: dict
 
 def build_manual_food_draft(label_name: str, brand: str | None, ocr_text: str = ""):
     return {
-        "name": label_name[:120],
+        "name": "",
         "brand": brand or "",
         "serving_label": "",
         "calories_per_100g": "",
@@ -2723,34 +2723,16 @@ def add_client_goal(client_id):
     title = (request.form.get("title") or "").strip()
     if not title:
         return redirect(url_for("client_profile", client_id=client.id, tab="info", err="Goal title is required."))
-    target_value = to_float(request.form.get("target_value"))
-    current_value = to_float(request.form.get("current_value"))
-    goal_type = normalize_goal_type(request.form.get("goal_type"))
-    unit = normalize_goal_unit(request.form.get("unit"))
-    if not unit:
-        unit = default_goal_unit(goal_type)
-    target_date = None
-    target_date_raw = (request.form.get("target_date") or "").strip()
-    if target_date_raw:
-        try:
-            target_date = datetime.strptime(target_date_raw, "%Y-%m-%d").date()
-        except Exception:
-            return redirect(url_for("client_profile", client_id=client.id, tab="info", err="Invalid goal target date."))
-    note = (request.form.get("note") or "").strip()
-    if current_value is None:
-        temp_goal = ClientGoal(title=title, note=note, goal_type=goal_type, unit=unit)
-        if is_weight_goal(temp_goal):
-            current_value = get_latest_weight_value(client.id)
     g = ClientGoal(
         client_id=client.id,
         title=title,
-        goal_type=goal_type,
-        unit=unit,
-        target_value=target_value,
-        current_value=current_value,
-        target_date=target_date,
+        goal_type="custom",
+        unit=None,
+        target_value=None,
+        current_value=None,
+        target_date=None,
         status="active",
-        note=note,
+        note="",
     )
     db.session.add(g)
     db.session.commit()
