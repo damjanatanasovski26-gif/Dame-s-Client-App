@@ -154,35 +154,11 @@ h3{ margin:0 0 14px; font-size:18px; font-weight:700; }
   display:none;
 }
 
-.account-settings summary span,
-.account-settings summary span::before,
-.account-settings summary span::after{
-  width:20px;
-  height:20px;
-  display:block;
-  border:3px solid currentColor;
+.account-settings summary img{
+  width:28px;
+  height:28px;
+  object-fit:contain;
   border-radius:50%;
-}
-
-.account-settings summary span{
-  position:relative;
-}
-
-.account-settings summary span::before,
-.account-settings summary span::after{
-  content:"";
-  position:absolute;
-  left:50%;
-  top:50%;
-  width:6px;
-  height:26px;
-  border-width:0 3px;
-  border-radius:3px;
-  transform:translate(-50%, -50%);
-}
-
-.account-settings summary span::after{
-  transform:translate(-50%, -50%) rotate(60deg);
 }
 
 .account-settings[open] summary{
@@ -202,6 +178,49 @@ h3{ margin:0 0 14px; font-size:18px; font-weight:700; }
   border-radius:20px;
   background:color-mix(in srgb, var(--surface) 96%, #ffffff 4%);
   box-shadow:0 22px 56px rgba(2,6,23,.28);
+}
+
+.account-settings-action{
+  min-height:44px;
+  border:1px solid color-mix(in srgb, var(--line) 72%, transparent 28%);
+  border-radius:14px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:0 14px;
+  background:color-mix(in srgb, var(--surface-2) 88%, transparent 12%);
+  color:var(--text);
+  font:inherit;
+  font-weight:800;
+  text-decoration:none;
+  cursor:pointer;
+}
+
+.account-settings-action:hover{
+  border-color:color-mix(in srgb, var(--primary) 45%, var(--line) 55%);
+  transform:translateY(-1px);
+}
+
+.account-settings-action[hidden]{
+  display:none !important;
+}
+
+.account-settings-logout{
+  background:color-mix(in srgb, var(--danger) 88%, #000 12%);
+  border-color:transparent;
+  color:#fff;
+}
+
+.account-settings-form{
+  display:grid;
+  gap:12px;
+  margin-top:4px;
+  padding-top:12px;
+  border-top:1px solid var(--line);
+}
+
+.account-settings-form[hidden]{
+  display:none !important;
 }
 
 .account-settings-panel h3{
@@ -2336,6 +2355,8 @@ body.nutrition-shell .container{
   padding:0;
 }
 
+body.client-shell .theme-toggle,
+body.client-shell .install-app-btn,
 body.nutrition-shell .theme-toggle,
 body.nutrition-shell .install-app-btn{
   display:none !important;
