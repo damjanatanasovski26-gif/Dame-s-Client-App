@@ -3409,55 +3409,84 @@ body.nutrition-shell .nutrition-view{
 }
 
 @media (min-width: 900px){
-  body.nutrition-shell{
+  body.nutrition-shell,
+  body:has(.nutrition-app){
     background:
       radial-gradient(900px 420px at 12% -8%, rgba(15, 118, 110, .14), transparent 62%),
       radial-gradient(740px 360px at 95% -10%, rgba(245, 158, 11, .12), transparent 66%),
       #0c1020;
+    overflow-x:hidden;
   }
 
-  body.nutrition-shell .container{
-    padding:28px;
+  body.nutrition-shell .container,
+  body:has(.nutrition-app) .container{
+    width:100%;
+    max-width:none;
+    min-height:100dvh;
+    margin:0;
+    padding:0;
   }
 
-  body.nutrition-shell .nutrition-app{
-    max-width:1180px;
-    min-height:calc(100dvh - 56px);
-    margin:0 auto;
-    border:1px solid rgba(255,255,255,.08);
-    border-radius:28px;
-    background:#0c1020;
-    box-shadow:0 24px 70px rgba(0,0,0,.36);
+  body:has(.nutrition-app) .theme-toggle,
+  body:has(.nutrition-app) .install-app-btn,
+  body:has(.nutrition-app) .container > .topbar,
+  body:has(.nutrition-app) .container > .tabs,
+  body:has(.nutrition-app) .container > .card{
+    display:none !important;
   }
 
-  body.nutrition-shell .nutrition-view{
+  body.nutrition-shell .nutrition-app,
+  .nutrition-app{
+    width:100%;
+    max-width:none;
+    min-height:100dvh;
+    margin:0;
+    border:0;
+    border-radius:0;
+    background:
+      linear-gradient(180deg, rgba(37,42,61,.62), rgba(12,16,32,0) 420px),
+      #0c1020;
+    box-shadow:none;
+  }
+
+  body.nutrition-shell .nutrition-view,
+  .nutrition-view{
     min-height:auto;
-    padding:26px;
+    padding:28px clamp(28px, 4vw, 64px) 42px;
   }
 
-  body.nutrition-shell #nutritionDiaryView.is-active{
+  body.nutrition-shell #nutritionDiaryView.is-active,
+  #nutritionDiaryView.is-active{
     display:grid;
-    grid-template-columns:minmax(360px, 440px) minmax(0, 1fr);
+    grid-template-columns:minmax(0, 1fr);
     align-items:start;
-    gap:22px;
+    gap:28px;
   }
 
   #nutritionDiaryView .nutrition-app-header{
     grid-column:1 / -1;
     padding-top:0;
-    margin-bottom:0;
+    margin-bottom:2px;
+  }
+
+  #nutritionDiaryView .nutrition-app-header h2{
+    font-size:34px;
   }
 
   .nutrition-hub-link{
-    top:18px;
-    right:20px;
+    top:24px;
+    right:clamp(28px, 4vw, 64px);
   }
 
   .nutrition-rings-card{
-    min-height:620px;
-    align-content:center;
-    gap:24px;
-    padding:28px;
+    min-height:360px;
+    display:grid;
+    grid-template-columns:minmax(250px, 320px) minmax(0, 1fr);
+    grid-template-rows:1fr auto;
+    align-items:center;
+    gap:28px;
+    padding:32px;
+    border-radius:28px;
   }
 
   .nutrition-rings-card:hover{
@@ -3465,47 +3494,78 @@ body.nutrition-shell .nutrition-view{
   }
 
   .nutrition-calorie-ring{
-    width:240px;
-    height:240px;
+    width:260px;
+    height:260px;
+    justify-self:center;
   }
 
   .nutrition-mini-rings{
-    gap:16px;
+    gap:18px;
+    align-self:center;
   }
 
   .nutrition-mini-ring{
-    width:112px;
-    height:112px;
+    width:126px;
+    height:126px;
+  }
+
+  .nutrition-mini-ring b{
+    font-size:26px;
+  }
+
+  .nutrition-mini-ring span,
+  .nutrition-mini-ring small{
+    font-size:12px;
   }
 
   .nutrition-ring-nav{
-    top:158px;
+    top:50%;
+    transform:translateY(-50%);
   }
 
   .nutrition-ring-nav-prev{
-    left:22px;
+    left:20px;
   }
 
   .nutrition-ring-nav-next{
-    right:22px;
+    right:20px;
+  }
+
+  .nutrition-ring-nav:hover{
+    transform:translateY(-50%) scale(1.04);
+  }
+
+  .nutrition-admin-target{
+    grid-column:1 / -1;
+    justify-self:center;
+    width:min(360px, 100%);
+    margin-top:4px;
   }
 
   .nutrition-meals{
     margin-top:0;
-    gap:14px;
+    gap:16px;
   }
 
   .nutrition-meal-card{
-    border-radius:18px;
+    border-radius:22px;
   }
 
   .nutrition-meal-top{
-    min-height:72px;
-    padding:12px 18px;
+    min-height:86px;
+    padding:16px 22px;
+  }
+
+  .nutrition-meal-top h3{
+    font-size:24px;
+  }
+
+  .nutrition-meal-top span{
+    font-size:14px;
   }
 
   .nutrition-meal-entries{
-    padding:0 18px 14px 72px;
+    padding:0 22px 18px 82px;
   }
 
   .nutrition-action-footer{
@@ -3513,12 +3573,12 @@ body.nutrition-shell .nutrition-view{
   }
 
   .nutrition-panel.is-active{
-    max-width:880px;
+    max-width:min(1080px, calc(100vw - 72px));
     margin:0 auto;
   }
 
   #nutritionFoodView.is-active{
-    max-width:960px;
+    max-width:min(1180px, calc(100vw - 72px));
   }
 
   #nutritionReviewView.is-active,
@@ -3534,6 +3594,13 @@ body.nutrition-shell .nutrition-view{
 
   .nutrition-food-result{
     padding:17px 18px;
+  }
+}
+
+@media (min-width: 1100px){
+  body.nutrition-shell #nutritionDiaryView.is-active,
+  #nutritionDiaryView.is-active{
+    grid-template-columns:minmax(440px, .92fr) minmax(540px, 1.25fr);
   }
 }
 
