@@ -126,13 +126,28 @@ h3{ margin:0 0 14px; font-size:18px; font-weight:700; }
   margin-bottom:18px;
 }
 
+.client-shell .topbar{
+  display:grid;
+  grid-template-columns:minmax(0, 1fr) auto;
+  align-items:center;
+}
+
 .topbar > .actions{
   align-items:flex-start;
+}
+
+.client-shell .topbar > .actions{
+  width:auto;
+  margin-left:0;
+  justify-self:end;
+  flex-wrap:nowrap;
 }
 
 .account-settings{
   position:relative;
   z-index:20;
+  justify-self:end;
+  flex:0 0 auto;
 }
 
 .account-settings summary{
@@ -3855,6 +3870,11 @@ body.nutrition-shell .nutrition-view{
   .topbar .actions{
     width:auto;
     margin-left:auto;
+  }
+  .client-shell .topbar .actions{
+    width:auto;
+    margin-left:0;
+    justify-content:flex-end;
   }
   .topbar .actions .btn{
     flex:1 1 auto;
