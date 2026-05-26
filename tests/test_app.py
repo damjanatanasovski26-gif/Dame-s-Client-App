@@ -531,6 +531,35 @@ class TrainerAppTests(unittest.TestCase):
             self.assertEqual(FoodItem.query.filter_by(source="capnutra").count(), 1)
             self.assertEqual(food.calories_per_100g, 49)
 
+    def test_admin_can_trigger_capnutra_import_from_dashboard(self):
+        self._create_user("admin", "pass123", role="admin")
+        self._login("admin", "pass123")
+
+        with patch("app.fetch_capnutra_food_library", return_value=[{
+            "source_ref": "0000250",
+            "name": "Apple, whole, raw",
+            "brand": "CAPNUTRA Serbian FCDB",
+            "calories_per_100g": 48.3,
+            "protein_per_100g": 0.2,
+            "carbs_per_100g": 10,
+            "fat_per_100g": 0.3,
+        }]):
+            resp = self.client.post("/admin/import-capnutra", follow_redirects=True)
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b"CAPNUTRA import complete", resp.data)
+        with app.app_context():
+            self.assertIsNotNone(FoodItem.query.filter_by(source="capnutra", source_ref="0000250").first())
+
+    def test_client_cannot_trigger_capnutra_import(self):
+        client_id = self._create_client(name="Sara")
+        self._create_user("sara_user", "pass123", role="client", client_id=client_id)
+        self._login("sara_user", "pass123")
+
+        resp = self.client.post("/admin/import-capnutra")
+
+        self.assertEqual(resp.status_code, 403)
+
     def test_food_log_can_match_by_search_name_when_hidden_id_is_missing(self):
         client_id = self._create_client(name="Sara")
         self._create_user("sara_user", "pass123", role="client", client_id=client_id)

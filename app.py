@@ -2652,6 +2652,31 @@ def backup_database():
     )
 
 
+@app.route("/admin/import-capnutra", methods=["POST"])
+@login_required
+def import_capnutra_admin():
+    if not is_admin():
+        return "Forbidden", 403
+
+    try:
+        stats = import_capnutra_foods(fetch_capnutra_food_library(), prune_missing=True)
+    except Exception:
+        app.logger.exception("CAPNUTRA import failed")
+        return redirect(url_for(
+            "index",
+            err="CAPNUTRA import failed. Try again in a minute, or check the deployment logs.",
+        ))
+
+    return redirect(url_for(
+        "index",
+        msg=(
+            "CAPNUTRA import complete: "
+            f"{stats['created']} created, {stats['updated']} updated, "
+            f"{stats['removed']} removed, {stats['total']} active."
+        ),
+    ))
+
+
 @app.route("/client/<int:client_id>/report.pdf")
 @login_required
 def export_client_report_pdf(client_id):
