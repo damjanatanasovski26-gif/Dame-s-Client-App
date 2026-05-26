@@ -31,6 +31,16 @@ except ImportError:
 
 from PIL import Image, ImageFilter, ImageOps
 
+try:
+    import requests
+except ImportError:
+    requests = None
+
+try:
+    from bs4 import BeautifulSoup
+except ImportError:
+    BeautifulSoup = None
+
 
 def load_local_env(env_path: str):
     if not os.path.exists(env_path):
@@ -814,6 +824,184 @@ def parse_decimal_text(value):
 
 def normalize_food_search_text(value: str):
     return re.sub(r"[^a-z0-9]+", " ", (value or "").strip().lower()).strip()
+
+
+CAPNUTRA_BASE_URL = "http://104.155.19.23/capnutra"
+CAPNUTRA_SOURCE_NAME = "CAPNUTRA Serbian FCDB"
+CAPNUTRA_IMPORT_COMPONENTS = {
+    "calories_per_100g": "",
+    "protein_per_100g": "PROT",
+    "carbs_per_100g": "CHO",
+    "fat_per_100g": "FAT",
+}
+
+
+def clean_capnutra_text(value: str):
+    text = (value or "").replace("\xa0", " ")
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def parse_capnutra_food_rows(html: str):
+    if BeautifulSoup is None:
+        raise RuntimeError("beautifulsoup4 is required for CAPNUTRA import.")
+
+    soup = BeautifulSoup(html or "", "html.parser")
+    rows = []
+    for tr in soup.find_all("tr", id=re.compile(r"^basic\d+$")):
+        trigger = tr.find(attrs={"onclick": re.compile(r"detail\(")})
+        if not trigger:
+            trigger = tr.find("a", href=re.compile(r"detail\("))
+        call_text = (trigger.get("onclick") if trigger and trigger.has_attr("onclick") else "") or (
+            trigger.get("href") if trigger and trigger.has_attr("href") else ""
+        )
+        id_match = re.search(r"detail\('\d+'\s*,\s*'(\d+)'\)", call_text)
+        name_node = tr.find("strong")
+        if not id_match or not name_node:
+            continue
+
+        text = clean_capnutra_text(tr.get_text(" "))
+        value_match = re.search(r"\b([0-9]+(?:[.,][0-9]+)?)\s*kcal\b", text, re.I)
+        if not value_match:
+            numeric_cells = [
+                clean_capnutra_text(node.get_text(" "))
+                for node in tr.find_all(["td", "div"])
+                if parse_decimal_text(clean_capnutra_text(node.get_text(" "))) is not None
+            ]
+            value_text = numeric_cells[-1] if numeric_cells else ""
+            value_match = re.search(r"^([0-9]+(?:[.,][0-9]+)?)$", value_text)
+
+        value = parse_decimal_text(value_match.group(1)) if value_match else None
+        rows.append({
+            "source_ref": id_match.group(1),
+            "name": clean_capnutra_text(name_node.get_text(" ")),
+            "value": value,
+        })
+    return rows
+
+
+def parse_capnutra_total_pages(payload: str):
+    parts = payload.split("||")
+    if len(parts) < 3:
+        return 1
+    try:
+        return max(int(parts[2].strip()), 1)
+    except ValueError:
+        return 1
+
+
+def fetch_capnutra_food_page(component: str = "", page: int = 0, itempage: int = 60):
+    params = urlencode({
+        "pageNum": page,
+        "food_gr": "",
+        "food_name": "",
+        "itempage": itempage,
+        "xsort": "",
+        "xcomp": component,
+    })
+    url = f"{CAPNUTRA_BASE_URL}/food.php?{params}"
+    if requests is not None:
+        response = requests.get(url, timeout=20, headers={"User-Agent": "TrainerApp/1.0 (+food-library-import)"})
+        response.raise_for_status()
+        return response.text
+
+    req = Request(
+        url,
+        headers={"User-Agent": "TrainerApp/1.0 (+food-library-import)"},
+    )
+    with urlopen(req, timeout=20) as resp:
+        return resp.read().decode("utf-8", errors="replace")
+
+
+def fetch_capnutra_food_library(progress=None):
+    foods_by_ref = {}
+    total_pages = None
+
+    for field, component in CAPNUTRA_IMPORT_COMPONENTS.items():
+        first_payload = fetch_capnutra_food_page(component=component, page=0)
+        pages = parse_capnutra_total_pages(first_payload)
+        if total_pages is None:
+            total_pages = pages
+
+        for row in parse_capnutra_food_rows(first_payload):
+            foods_by_ref.setdefault(row["source_ref"], {
+                "source_ref": row["source_ref"],
+                "name": row["name"],
+                "brand": CAPNUTRA_SOURCE_NAME,
+                "calories_per_100g": 0.0,
+                "protein_per_100g": 0.0,
+                "carbs_per_100g": 0.0,
+                "fat_per_100g": 0.0,
+            })[field] = row["value"] or 0.0
+
+        for page in range(2, pages + 1):
+            payload = fetch_capnutra_food_page(component=component, page=page)
+            for row in parse_capnutra_food_rows(payload):
+                item = foods_by_ref.setdefault(row["source_ref"], {
+                    "source_ref": row["source_ref"],
+                    "name": row["name"],
+                    "brand": CAPNUTRA_SOURCE_NAME,
+                    "calories_per_100g": 0.0,
+                    "protein_per_100g": 0.0,
+                    "carbs_per_100g": 0.0,
+                    "fat_per_100g": 0.0,
+                })
+                item["name"] = item["name"] or row["name"]
+                item[field] = row["value"] or 0.0
+
+            if progress:
+                progress(field, page, pages, len(foods_by_ref))
+
+    return [
+        item for item in foods_by_ref.values()
+        if item["name"] and item["calories_per_100g"] > 0
+    ]
+
+
+def import_capnutra_foods(food_rows: list[dict] | None = None, prune_missing: bool = False):
+    rows = food_rows if food_rows is not None else fetch_capnutra_food_library()
+    existing = {
+        item.source_ref: item
+        for item in FoodItem.query.filter_by(source="capnutra").all()
+    }
+
+    created = 0
+    updated = 0
+    seen_refs = set()
+    for row in rows:
+        ref = str(row.get("source_ref") or "").strip()
+        name = (row.get("name") or "").strip()
+        calories = float(row.get("calories_per_100g") or 0)
+        if not ref or not name or calories <= 0:
+            continue
+
+        seen_refs.add(ref)
+        food = existing.get(ref)
+        if not food:
+            food = FoodItem(client_id=None, source="capnutra", source_ref=ref)
+            db.session.add(food)
+            created += 1
+        else:
+            updated += 1
+
+        food.client_id = None
+        food.name = name[:120]
+        food.brand = (row.get("brand") or CAPNUTRA_SOURCE_NAME)[:120]
+        food.serving_label = "100g"
+        food.barcode = None
+        food.calories_per_100g = round(calories, 1)
+        food.protein_per_100g = round(float(row.get("protein_per_100g") or 0), 1)
+        food.carbs_per_100g = round(float(row.get("carbs_per_100g") or 0), 1)
+        food.fat_per_100g = round(float(row.get("fat_per_100g") or 0), 1)
+
+    removed = 0
+    if food_rows is None or prune_missing:
+        for ref, food in existing.items():
+            if ref not in seen_refs:
+                db.session.delete(food)
+                removed += 1
+
+    db.session.commit()
+    return {"created": created, "updated": updated, "removed": removed, "total": len(seen_refs)}
 
 
 def extract_nutrient_value(nutrients, names: tuple[str, ...]):
@@ -1776,6 +1964,21 @@ def seed_admin_command():
     """Create default admin user if it doesn't exist."""
     seed_admin()
     click.echo("seed-admin complete")
+
+
+@app.cli.command("import-capnutra")
+def import_capnutra_command():
+    """Import CAPNUTRA Serbian FCDB foods into the shared nutrition library."""
+
+    def progress(field, page, pages, total):
+        click.echo(f"{field}: page {page}/{pages}, collected {total} foods")
+
+    stats = import_capnutra_foods(fetch_capnutra_food_library(progress=progress), prune_missing=True)
+    click.echo(
+        "CAPNUTRA import complete: "
+        f"{stats['created']} created, {stats['updated']} updated, "
+        f"{stats['removed']} removed, {stats['total']} active."
+    )
 
 
 def get_current_plan(client_id: int):

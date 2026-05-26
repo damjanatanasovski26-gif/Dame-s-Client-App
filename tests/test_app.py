@@ -7,7 +7,7 @@ from unittest.mock import Mock, patch
 
 from werkzeug.security import generate_password_hash
 
-from app import app, db, Client, ClientGoal, FoodItem, FoodLogEntry, Measurement, Payment, SessionLog, User, is_probable_nutrition_label, parse_label_text, scan_label_file_text, seed_reference_foods
+from app import app, db, Client, ClientGoal, FoodItem, FoodLogEntry, Measurement, Payment, SessionLog, User, import_capnutra_foods, is_probable_nutrition_label, parse_capnutra_food_rows, parse_capnutra_total_pages, parse_label_text, scan_label_file_text, seed_reference_foods
 
 
 class TrainerAppTests(unittest.TestCase):
@@ -484,6 +484,52 @@ class TrainerAppTests(unittest.TestCase):
 
             self.assertIsNone(FoodItem.query.filter_by(source="seed", source_ref="ajvar").first())
             self.assertIsNotNone(FoodItem.query.filter_by(source="seed", source_ref="chicken-breast-raw").first())
+
+    def test_capnutra_parser_reads_food_rows_and_paging_metadata(self):
+        payload = (
+            """<tr id="basic1" name="basic1"><td><img onclick="javascript:  detail('1','0000250'); "></td>"""
+            """<td><strong>Apple, whole, raw&nbsp;&nbsp;</strong></td>"""
+            """><td align="right">48&nbsp;&nbsp;kcal</td></tr>"""
+            """<tr style="background-color:#FFFF99; " id="nut1"></tr>"""
+            """<tr id="basic2" name="basic2"><td><img onclick="javascript:  detail('2','0000877'); "></td>"""
+            """<td><strong>Cheese, cheddar&nbsp;&nbsp;</strong></td>"""
+            """<td><div align="right">24.9</div></td></tr></table></div> || 1 || 27 ||"""
+        )
+
+        rows = parse_capnutra_food_rows(payload)
+
+        self.assertEqual(parse_capnutra_total_pages(payload), 27)
+        self.assertEqual(rows[0]["source_ref"], "0000250")
+        self.assertEqual(rows[0]["name"], "Apple, whole, raw")
+        self.assertEqual(rows[0]["value"], 48.0)
+        self.assertEqual(rows[1]["value"], 24.9)
+
+    def test_capnutra_import_upserts_shared_foods(self):
+        rows = [{
+            "source_ref": "0000250",
+            "name": "Apple, whole, raw",
+            "brand": "CAPNUTRA Serbian FCDB",
+            "calories_per_100g": 48.3,
+            "protein_per_100g": 0.2,
+            "carbs_per_100g": 10,
+            "fat_per_100g": 0.3,
+        }]
+        with app.app_context():
+            stats = import_capnutra_foods(rows)
+            self.assertEqual(stats["created"], 1)
+            food = FoodItem.query.filter_by(source="capnutra", source_ref="0000250").first()
+            self.assertIsNotNone(food)
+            self.assertIsNone(food.client_id)
+            self.assertEqual(food.name, "Apple, whole, raw")
+            self.assertEqual(food.brand, "CAPNUTRA Serbian FCDB")
+            self.assertEqual(food.serving_label, "100g")
+            self.assertEqual(food.carbs_per_100g, 10)
+
+            rows[0]["calories_per_100g"] = 49
+            stats = import_capnutra_foods(rows)
+            self.assertEqual(stats["updated"], 1)
+            self.assertEqual(FoodItem.query.filter_by(source="capnutra").count(), 1)
+            self.assertEqual(food.calories_per_100g, 49)
 
     def test_food_log_can_match_by_search_name_when_hidden_id_is_missing(self):
         client_id = self._create_client(name="Sara")
