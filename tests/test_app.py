@@ -6,6 +6,7 @@ from io import BytesIO
 from unittest.mock import Mock, patch
 
 from werkzeug.security import generate_password_hash
+from openpyxl import Workbook
 
 from app import app, db, Client, ClientGoal, FoodItem, FoodLogEntry, Measurement, Payment, SessionLog, StrengthLogEntry, User, import_capnutra_foods, is_probable_nutrition_label, parse_capnutra_food_rows, parse_capnutra_total_pages, parse_label_text, scan_label_file_text, seed_reference_foods
 
@@ -846,6 +847,49 @@ class TrainerAppTests(unittest.TestCase):
             self.assertEqual(len(entries), 2)
             self.assertEqual(entries[-1].exercise, "Triceps Pushdown")
             self.assertEqual(entries[-1].weight, 82.0)
+
+    def test_strength_import_accepts_hevy_workbook_named_csv(self):
+        client_id = self._create_client(name="Vlado")
+        self._create_user("admin", "admin123", role="admin")
+        self._login("admin", "admin123")
+
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.title = "in"
+        sheet.append([
+            "title", "start_time", "end_time", "description", "exercise_title",
+            "superset_id", "exercise_notes", "set_index", "set_type",
+            "weight_kg", "reps", "distance_km", "duration_seconds", "rpe",
+        ])
+        sheet.append([
+            "UPPER A", "28 May 2026, 17:31", "28 May 2026, 18:51", None,
+            "Bench Press (Barbell)", None, None, 0, "normal", 85, 6, None, None, None,
+        ])
+        sheet.append([
+            "UPPER A", "28 May 2026, 17:31", "28 May 2026, 18:51", None,
+            "Bench Press (Barbell)", None, None, 1, "normal", 80, 9, None, None, None,
+        ])
+        export_body = BytesIO()
+        workbook.save(export_body)
+        export_body.seek(0)
+
+        resp = self.client.post(
+            f"/client/{client_id}/strength/import",
+            data={"strength_csv": (export_body, "vlado workout.csv")},
+            content_type="multipart/form-data",
+            follow_redirects=True,
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b"Imported 2 strength sets from Hevy", resp.data)
+        self.assertIn(b"Bench Press (Barbell)", resp.data)
+
+        with app.app_context():
+            entries = StrengthLogEntry.query.filter_by(client_id=client_id).order_by(StrengthLogEntry.id.asc()).all()
+            self.assertEqual(len(entries), 2)
+            self.assertEqual(entries[0].source, "hevy")
+            self.assertEqual(entries[0].exercise, "Bench Press (Barbell)")
+            self.assertEqual(entries[0].weight, 85.0)
+            self.assertEqual(entries[0].reps, 6)
 
     def test_strength_poster_png_endpoint_returns_image(self):
         client_id = self._create_client(name="Poster Test")

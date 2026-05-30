@@ -29,6 +29,11 @@ try:
 except ImportError:
     pytesseract = None
 
+try:
+    import openpyxl
+except ImportError:
+    openpyxl = None
+
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
 
 try:
@@ -719,6 +724,26 @@ def parse_iso_datetime(value: str):
     return None
 
 
+def parse_strength_export_datetime(value):
+    if isinstance(value, datetime):
+        return value
+    value = str(value or "").strip()
+    if not value:
+        return None
+    for fmt in (
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%dT%H:%M:%S",
+        "%Y-%m-%d %H:%M",
+        "%d %b %Y, %H:%M",
+        "%d %B %Y, %H:%M",
+    ):
+        try:
+            return datetime.strptime(value, fmt)
+        except Exception:
+            continue
+    return None
+
+
 def normalize_meal_type(value: str | None):
     meal_type = (value or "").strip().lower()
     if meal_type not in MEAL_TYPES:
@@ -849,7 +874,11 @@ def get_accessible_food(client_id: int, food_id: int):
 
 
 def parse_decimal_text(value):
-    cleaned = (value or "").strip().replace(",", ".")
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    cleaned = str(value).strip().replace(",", ".")
     if not cleaned:
         return None
     try:
@@ -2129,50 +2158,129 @@ def render_strength_poster_png(client_name: str, poster: dict):
     return output
 
 
-def import_lyfta_strength_csv(client_id: int, csv_file, source_name: str):
+def normalize_strength_header(value):
+    return str(value or "").strip()
+
+
+def read_strength_csv_rows(uploaded_file):
+    raw = uploaded_file.stream.read()
+    uploaded_file.stream.seek(0)
     try:
-        text_stream = io.TextIOWrapper(csv_file.stream, encoding="utf-8-sig", newline="")
-        reader = csv.DictReader(text_stream)
-        rows = list(reader)
+        text = raw.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        text = raw.decode("latin-1")
+    return list(csv.DictReader(io.StringIO(text)))
+
+
+def read_strength_workbook_rows(uploaded_file):
+    if openpyxl is None:
+        raise ValueError("Excel support is not installed.")
+    uploaded_file.stream.seek(0)
+    workbook = openpyxl.load_workbook(uploaded_file.stream, read_only=True, data_only=True)
+    try:
+        sheet = workbook[workbook.sheetnames[0]]
+        rows = sheet.iter_rows(values_only=True)
+        headers = [normalize_strength_header(value) for value in next(rows, [])]
+        parsed = []
+        for values in rows:
+            parsed.append({
+                headers[index]: value
+                for index, value in enumerate(values)
+                if index < len(headers) and headers[index]
+            })
+        return parsed
     finally:
-        csv_file.stream.seek(0)
+        uploaded_file.stream.seek(0)
+        workbook.close()
 
+
+def strength_upload_is_workbook(uploaded_file, filename: str):
+    extension = os.path.splitext(filename.lower())[1]
+    uploaded_file.stream.seek(0)
+    signature = uploaded_file.stream.read(4)
+    uploaded_file.stream.seek(0)
+    return signature == b"PK\x03\x04" or extension in (".xlsx", ".xlsm", ".xltx", ".xltm")
+
+
+def detect_strength_export_source(rows: list[dict]):
     if not rows:
-        return {"created": 0, "skipped": 0}
+        return None
+    keys = {str(key or "").strip().lower() for key in rows[0].keys()}
+    if {"title", "date", "exercise", "weight", "reps"}.issubset(keys):
+        return "lyfta"
+    if {"title", "start_time", "exercise_title", "weight_kg", "reps"}.issubset(keys):
+        return "hevy"
+    return None
 
-    StrengthLogEntry.query.filter_by(client_id=client_id, source="lyfta").delete()
+
+def get_row_value(row: dict, *keys):
+    lowered = {str(key or "").strip().lower(): value for key, value in row.items()}
+    for key in keys:
+        if key.lower() in lowered:
+            return lowered[key.lower()]
+    return None
+
+
+def import_strength_export(client_id: int, uploaded_file, source_name: str):
+    rows = (
+        read_strength_workbook_rows(uploaded_file)
+        if strength_upload_is_workbook(uploaded_file, source_name)
+        else read_strength_csv_rows(uploaded_file)
+    )
+    if not rows:
+        return {"created": 0, "skipped": 0, "source": "unknown"}
+
+    source = detect_strength_export_source(rows)
+    if source is None:
+        raise ValueError("Unsupported strength export format.")
+
+    StrengthLogEntry.query.filter_by(client_id=client_id).delete()
 
     created = 0
     skipped = 0
     for row in rows:
-        exercise = (row.get("Exercise") or "").strip()
-        logged_at = parse_iso_datetime(row.get("Date") or "")
+        if source == "hevy":
+            exercise = str(get_row_value(row, "exercise_title") or "").strip()
+            logged_at = parse_strength_export_datetime(get_row_value(row, "start_time"))
+            weight = parse_decimal_text(get_row_value(row, "weight_kg"))
+            reps_value = parse_decimal_text(get_row_value(row, "reps"))
+            workout_title = str(get_row_value(row, "title") or "").strip() or None
+            rir_rpe = str(get_row_value(row, "rpe") or "").strip() or None
+            duration = str(get_row_value(row, "duration_seconds") or "").strip() or None
+            set_type = str(get_row_value(row, "set_type") or "").strip() or None
+        else:
+            exercise = str(get_row_value(row, "Exercise") or "").strip()
+            logged_at = parse_strength_export_datetime(get_row_value(row, "Date"))
+            weight = parse_decimal_text(get_row_value(row, "Weight"))
+            reps_value = parse_decimal_text(get_row_value(row, "Reps"))
+            workout_title = str(get_row_value(row, "Title") or "").strip() or None
+            rir_rpe = str(get_row_value(row, "RIR/RPE") or "").strip() or None
+            duration = str(get_row_value(row, "Duration") or "").strip() or None
+            set_type = str(get_row_value(row, "Set Type") or "").strip() or None
+
         if not exercise or not logged_at:
             skipped += 1
             continue
 
-        weight = parse_decimal_text(row.get("Weight") or "")
-        reps_value = parse_decimal_text(row.get("Reps") or "")
         reps = int(reps_value) if reps_value is not None else None
-
         entry = StrengthLogEntry(
             client_id=client_id,
-            source="lyfta",
-            workout_title=((row.get("Title") or "").strip() or None),
+            source=source,
+            workout_title=workout_title,
             logged_at=logged_at,
             exercise=exercise[:160],
             weight=weight,
             reps=reps,
-            rir_rpe=((row.get("RIR/RPE") or "").strip() or None),
-            duration=((row.get("Duration") or "").strip() or None),
-            set_type=((row.get("Set Type") or "").strip() or None),
+            rir_rpe=rir_rpe,
+            duration=duration,
+            set_type=set_type,
             source_file=source_name[:255],
         )
         db.session.add(entry)
         created += 1
 
     db.session.commit()
-    return {"created": created, "skipped": skipped}
+    return {"created": created, "skipped": skipped, "source": source}
 
 
 def serialize_food_log(log: FoodLogEntry):
@@ -3950,20 +4058,19 @@ def import_strength_data(client_id):
     client = get_or_404(Client, client_id)
     csv_file = request.files.get("strength_csv")
     if not csv_file or not csv_file.filename:
-        return redirect(url_for("client_profile", client_id=client.id, tab="strength", err="Choose a Lyfta CSV file first."))
-    if not csv_file.filename.lower().endswith(".csv"):
-        return redirect(url_for("client_profile", client_id=client.id, tab="strength", err="Upload a CSV export from Lyfta."))
+        return redirect(url_for("client_profile", client_id=client.id, tab="strength", err="Choose a strength export file first."))
 
     try:
-        result = import_lyfta_strength_csv(client.id, csv_file, secure_filename(csv_file.filename))
+        result = import_strength_export(client.id, csv_file, secure_filename(csv_file.filename))
     except Exception:
-        return redirect(url_for("client_profile", client_id=client.id, tab="strength", err="Could not import that CSV file."))
+        return redirect(url_for("client_profile", client_id=client.id, tab="strength", err="Could not import that strength export. Use a Lyfta CSV or Hevy Excel/CSV export."))
 
+    source_label = {"lyfta": "Lyfta", "hevy": "Hevy"}.get(result["source"], "strength")
     return redirect(url_for(
         "client_profile",
         client_id=client.id,
         tab="strength",
-        msg=f"Imported {result['created']} strength sets from Lyfta." + (f" Skipped {result['skipped']} rows." if result["skipped"] else ""),
+        msg=f"Imported {result['created']} strength sets from {source_label}." + (f" Skipped {result['skipped']} rows." if result["skipped"] else ""),
     ))
 
 
