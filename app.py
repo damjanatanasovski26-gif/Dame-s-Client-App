@@ -2013,6 +2013,16 @@ def draw_text_fit(draw, text: str, xy, font, fill, max_width: int, max_lines: in
     return y
 
 
+def font_that_fits(text: str, size: int, max_width: int, bold: bool = False, min_size: int = 24):
+    text = str(text)
+    for candidate_size in range(size, min_size - 1, -2):
+        font = poster_font(candidate_size, bold)
+        bbox = ImageDraw.Draw(Image.new("RGB", (1, 1))).textbbox((0, 0), text, font=font)
+        if bbox[2] - bbox[0] <= max_width:
+            return font
+    return poster_font(min_size, bold)
+
+
 def render_strength_poster_png(client_name: str, poster: dict):
     width, height = 1080, 1350
     img = Image.new("RGB", (width, height), "#0a0d12")
@@ -2051,13 +2061,17 @@ def render_strength_poster_png(client_name: str, poster: dict):
 
     date_range = f"{poster['start_date'].strftime('%d %b %Y')} - {poster['end_date'].strftime('%d %b %Y')}"
     draw.text((94, 96), "STRENGTH PROGRESS", fill=teal, font=label_font)
-    draw_text_fit(draw, client_name or "Client", (94, 132), title_font, ink, 700, max_lines=1)
+    client_title = str(client_name or "Client").strip()
+    title_font = font_that_fits(client_title, 62, 620, bold=True, min_size=36)
+    draw.text((94, 132), client_title, fill=ink, font=title_font)
     draw.text((94, 204), date_range, fill=muted, font=body_font)
 
-    badge = (760, 98, 986, 190)
+    badge = (736, 98, 986, 190)
     draw.rounded_rectangle(badge, radius=26, fill=(15, 118, 110, 255))
-    draw.text((790, 118), f"{poster['weeks']} weeks", fill="#ffffff", font=name_font)
-    draw.text((793, 161), "tracked range", fill="#ccfbf1", font=small_font)
+    weeks_label = f"{poster['weeks']} weeks"
+    weeks_font = font_that_fits(weeks_label, 42, 196, bold=True, min_size=30)
+    draw.text((766, 118), weeks_label, fill="#ffffff", font=weeks_font)
+    draw.text((769, 161), "tracked range", fill="#ccfbf1", font=small_font)
 
     summary_y = 260
     summary_w = 288
