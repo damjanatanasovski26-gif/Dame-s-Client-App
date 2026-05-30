@@ -29,7 +29,7 @@ try:
 except ImportError:
     pytesseract = None
 
-from PIL import Image, ImageFilter, ImageOps
+from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
 
 try:
     import requests
@@ -388,6 +388,22 @@ class FoodLogEntry(db.Model):
     created_at = db.Column(db.DateTime, default=utc_now, nullable=False)
 
 
+class StrengthLogEntry(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    client_id = db.Column(db.Integer, db.ForeignKey("client.id"), nullable=False, index=True)
+    source = db.Column(db.String(30), nullable=False, default="lyfta")
+    workout_title = db.Column(db.String(120))
+    logged_at = db.Column(db.DateTime, nullable=False, index=True)
+    exercise = db.Column(db.String(160), nullable=False, index=True)
+    weight = db.Column(db.Float, nullable=True)
+    reps = db.Column(db.Integer, nullable=True)
+    rir_rpe = db.Column(db.String(20))
+    duration = db.Column(db.String(20))
+    set_type = db.Column(db.String(30))
+    source_file = db.Column(db.String(255))
+    created_at = db.Column(db.DateTime, default=utc_now, nullable=False)
+
+
 class Payment(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     client_id = db.Column(db.Integer, db.ForeignKey("client.id"), nullable=False)
@@ -691,6 +707,18 @@ def parse_iso_date(value: str):
         return None
 
 
+def parse_iso_datetime(value: str):
+    value = (value or "").strip()
+    if not value:
+        return None
+    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S"):
+        try:
+            return datetime.strptime(value, fmt)
+        except Exception:
+            continue
+    return None
+
+
 def normalize_meal_type(value: str | None):
     meal_type = (value or "").strip().lower()
     if meal_type not in MEAL_TYPES:
@@ -700,6 +728,14 @@ def normalize_meal_type(value: str | None):
 
 def meal_type_label(meal_type: str):
     return normalize_meal_type(meal_type).title()
+
+
+def estimate_one_rep_max(weight: float | None, reps: int | None):
+    if weight is None or reps is None or reps <= 0:
+        return None
+    if reps == 1:
+        return round(weight, 1)
+    return round(weight * (1 + (reps / 30)), 1)
 
 
 def resolve_tesseract_cmd():
@@ -1777,6 +1813,354 @@ def build_nutrition_summary(logs: list[FoodLogEntry], calorie_target: int | None
     }
 
 
+def build_strength_summary(entries: list[StrengthLogEntry], selected_exercise: str | None):
+    exercises = sorted({entry.exercise.strip() for entry in entries if (entry.exercise or "").strip()})
+    selected = (selected_exercise or "").strip()
+    if selected and selected not in exercises:
+        selected = ""
+    if not selected and exercises:
+        counts = {}
+        for exercise in exercises:
+            counts[exercise] = sum(1 for entry in entries if entry.exercise == exercise)
+        selected = max(exercises, key=lambda exercise: (counts[exercise], exercise.lower()))
+
+    filtered = [entry for entry in entries if entry.exercise == selected] if selected else []
+    grouped = {}
+    for entry in filtered:
+        day = entry.logged_at.date()
+        grouped.setdefault(day, []).append(entry)
+
+    progress_points = []
+    for day in sorted(grouped):
+        usable = [entry for entry in grouped[day] if entry.weight is not None]
+        if not usable:
+            continue
+        top = max(usable, key=lambda entry: ((entry.weight or 0), (entry.reps or 0), entry.id))
+        progress_points.append({
+            "date": day.strftime("%Y-%m-%d"),
+            "weight": round(top.weight or 0, 1),
+            "reps": top.reps or 0,
+            "e1rm": estimate_one_rep_max(top.weight, top.reps),
+        })
+
+    best_weight_entry = None
+    best_volume_entry = None
+    for entry in filtered:
+        if entry.weight is not None and (best_weight_entry is None or (entry.weight, entry.reps or 0) > (best_weight_entry.weight, best_weight_entry.reps or 0)):
+            best_weight_entry = entry
+        if entry.weight is None or entry.reps is None:
+            continue
+        if best_volume_entry is None or ((entry.weight * entry.reps), entry.weight) > ((best_volume_entry.weight * best_volume_entry.reps), best_volume_entry.weight):
+            best_volume_entry = entry
+
+    latest = filtered[-1] if filtered else None
+    return {
+        "exercises": exercises,
+        "selected_exercise": selected,
+        "entries": filtered,
+        "points": progress_points,
+        "total_sets": len(filtered),
+        "workout_count": len({entry.logged_at.date() for entry in filtered}),
+        "best_weight_entry": best_weight_entry,
+        "best_volume_entry": best_volume_entry,
+        "latest_entry": latest,
+    }
+
+
+def parse_strength_date_range(start_raw: str | None, end_raw: str | None, entries: list[StrengthLogEntry]):
+    start_date = parse_iso_date(start_raw)
+    end_date = parse_iso_date(end_raw)
+    if entries:
+        min_day = entries[0].logged_at.date()
+        max_day = entries[-1].logged_at.date()
+    else:
+        min_day = date.today()
+        max_day = date.today()
+
+    if end_date is None:
+        end_date = max_day
+    if start_date is None:
+        start_date = min_day
+    if start_date > end_date:
+        start_date, end_date = end_date, start_date
+    return start_date, end_date
+
+
+def get_latest_weight_on_or_before(points: list[Measurement], day: date):
+    candidates = [point for point in points if point.date.date() <= day and point.weight is not None]
+    return candidates[-1].weight if candidates else None
+
+
+def build_strength_poster_data(
+    entries: list[StrengthLogEntry],
+    weight_points: list[Measurement],
+    start_date: date,
+    end_date: date,
+    manual_lifts: list[str],
+):
+    ranged = [entry for entry in entries if start_date <= entry.logged_at.date() <= end_date and entry.weight is not None]
+    grouped = {}
+    for entry in ranged:
+        grouped.setdefault(entry.exercise, []).append(entry)
+
+    progress_rows = []
+    for exercise, exercise_entries in grouped.items():
+        sorted_entries = sorted(exercise_entries, key=lambda entry: (entry.logged_at, entry.id))
+        weakest_entry = min(
+            sorted_entries,
+            key=lambda entry: (
+                entry.weight if entry.weight is not None else float("inf"),
+                entry.reps if entry.reps is not None else float("inf"),
+                entry.logged_at,
+            ),
+        )
+        strongest_entry = max(
+            sorted_entries,
+            key=lambda entry: (
+                entry.weight if entry.weight is not None else float("-inf"),
+                entry.reps if entry.reps is not None else float("-inf"),
+                entry.logged_at,
+            ),
+        )
+        start_weight = round(weakest_entry.weight or 0, 1)
+        end_weight = round(strongest_entry.weight or 0, 1)
+        delta = round(end_weight - start_weight, 1)
+        pct = round((delta / start_weight) * 100, 1) if start_weight > 0 else 0.0
+        progress_rows.append({
+            "exercise": exercise,
+            "start": start_weight,
+            "end": end_weight,
+            "delta": delta,
+            "pct": pct,
+            "start_reps": weakest_entry.reps or 0,
+            "end_reps": strongest_entry.reps or 0,
+            "start_date": weakest_entry.logged_at.date(),
+            "end_date": strongest_entry.logged_at.date(),
+        })
+
+    selected_rows = []
+    chosen_names = [name.strip() for name in manual_lifts if (name or "").strip()]
+    if chosen_names:
+        by_name = {row["exercise"]: row for row in progress_rows}
+        for name in chosen_names:
+            row = by_name.get(name)
+            if row:
+                selected_rows.append(row)
+        selected_rows = selected_rows[:6]
+    else:
+        selected_rows = sorted(
+            progress_rows,
+            key=lambda row: (row["delta"], row["pct"], row["end"]),
+            reverse=True,
+        )[:6]
+
+    before_weight = weight_points[0].weight if weight_points else None
+    after_weight = weight_points[-1].weight if weight_points else None
+    body_delta = round(after_weight - before_weight, 1) if before_weight is not None and after_weight is not None else None
+    weeks = max(1, ceil(((end_date - start_date).days + 1) / 7))
+
+    return {
+        "start_date": start_date,
+        "end_date": end_date,
+        "weeks": weeks,
+        "before_weight": before_weight,
+        "after_weight": after_weight,
+        "body_delta": body_delta,
+        "rows": selected_rows,
+        "available_exercises": sorted(grouped.keys()),
+    }
+
+
+def poster_font(size: int, bold: bool = False):
+    root = os.path.dirname(os.path.abspath(__file__))
+    candidates = [
+        os.path.join(root, ".venv", "Lib", "site-packages", "reportlab", "fonts", "VeraBd.ttf" if bold else "Vera.ttf"),
+        "C:\\Windows\\Fonts\\arialbd.ttf" if bold else "C:\\Windows\\Fonts\\arial.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf",
+    ]
+    for path in candidates:
+        if path and os.path.exists(path):
+            return ImageFont.truetype(path, size=size)
+    return ImageFont.load_default()
+
+
+def draw_text_fit(draw, text: str, xy, font, fill, max_width: int, max_lines: int = 2, line_gap: int = 6):
+    words = str(text).split()
+    lines = []
+    current = ""
+    for word in words:
+        trial = f"{current} {word}".strip()
+        bbox = draw.textbbox((0, 0), trial, font=font)
+        if bbox[2] - bbox[0] <= max_width or not current:
+            current = trial
+        else:
+            lines.append(current)
+            current = word
+        if len(lines) >= max_lines:
+            break
+    if current and len(lines) < max_lines:
+        lines.append(current)
+    if words and len(lines) == max_lines and " ".join(lines).split() != words:
+        while lines[-1] and draw.textbbox((0, 0), lines[-1] + "...", font=font)[2] > max_width:
+            lines[-1] = lines[-1][:-1].rstrip()
+        lines[-1] = lines[-1] + "..."
+    x, y = xy
+    line_height = draw.textbbox((0, 0), "Ag", font=font)[3] + line_gap
+    for line in lines:
+        draw.text((x, y), line, fill=fill, font=font)
+        y += line_height
+    return y
+
+
+def render_strength_poster_png(client_name: str, poster: dict):
+    width, height = 1080, 1350
+    img = Image.new("RGB", (width, height), "#0a0d12")
+    draw = ImageDraw.Draw(img, "RGBA")
+
+    for y in range(height):
+        ratio = y / height
+        r = int(9 + (22 - 9) * ratio)
+        g = int(14 + (29 - 14) * ratio)
+        b = int(22 + (35 - 22) * ratio)
+        draw.line((0, y, width, y), fill=(r, g, b, 255))
+
+    draw.ellipse((-260, -180, 520, 520), fill=(24, 184, 166, 56))
+    draw.ellipse((650, 80, 1260, 720), fill=(245, 158, 11, 38))
+    draw.ellipse((460, 890, 1220, 1580), fill=(16, 185, 129, 42))
+
+    title_font = poster_font(62, True)
+    name_font = poster_font(42, True)
+    label_font = poster_font(24, True)
+    body_font = poster_font(26)
+    small_font = poster_font(22)
+    number_font = poster_font(40, True)
+    lift_font = poster_font(29, True)
+
+    margin = 58
+    card_x1, card_y1, card_x2, card_y2 = margin, 58, width - margin, height - 58
+    draw.rounded_rectangle((card_x1, card_y1, card_x2, card_y2), radius=34, fill=(246, 248, 244, 242))
+    draw.rounded_rectangle((card_x1 + 2, card_y1 + 2, card_x2 - 2, card_y2 - 2), radius=32, outline=(255, 255, 255, 95), width=2)
+
+    ink = "#111827"
+    muted = "#64748b"
+    green = "#047857"
+    teal = "#0f766e"
+    amber = "#b45309"
+    line = (203, 213, 225, 210)
+
+    date_range = f"{poster['start_date'].strftime('%d %b %Y')} - {poster['end_date'].strftime('%d %b %Y')}"
+    draw.text((94, 96), "STRENGTH PROGRESS", fill=teal, font=label_font)
+    draw_text_fit(draw, client_name or "Client", (94, 132), title_font, ink, 700, max_lines=1)
+    draw.text((94, 204), date_range, fill=muted, font=body_font)
+
+    badge = (760, 98, 986, 190)
+    draw.rounded_rectangle(badge, radius=26, fill=(15, 118, 110, 255))
+    draw.text((790, 118), f"{poster['weeks']} weeks", fill="#ffffff", font=name_font)
+    draw.text((793, 161), "tracked range", fill="#ccfbf1", font=small_font)
+
+    summary_y = 260
+    summary_w = 288
+    summary_gap = 22
+    summary_items = [
+        ("Body start", f"{poster['before_weight']:.1f} kg" if poster["before_weight"] is not None else "-"),
+        ("Body end", f"{poster['after_weight']:.1f} kg" if poster["after_weight"] is not None else "-"),
+        ("Change", f"{poster['body_delta']:+.1f} kg" if poster["body_delta"] is not None else "-"),
+    ]
+    for idx, (label, value) in enumerate(summary_items):
+        x = 94 + idx * (summary_w + summary_gap)
+        draw.rounded_rectangle((x, summary_y, x + summary_w, summary_y + 116), radius=22, fill=(255, 255, 255, 215), outline=line, width=1)
+        draw.text((x + 24, summary_y + 20), label.upper(), fill=muted, font=small_font)
+        color = amber if label == "Change" and str(value).startswith("+") else ink
+        draw.text((x + 24, summary_y + 54), value, fill=color, font=number_font)
+
+    draw.text((94, 430), "TOP LIFT CHANGES", fill=ink, font=name_font)
+    draw.text((94, 478), "Lowest recorded set compared with highest recorded set", fill=muted, font=small_font)
+
+    rows = poster["rows"][:6]
+    y = 528
+    row_h = 100
+    max_delta = max([abs(row["delta"]) for row in rows] or [1])
+    for index, row in enumerate(rows, start=1):
+        draw.rounded_rectangle((94, y, 986, y + row_h), radius=24, fill=(255, 255, 255, 225), outline=line, width=1)
+        draw.rounded_rectangle((118, y + 24, 170, y + 76), radius=16, fill=(15, 118, 110, 255))
+        draw.text((135 if index < 10 else 128, y + 36), str(index), fill="#ffffff", font=label_font)
+
+        draw_text_fit(draw, row["exercise"], (192, y + 20), lift_font, ink, 410, max_lines=1)
+        lift_line = f"{row['start']:.1f}kg x {row['start_reps']}  ->  {row['end']:.1f}kg x {row['end_reps']}"
+        draw.text((192, y + 58), lift_line, fill=muted, font=body_font)
+
+        delta_label = f"{row['delta']:+.1f} kg"
+        pct_label = f"{row['pct']:+.1f}%"
+        draw.text((780, y + 16), delta_label, fill=green if row["delta"] >= 0 else amber, font=number_font)
+        draw.text((786, y + 58), pct_label, fill=muted, font=small_font)
+
+        bar_x, bar_y, bar_w = 594, y + 80, 350
+        draw.rounded_rectangle((bar_x, bar_y, bar_x + bar_w, bar_y + 10), radius=5, fill=(226, 232, 240, 255))
+        fill_w = int(bar_w * min(1, abs(row["delta"]) / max_delta))
+        draw.rounded_rectangle((bar_x, bar_y, bar_x + max(8, fill_w), bar_y + 10), radius=5, fill=(16, 185, 129, 255))
+        y += row_h + 13
+
+    if not rows:
+        draw.rounded_rectangle((94, y, 986, y + 160), radius=24, fill=(255, 255, 255, 225), outline=line, width=1)
+        draw.text((130, y + 58), "No comparable lift data in this range.", fill=amber, font=body_font)
+
+    footer = "Trainer App Progress Card"
+    footer_bbox = draw.textbbox((0, 0), footer, font=small_font)
+    draw.text(((width - (footer_bbox[2] - footer_bbox[0])) / 2, 1248), footer, fill="#64748b", font=small_font)
+
+    output = io.BytesIO()
+    img.save(output, format="PNG")
+    output.seek(0)
+    return output
+
+
+def import_lyfta_strength_csv(client_id: int, csv_file, source_name: str):
+    try:
+        text_stream = io.TextIOWrapper(csv_file.stream, encoding="utf-8-sig", newline="")
+        reader = csv.DictReader(text_stream)
+        rows = list(reader)
+    finally:
+        csv_file.stream.seek(0)
+
+    if not rows:
+        return {"created": 0, "skipped": 0}
+
+    StrengthLogEntry.query.filter_by(client_id=client_id, source="lyfta").delete()
+
+    created = 0
+    skipped = 0
+    for row in rows:
+        exercise = (row.get("Exercise") or "").strip()
+        logged_at = parse_iso_datetime(row.get("Date") or "")
+        if not exercise or not logged_at:
+            skipped += 1
+            continue
+
+        weight = parse_decimal_text(row.get("Weight") or "")
+        reps_value = parse_decimal_text(row.get("Reps") or "")
+        reps = int(reps_value) if reps_value is not None else None
+
+        entry = StrengthLogEntry(
+            client_id=client_id,
+            source="lyfta",
+            workout_title=((row.get("Title") or "").strip() or None),
+            logged_at=logged_at,
+            exercise=exercise[:160],
+            weight=weight,
+            reps=reps,
+            rir_rpe=((row.get("RIR/RPE") or "").strip() or None),
+            duration=((row.get("Duration") or "").strip() or None),
+            set_type=((row.get("Set Type") or "").strip() or None),
+            source_file=source_name[:255],
+        )
+        db.session.add(entry)
+        created += 1
+
+    db.session.commit()
+    return {"created": created, "skipped": skipped}
+
+
 def serialize_food_log(log: FoodLogEntry):
     return {
         "id": log.id,
@@ -2259,11 +2643,15 @@ def client_profile(client_id):
     seed_reference_foods()
     tab = request.args.get("tab", "info")
     nutrition_date = parse_iso_date(request.args.get("nutrition_date")) or date.today()
+    strength_exercise = (request.args.get("strength_exercise") or "").strip()
+    poster_start_raw = None
+    poster_end_raw = None
+    poster_lifts = request.args.getlist("poster_lifts")
     err = request.args.get("err")
     msg = request.args.get("msg")
     viewer = current_user()
     # Keep client navigation on allowed tabs only.
-    if not is_admin() and tab == "payments":
+    if not is_admin() and tab in ("payments", "strength"):
         return redirect(url_for("client_profile", client_id=client.id, tab="info"))
     if not is_admin() and viewer and viewer.must_change_password and tab != "info":
         return redirect(url_for(
@@ -2450,6 +2838,20 @@ def client_profile(client_id):
     nutrition_summary = build_nutrition_summary(food_logs, client.daily_calorie_target)
     nutrition_search_results = get_nutrition_search_results(client.id)
     nutrition_label_draft = get_nutrition_label_draft(client.id)
+    strength_entries = (
+        StrengthLogEntry.query.filter_by(client_id=client.id)
+        .order_by(StrengthLogEntry.logged_at.asc(), StrengthLogEntry.id.asc())
+        .all()
+    )
+    strength_summary = build_strength_summary(strength_entries, strength_exercise)
+    poster_start, poster_end = parse_strength_date_range(poster_start_raw, poster_end_raw, strength_entries)
+    strength_poster = build_strength_poster_data(
+        strength_entries,
+        weight_points_asc,
+        poster_start,
+        poster_end,
+        poster_lifts,
+    )
     if is_admin():
         notes = (
             ClientNote.query.filter_by(client_id=client.id)
@@ -2478,7 +2880,7 @@ def client_profile(client_id):
         "client.html",
         client=client,
         tab=tab,
-        page_class="nutrition-shell" if tab == "nutrition" else "",
+        page_class="nutrition-shell" if tab == "nutrition" else ("strength-shell" if tab == "strength" else ""),
         err=err,
         msg=msg,
         is_admin=is_admin(),
@@ -2526,6 +2928,10 @@ def client_profile(client_id):
         nutrition_label_draft=nutrition_label_draft,
         label_scan_enabled=label_scan_enabled(),
         label_scan_provider=label_scan_provider_label(),
+        strength_summary=strength_summary,
+        strength_poster=strength_poster,
+        strength_poster_selected_lifts=poster_lifts,
+        estimate_one_rep_max=estimate_one_rep_max,
         client_user=client_user,
         client_online_now=client_online_now,
         client_last_seen_display=client_last_seen_display,
@@ -3519,6 +3925,58 @@ def delete_food_log_entry(client_id, log_id):
     db.session.delete(log_entry)
     db.session.commit()
     return nutrition_redirect(client_id, msg="Logged food removed.", logged_for=logged_for)
+
+
+@app.route("/client/<int:client_id>/strength/import", methods=["POST"])
+@login_required
+def import_strength_data(client_id):
+    if not is_admin():
+        return "Forbidden", 403
+
+    client = get_or_404(Client, client_id)
+    csv_file = request.files.get("strength_csv")
+    if not csv_file or not csv_file.filename:
+        return redirect(url_for("client_profile", client_id=client.id, tab="strength", err="Choose a Lyfta CSV file first."))
+    if not csv_file.filename.lower().endswith(".csv"):
+        return redirect(url_for("client_profile", client_id=client.id, tab="strength", err="Upload a CSV export from Lyfta."))
+
+    try:
+        result = import_lyfta_strength_csv(client.id, csv_file, secure_filename(csv_file.filename))
+    except Exception:
+        return redirect(url_for("client_profile", client_id=client.id, tab="strength", err="Could not import that CSV file."))
+
+    return redirect(url_for(
+        "client_profile",
+        client_id=client.id,
+        tab="strength",
+        msg=f"Imported {result['created']} strength sets from Lyfta." + (f" Skipped {result['skipped']} rows." if result["skipped"] else ""),
+    ))
+
+
+@app.route("/client/<int:client_id>/strength/poster.png")
+@login_required
+def strength_poster_png(client_id):
+    if not is_admin():
+        return "Forbidden", 403
+
+    client = get_or_404(Client, client_id)
+    strength_entries = (
+        StrengthLogEntry.query.filter_by(client_id=client.id)
+        .order_by(StrengthLogEntry.logged_at.asc(), StrengthLogEntry.id.asc())
+        .all()
+    )
+    start_date, end_date = parse_strength_date_range(None, None, strength_entries)
+    manual_lifts = request.args.getlist("poster_lifts")
+    weight_points = (
+        Measurement.query.filter_by(client_id=client.id)
+        .filter(Measurement.weight.isnot(None))
+        .order_by(Measurement.date.asc())
+        .all()
+    )
+    poster = build_strength_poster_data(strength_entries, weight_points, start_date, end_date, manual_lifts)
+    image_data = render_strength_poster_png(client.name, poster)
+    filename = f"{secure_filename(client.name or 'client')}_strength_poster.png"
+    return send_file(image_data, mimetype="image/png", as_attachment=True, download_name=filename)
 
 
 @app.route("/client/<int:client_id>/change-password", methods=["POST"], endpoint="change_client_password")

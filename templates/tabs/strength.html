@@ -1,0 +1,243 @@
+<div class="nutrition-app strength-app" id="strengthApp">
+  <section class="nutrition-view is-active">
+    <header class="nutrition-panel-header">
+      <a class="nutrition-round-btn nutrition-back-btn" href="{{ url_for('client_profile', client_id=client.id, tab='info') }}" aria-label="Back to client tabs"></a>
+      <div>
+        <h2>Strength</h2>
+        <span>Progress Poster Builder</span>
+      </div>
+      <button class="nutrition-sort-btn" type="button" id="strengthRefreshBtn">Refresh</button>
+    </header>
+
+    <div class="card">
+      <h3>Import Strength Data</h3>
+      <div class="muted" style="margin-bottom:10px;">Upload Lyfta CSV and replace current imported lift history for this client.</div>
+      <form class="form" action="{{ url_for('import_strength_data', client_id=client.id) }}" method="POST" enctype="multipart/form-data">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input class="input" type="file" name="strength_csv" accept=".csv,text/csv" required>
+        <button class="btn" type="submit">Import CSV</button>
+      </form>
+    </div>
+
+    {% if strength_summary.exercises %}
+      <div class="card">
+        <h3>Poster Settings</h3>
+        <form class="form" action="{{ url_for('strength_poster_png', client_id=client.id) }}" method="GET" id="posterConfigForm">
+          <div class="strength-range-pill">
+            <span>Imported range</span>
+            <b>{{ strength_poster.start_date.strftime("%d/%m/%Y") }} - {{ strength_poster.end_date.strftime("%d/%m/%Y") }}</b>
+          </div>
+
+          <label class="label">Choose up to 6 lifts</label>
+          <div class="nutrition-search-field">
+            <span aria-hidden="true"></span>
+            <input type="search" id="strengthLiftSearch" placeholder="Search for exercise" autocomplete="off">
+          </div>
+
+          <div class="strength-picker-meta">
+            <b id="strengthPickerCount">{{ strength_poster.available_exercises|length }} imported exercises</b>
+            <span id="strengthPickerHint">Showing top progress lifts</span>
+          </div>
+          <div class="strength-search-results" id="strengthSearchResults"></div>
+
+          <div class="poster-lift-chips" id="selectedPosterLifts"></div>
+          <div id="posterLiftHiddenInputs"></div>
+
+          <div class="actions">
+            <button class="btn" type="submit">Download Poster Card</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="stats-grid">
+        <div class="card nutrition-metric-card">
+          <span class="muted">Weeks</span>
+          <div class="nutrition-metric-value">{{ strength_poster.weeks }}</div>
+        </div>
+        <div class="card nutrition-metric-card">
+          <span class="muted">Bodyweight Start</span>
+          <div class="nutrition-metric-value">{% if strength_poster.before_weight is not none %}{{ strength_poster.before_weight }}{% else %}-{% endif %}</div>
+        </div>
+        <div class="card nutrition-metric-card">
+          <span class="muted">Bodyweight End</span>
+          <div class="nutrition-metric-value">{% if strength_poster.after_weight is not none %}{{ strength_poster.after_weight }}{% else %}-{% endif %}</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Lift Comparison (Weakest to Strongest)</h3>
+        {% if strength_poster.rows %}
+          <div class="strength-poster-list">
+            {% for row in strength_poster.rows %}
+              <article class="strength-poster-item">
+                <h4>{{ row.exercise }}</h4>
+                <div class="muted">
+                  Lowest: <b>{{ row.start }} kg x {{ row.start_reps }}</b> ({{ row.start_date.strftime("%d/%m/%Y") }})
+                </div>
+                <div class="muted">
+                  Highest: <b>{{ row.end }} kg x {{ row.end_reps }}</b> ({{ row.end_date.strftime("%d/%m/%Y") }})
+                </div>
+                <div class="strength-poster-change">{{ row.delta|round(1) }} kg ({{ row.pct|round(1) }}%)</div>
+              </article>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="empty-state">No comparable lift data in this date range.</div>
+        {% endif %}
+      </div>
+    {% else %}
+      <div class="card">
+        <h3>Strength Progress</h3>
+        <div class="empty-state">No imported strength data yet. Upload Lyfta CSV first.</div>
+      </div>
+    {% endif %}
+  </section>
+</div>
+
+{% if strength_summary.exercises %}
+<script>
+  (function () {
+    const refreshBtn = document.getElementById("strengthRefreshBtn");
+    if (refreshBtn) {
+      refreshBtn.addEventListener("click", function () {
+        window.location.reload();
+      });
+    }
+
+    const searchInput = document.getElementById("strengthLiftSearch");
+    const resultsWrap = document.getElementById("strengthSearchResults");
+    const chipsWrap = document.getElementById("selectedPosterLifts");
+    const hiddenWrap = document.getElementById("posterLiftHiddenInputs");
+    const pickerHint = document.getElementById("strengthPickerHint");
+    if (!searchInput || !resultsWrap || !chipsWrap || !hiddenWrap) return;
+
+    const allExercises = {{ strength_poster.available_exercises|tojson }};
+    const rankedExercises = {{ strength_poster.rows|map(attribute='exercise')|list|tojson }};
+    const initialSelected = {{ strength_poster_selected_lifts|tojson }};
+    const selected = [];
+
+    function containsIgnoreCase(list, value) {
+      return list.some(function (item) {
+        return item.toLowerCase() === value.toLowerCase();
+      });
+    }
+
+    function syncHidden() {
+      hiddenWrap.innerHTML = "";
+      selected.forEach(function (lift) {
+        const input = document.createElement("input");
+        input.type = "hidden";
+        input.name = "poster_lifts";
+        input.value = lift;
+        hiddenWrap.appendChild(input);
+      });
+    }
+
+    function renderChips() {
+      chipsWrap.innerHTML = "";
+      selected.forEach(function (lift, idx) {
+        const chip = document.createElement("div");
+        chip.className = "poster-lift-chip";
+        const text = document.createElement("span");
+        text.textContent = lift;
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.textContent = "x";
+        remove.addEventListener("click", function () {
+          selected.splice(idx, 1);
+          renderChips();
+          syncHidden();
+          renderResults();
+        });
+        chip.appendChild(text);
+        chip.appendChild(remove);
+        chipsWrap.appendChild(chip);
+      });
+    }
+
+    function addLift(lift) {
+      if (!lift) return;
+      if (!containsIgnoreCase(allExercises, lift)) return;
+      if (containsIgnoreCase(selected, lift)) return;
+      if (selected.length >= 6) return;
+      const canonical = allExercises.find(function (item) {
+        return item.toLowerCase() === lift.toLowerCase();
+      }) || lift;
+      selected.push(canonical);
+      searchInput.value = "";
+      renderChips();
+      syncHidden();
+      renderResults();
+    }
+
+    function renderResults() {
+      const query = (searchInput.value || "").trim().toLowerCase();
+      const source = query ? allExercises : rankedExercises.concat(allExercises);
+      const seen = [];
+      const filtered = source.filter(function (item) {
+        if (containsIgnoreCase(seen, item)) return false;
+        seen.push(item);
+        if (containsIgnoreCase(selected, item)) return false;
+        if (!query) return true;
+        return item.toLowerCase().indexOf(query) !== -1;
+      }).slice(0, query ? 12 : 6);
+
+      if (pickerHint) {
+        pickerHint.textContent = query ? "Matching imported exercises" : "Showing top progress lifts";
+      }
+
+      resultsWrap.innerHTML = "";
+      if (!filtered.length) {
+        const empty = document.createElement("div");
+        empty.className = "empty-state";
+        empty.textContent = query ? "No matching exercise." : "No more exercises available.";
+        resultsWrap.appendChild(empty);
+        return;
+      }
+
+      filtered.forEach(function (item) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "strength-search-item";
+        const name = document.createElement("b");
+        name.textContent = item;
+        const note = document.createElement("span");
+        note.textContent = "Tap to add";
+        button.appendChild(name);
+        button.appendChild(note);
+        button.addEventListener("click", function () {
+          addLift(item);
+        });
+        resultsWrap.appendChild(button);
+      });
+    }
+
+    searchInput.addEventListener("input", renderResults);
+    searchInput.addEventListener("keydown", function (event) {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      const query = (searchInput.value || "").trim();
+      if (!query) return;
+      const exact = allExercises.find(function (item) {
+        return item.toLowerCase() === query.toLowerCase();
+      });
+      if (exact) addLift(exact);
+    });
+
+    initialSelected.forEach(function (item) {
+      if (!item) return;
+      if (selected.length >= 6) return;
+      const exact = allExercises.find(function (exercise) {
+        return exercise.toLowerCase() === item.toLowerCase();
+      });
+      if (exact && !containsIgnoreCase(selected, exact)) {
+        selected.push(exact);
+      }
+    });
+
+    renderChips();
+    syncHidden();
+    renderResults();
+  })();
+</script>
+{% endif %}

@@ -1,11 +1,13 @@
 {% extends "base.html" %}
 {% set title = client.name %}
 {% set is_nutrition_tab = tab == "nutrition" %}
-{% set page_class = "client-shell nutrition-shell" if is_nutrition_tab else "client-shell" %}
+{% set is_strength_tab = tab == "strength" %}
+{% set is_focus_tab = is_nutrition_tab or is_strength_tab %}
+{% set page_class = "client-shell nutrition-shell" if is_nutrition_tab else ("client-shell strength-shell" if is_strength_tab else "client-shell") %}
 
 {% block content %}
 
-{% if not is_nutrition_tab %}
+{% if not is_focus_tab %}
   <div class="topbar">
     <h1>Trainer App</h1>
     <div class="actions">
@@ -97,25 +99,25 @@
   </div>
 {% endif %}
 
-{% if not is_nutrition_tab %}
-  {% if err %}
-    <div class="card alert error">
-      <b style="color:var(--danger);">Error:</b> {{ err }}
-    </div>
-  {% endif %}
+{% if err %}
+  <div class="card alert error">
+    <b style="color:var(--danger);">Error:</b> {{ err }}
+  </div>
+{% endif %}
 
-  {% if msg %}
-    <div class="card alert success">
-      <b style="color:var(--success);">OK:</b> {{ msg }}
-    </div>
-  {% endif %}
+{% if msg %}
+  <div class="card alert success">
+    <b style="color:var(--success);">OK:</b> {{ msg }}
+  </div>
+{% endif %}
 
-  {% if must_change_password and not is_admin %}
-    <div class="card alert error">
-      <b style="color:var(--danger);">Action required:</b> Set a new password in the Info tab before using other tabs.
-    </div>
-  {% endif %}
+{% if must_change_password and not is_admin %}
+  <div class="card alert error">
+    <b style="color:var(--danger);">Action required:</b> Set a new password in the Info tab before using other tabs.
+  </div>
+{% endif %}
 
+{% if not is_focus_tab %}
   <div class="tabs">
     <a class="tab {% if tab=='info' %}active{% endif %}" href="{{ url_for('client_profile', client_id=client.id, tab='info') }}">
        Info
@@ -123,6 +125,11 @@
     <a class="tab {% if tab=='stats' %}active{% endif %}" href="{{ url_for('client_profile', client_id=client.id, tab='stats') }}">
        Stats
     </a>
+    {% if is_admin %}
+      <a class="tab {% if tab=='strength' %}active{% endif %}" href="{{ url_for('client_profile', client_id=client.id, tab='strength') }}">
+         Strength
+      </a>
+    {% endif %}
     <a class="tab {% if tab=='nutrition' %}active{% endif %}" href="{{ url_for('client_profile', client_id=client.id, tab='nutrition') }}">
        Nutrition
     </a>
@@ -138,13 +145,15 @@
   {% include "tabs/info.html" %}
 {% elif tab == "stats" %}
   {% include "tabs/stats.html" %}
+{% elif tab == "strength" and is_admin %}
+  {% include "tabs/strength.html" %}
 {% elif tab == "nutrition" %}
   {% include "tabs/nutrition.html" %}
 {% elif tab == "payments" and is_admin %}
   {% include "tabs/payments.html" %}
 {% endif %}
 
-{% if not is_nutrition_tab %}
+{% if not is_focus_tab %}
 <script>
   (function () {
     const settings = document.querySelector(".account-settings");
@@ -207,7 +216,7 @@
 </div>
 {% endif %}
 
-{% if not is_nutrition_tab and not is_admin and pending_today_appointments %}
+{% if not is_focus_tab and not is_admin and pending_today_appointments %}
 <div id="appointmentModal" class="modal-backdrop show" aria-hidden="false">
   <div class="modal-card">
     <h3 style="margin-bottom:8px;">Appointment Request Today</h3>

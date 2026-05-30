@@ -1,13 +1,13 @@
 import os
 import tempfile
 import unittest
-from datetime import date
+from datetime import date, datetime
 from io import BytesIO
 from unittest.mock import Mock, patch
 
 from werkzeug.security import generate_password_hash
 
-from app import app, db, Client, ClientGoal, FoodItem, FoodLogEntry, Measurement, Payment, SessionLog, User, import_capnutra_foods, is_probable_nutrition_label, parse_capnutra_food_rows, parse_capnutra_total_pages, parse_label_text, scan_label_file_text, seed_reference_foods
+from app import app, db, Client, ClientGoal, FoodItem, FoodLogEntry, Measurement, Payment, SessionLog, StrengthLogEntry, User, import_capnutra_foods, is_probable_nutrition_label, parse_capnutra_food_rows, parse_capnutra_total_pages, parse_label_text, scan_label_file_text, seed_reference_foods
 
 
 class TrainerAppTests(unittest.TestCase):
@@ -78,6 +78,22 @@ class TrainerAppTests(unittest.TestCase):
         location = resp.headers.get("Location", "")
         self.assertIn(f"/client/{client_id}", location)
         self.assertIn("tab=info", location)
+
+    def test_strength_tab_is_admin_only(self):
+        client_id = self._create_client(name="Alice")
+        self._create_user("alice_user", "pass123", role="client", client_id=client_id)
+
+        self._login("alice_user", "pass123")
+        resp = self.client.get(f"/client/{client_id}", follow_redirects=False)
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotIn(b">Strength<", resp.data)
+
+        resp = self.client.get(f"/client/{client_id}?tab=strength", follow_redirects=False)
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn("tab=info", resp.headers.get("Location", ""))
+
+        resp = self.client.get(f"/client/{client_id}/strength/poster.png", follow_redirects=False)
+        self.assertEqual(resp.status_code, 403)
 
     def test_admin_can_create_client_login(self):
         client_id = self._create_client(name="Bob")
@@ -801,6 +817,54 @@ class TrainerAppTests(unittest.TestCase):
         body = request.data.decode("utf-8")
         self.assertIn("DOCUMENT_TEXT_DETECTION", body)
         self.assertIn('"languageHints": ["en", "mk", "sq"]', body)
+
+    def test_strength_csv_import_creates_entries_and_strength_tab_renders(self):
+        client_id = self._create_client(name="Mila")
+        self._create_user("admin", "admin123", role="admin")
+        self._login("admin", "admin123")
+
+        csv_body = (
+            "Title,Date,Duration,Description,Notes,Exercise,Exercise Note,Superset id,Weight,Reps,RIR/RPE,Distance,Time,Set Type\n"
+            "\"Arms\",\"2026-05-21 14:04:01\",\"01:00:00\",,,\"Triceps Pushdown\",,,77.000,10,,,,NORMAL_SET\n"
+            "\"Arms\",\"2026-05-28 14:04:01\",\"01:00:00\",,,\"Triceps Pushdown\",,,82.000,10,,,,NORMAL_SET\n"
+        ).encode("utf-8")
+
+        resp = self.client.post(
+            f"/client/{client_id}/strength/import",
+            data={"strength_csv": (BytesIO(csv_body), "WorkoutData.csv")},
+            content_type="multipart/form-data",
+            follow_redirects=True,
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b"Imported 2 strength sets from Lyfta", resp.data)
+        self.assertIn(b"Progress Poster Builder", resp.data)
+        self.assertIn(b"Triceps Pushdown", resp.data)
+        self.assertIn(b"82.0 kg", resp.data)
+
+        with app.app_context():
+            entries = StrengthLogEntry.query.filter_by(client_id=client_id).order_by(StrengthLogEntry.logged_at.asc()).all()
+            self.assertEqual(len(entries), 2)
+            self.assertEqual(entries[-1].exercise, "Triceps Pushdown")
+            self.assertEqual(entries[-1].weight, 82.0)
+
+    def test_strength_poster_png_endpoint_returns_image(self):
+        client_id = self._create_client(name="Poster Test")
+        self._create_user("admin", "admin123", role="admin")
+        self._login("admin", "admin123")
+
+        with app.app_context():
+            db.session.add(Measurement(client_id=client_id, weight=90.0, date=datetime(2026, 1, 1, 10, 0, 0)))
+            db.session.add(Measurement(client_id=client_id, weight=85.0, date=datetime(2026, 5, 1, 10, 0, 0)))
+            db.session.add(StrengthLogEntry(client_id=client_id, source="lyfta", workout_title="Push", logged_at=datetime(2026, 1, 5, 12, 0, 0), exercise="Triceps Pushdown", weight=70.0, reps=10))
+            db.session.add(StrengthLogEntry(client_id=client_id, source="lyfta", workout_title="Push", logged_at=datetime(2026, 5, 5, 12, 0, 0), exercise="Triceps Pushdown", weight=82.0, reps=10))
+            db.session.commit()
+
+        resp = self.client.get(
+            f"/client/{client_id}/strength/poster.png?strength_start=2026-01-01&strength_end=2026-05-31&poster_lifts=Triceps+Pushdown",
+            follow_redirects=False,
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.mimetype, "image/png")
 
 
 if __name__ == "__main__":
