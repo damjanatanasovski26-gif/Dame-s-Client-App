@@ -1,4 +1,5 @@
 import os
+import shutil
 import tempfile
 import unittest
 from datetime import date, datetime
@@ -8,7 +9,7 @@ from unittest.mock import Mock, patch
 from werkzeug.security import generate_password_hash
 from openpyxl import Workbook
 
-from app import app, db, Client, ClientGoal, FoodItem, FoodLogEntry, Measurement, Payment, SessionLog, StrengthLogEntry, User, import_capnutra_foods, is_probable_nutrition_label, parse_capnutra_food_rows, parse_capnutra_total_pages, parse_label_text, scan_label_file_text, seed_reference_foods
+from app import app, db, Client, ClientGoal, ExerciseImage, FoodItem, FoodLogEntry, Measurement, Payment, SessionLog, StrengthLogEntry, User, import_capnutra_foods, is_probable_nutrition_label, parse_capnutra_food_rows, parse_capnutra_total_pages, parse_label_text, scan_label_file_text, seed_reference_foods
 
 
 class TrainerAppTests(unittest.TestCase):
@@ -909,6 +910,57 @@ class TrainerAppTests(unittest.TestCase):
         )
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.mimetype, "image/png")
+
+    @patch("app.requests.get")
+    def test_fetch_strength_exercise_images_uses_exercisedb_and_caches_file(self, get_mock):
+        client_id = self._create_client(name="Poster Test")
+        self._create_user("admin", "admin123", role="admin")
+        self._login("admin", "admin123")
+        old_key = app.config["RAPIDAPI_KEY"]
+        old_dir = app.config["UPLOAD_EXERCISE_DIR"]
+        temp_dir = tempfile.mkdtemp(prefix="exercise_images_")
+        app.config["RAPIDAPI_KEY"] = "rapid-key"
+        app.config["UPLOAD_EXERCISE_DIR"] = temp_dir
+
+        search_response = Mock()
+        search_response.json.return_value = [{
+            "id": "0001",
+            "name": "bench press",
+            "gifUrl": "https://example.com/bench.gif",
+        }]
+        search_response.raise_for_status = Mock()
+        image_response = Mock()
+        image_response.headers = {"Content-Type": "image/gif"}
+        image_response.content = b"GIF89a"
+        image_response.raise_for_status = Mock()
+        get_mock.side_effect = [search_response, image_response]
+
+        try:
+            with app.app_context():
+                db.session.add(StrengthLogEntry(
+                    client_id=client_id,
+                    source="hevy",
+                    workout_title="Push",
+                    logged_at=datetime(2026, 5, 5, 12, 0, 0),
+                    exercise="Bench Press (Barbell)",
+                    weight=82.0,
+                    reps=10,
+                ))
+                db.session.commit()
+
+            resp = self.client.post(f"/client/{client_id}/strength/fetch-images", follow_redirects=True)
+            self.assertEqual(resp.status_code, 200)
+            self.assertIn(b"Exercise images: 1 matched", resp.data)
+
+            with app.app_context():
+                cached = ExerciseImage.query.filter_by(exercise_name="Bench Press (Barbell)").first()
+                self.assertIsNotNone(cached)
+                self.assertEqual(cached.matched_name, "bench press")
+                self.assertTrue(os.path.exists(os.path.join(temp_dir, cached.local_file)))
+        finally:
+            app.config["RAPIDAPI_KEY"] = old_key
+            app.config["UPLOAD_EXERCISE_DIR"] = old_dir
+            shutil.rmtree(temp_dir, ignore_errors=True)
 
 
 if __name__ == "__main__":

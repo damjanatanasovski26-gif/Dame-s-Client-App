@@ -10,6 +10,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from functools import wraps
 import base64
 import csv
+import hashlib
 import hmac
 import io
 import json
@@ -116,8 +117,14 @@ app.config["UPLOAD_LABEL_DIR"] = os.environ.get(
     "UPLOAD_LABEL_DIR",
     os.path.join(app.root_path, "static", "uploads", "nutrition_labels")
 )
+app.config["UPLOAD_EXERCISE_DIR"] = os.environ.get(
+    "UPLOAD_EXERCISE_DIR",
+    os.path.join(app.root_path, "static", "uploads", "exercise_images")
+)
 app.config["MAX_PHOTO_UPLOAD_BYTES"] = int(os.environ.get("MAX_PHOTO_UPLOAD_BYTES", str(10 * 1024 * 1024)))
 app.config["USDA_API_KEY"] = os.environ.get("USDA_API_KEY", "").strip()
+app.config["RAPIDAPI_KEY"] = os.environ.get("RAPIDAPI_KEY", "").strip()
+app.config["EXERCISEDB_HOST"] = os.environ.get("EXERCISEDB_HOST", "exercisedb.p.rapidapi.com").strip()
 app.config["GOOGLE_VISION_API_KEY"] = os.environ.get("GOOGLE_VISION_API_KEY", "").strip()
 app.config["GOOGLE_VISION_FEATURE_TYPE"] = os.environ.get("GOOGLE_VISION_FEATURE_TYPE", "DOCUMENT_TEXT_DETECTION").strip()
 app.config["GOOGLE_VISION_LANGUAGE_HINTS"] = os.environ.get("GOOGLE_VISION_LANGUAGE_HINTS", "en,mk,sq").strip()
@@ -126,6 +133,7 @@ app.config["TESSERACT_LANGS"] = os.environ.get("TESSERACT_LANGS", "eng+mkd+sqi")
 
 os.makedirs(app.config["UPLOAD_PROGRESS_DIR"], exist_ok=True)
 os.makedirs(app.config["UPLOAD_LABEL_DIR"], exist_ok=True)
+os.makedirs(app.config["UPLOAD_EXERCISE_DIR"], exist_ok=True)
 
 if os.environ.get("TRUST_PROXY", "1").lower() in ("1", "true", "yes", "on"):
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
@@ -407,6 +415,18 @@ class StrengthLogEntry(db.Model):
     set_type = db.Column(db.String(30))
     source_file = db.Column(db.String(255))
     created_at = db.Column(db.DateTime, default=utc_now, nullable=False)
+
+
+class ExerciseImage(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    exercise_name = db.Column(db.String(160), nullable=False, unique=True, index=True)
+    matched_name = db.Column(db.String(160))
+    source = db.Column(db.String(30), nullable=False, default="exercisedb")
+    source_ref = db.Column(db.String(120))
+    image_url = db.Column(db.String(600))
+    local_file = db.Column(db.String(255))
+    created_at = db.Column(db.DateTime, default=utc_now, nullable=False)
+    updated_at = db.Column(db.DateTime, default=utc_now, nullable=False)
 
 
 class Payment(db.Model):
@@ -761,6 +781,27 @@ def estimate_one_rep_max(weight: float | None, reps: int | None):
     if reps == 1:
         return round(weight, 1)
     return round(weight * (1 + (reps / 30)), 1)
+
+
+def normalize_exercise_image_key(name: str):
+    return re.sub(r"\s+", " ", (name or "").strip()).lower()
+
+
+def exercise_search_query(name: str):
+    cleaned = re.sub(r"\([^)]*\)", " ", name or "")
+    cleaned = re.sub(r"[^a-zA-Z0-9 ]+", " ", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip().lower()
+    replacements = {
+        "barbell": "",
+        "dumbbell": "",
+        "lever": "",
+        "cable": "",
+        "machine": "",
+        "weighted": "",
+    }
+    words = [replacements.get(word, word) for word in cleaned.split()]
+    cleaned = " ".join(word for word in words if word).strip()
+    return cleaned or normalize_exercise_image_key(name)
 
 
 def resolve_tesseract_cmd():
@@ -1983,6 +2024,21 @@ def build_strength_poster_data(
             reverse=True,
         )[:6]
 
+    image_matches = {
+        match.exercise_name: match
+        for match in ExerciseImage.query
+        .filter(ExerciseImage.exercise_name.in_([row["exercise"] for row in selected_rows]))
+        .all()
+    } if selected_rows else {}
+    for row in selected_rows:
+        image_match = image_matches.get(row["exercise"])
+        row["image_path"] = None
+        if image_match and image_match.local_file:
+            image_path = os.path.join(app.config["UPLOAD_EXERCISE_DIR"], image_match.local_file)
+            if os.path.exists(image_path):
+                row["image_path"] = image_path
+                row["image_matched_name"] = image_match.matched_name
+
     before_weight = weight_points[0].weight if weight_points else None
     after_weight = weight_points[-1].weight if weight_points else None
     body_delta = round(after_weight - before_weight, 1) if before_weight is not None and after_weight is not None else None
@@ -2050,6 +2106,26 @@ def font_that_fits(text: str, size: int, max_width: int, bold: bool = False, min
         if bbox[2] - bbox[0] <= max_width:
             return font
     return poster_font(min_size, bold)
+
+
+def draw_poster_exercise_image(base_img, draw, image_path: str | None, box, fallback_label: str):
+    if not image_path or not os.path.exists(image_path):
+        return False
+    try:
+        with Image.open(image_path) as exercise_img:
+            try:
+                exercise_img.seek(0)
+            except Exception:
+                pass
+            exercise_img = exercise_img.convert("RGBA")
+            exercise_img.thumbnail((box[2] - box[0], box[3] - box[1]), Image.LANCZOS)
+            x = box[0] + ((box[2] - box[0]) - exercise_img.width) // 2
+            y = box[1] + ((box[3] - box[1]) - exercise_img.height) // 2
+            base_img.paste(exercise_img, (x, y), exercise_img)
+            return True
+    except Exception:
+        draw.text((box[0], box[1] + 28), fallback_label[:2].upper(), fill="#ddff50", font=poster_font(18, True))
+        return False
 
 
 def render_strength_poster_png(client_name: str, poster: dict):
@@ -2139,12 +2215,21 @@ def render_strength_poster_png(client_name: str, poster: dict):
         row_muted = "#586069" if index == 1 else muted
         delta_fill = "#111315" if index == 1 else accent
         bar_base = (17, 19, 21, 60) if index == 1 else (244, 241, 234, 52)
-        draw.text((100, y + 28), f"{index:02d}", fill=delta_fill, font=label_font)
-        draw.line((154, y + 22, 154, y + 74), fill=(17, 19, 21, 45) if index == 1 else line, width=2)
+        image_drawn = draw_poster_exercise_image(
+            img,
+            draw,
+            row.get("image_path"),
+            (94, y + 10, 164, y + 86),
+            row["exercise"],
+        )
+        if not image_drawn:
+            draw.text((100, y + 28), f"{index:02d}", fill=delta_fill, font=label_font)
+        draw.line((178, y + 22, 178, y + 74), fill=(17, 19, 21, 45) if index == 1 else line, width=2)
 
-        draw_text_fit(draw, row["exercise"], (178, y + 18), lift_font, row_ink, 420, max_lines=1)
+        name_font = poster_font(24, True) if image_drawn else lift_font
+        draw_text_fit(draw, row["exercise"], (202, y + 17), name_font, row_ink, 400, max_lines=1)
         lift_line = f"{row['start']:.1f} kg x {row['start_reps']}  ->  {row['end']:.1f} kg x {row['end_reps']}"
-        draw.text((178, y + 56), lift_line, fill=row_muted, font=body_font)
+        draw.text((202, y + 56), lift_line, fill=row_muted, font=body_font)
 
         delta_label = f"{row['delta']:+.1f} kg"
         pct_label = f"{row['pct']:+.1f}%"
@@ -2294,6 +2379,126 @@ def import_strength_export(client_id: int, uploaded_file, source_name: str):
 
     db.session.commit()
     return {"created": created, "skipped": skipped, "source": source}
+
+
+def exercisedb_headers():
+    api_key = app.config.get("RAPIDAPI_KEY", "").strip()
+    host = app.config.get("EXERCISEDB_HOST", "exercisedb.p.rapidapi.com").strip()
+    if not api_key:
+        raise RuntimeError("RAPIDAPI_KEY is not configured.")
+    return {
+        "X-RapidAPI-Key": api_key,
+        "X-RapidAPI-Host": host,
+    }
+
+
+def search_exercisedb_exercise(exercise_name: str):
+    if requests is None:
+        raise RuntimeError("requests is not installed.")
+    host = app.config.get("EXERCISEDB_HOST", "exercisedb.p.rapidapi.com").strip()
+    query = exercise_search_query(exercise_name)
+    url = f"https://{host}/exercises/name/{query}"
+    response = requests.get(url, headers=exercisedb_headers(), timeout=15)
+    response.raise_for_status()
+    results = response.json()
+    if isinstance(results, dict):
+        results = [results]
+    return results if isinstance(results, list) else []
+
+
+def score_exercise_image_match(exercise_name: str, candidate: dict):
+    target_words = set(exercise_search_query(exercise_name).split())
+    candidate_name = str(candidate.get("name") or "")
+    candidate_words = set(exercise_search_query(candidate_name).split())
+    if not target_words or not candidate_words:
+        return 0
+    overlap = len(target_words & candidate_words)
+    return (overlap * 10) - abs(len(candidate_words) - len(target_words))
+
+
+def download_exercise_image(image_url: str, exercise_name: str, source_ref: str | None = None):
+    if requests is None:
+        raise RuntimeError("requests is not installed.")
+    response = requests.get(image_url, timeout=20)
+    response.raise_for_status()
+    content_type = (response.headers.get("Content-Type") or "").lower()
+    extension = ".gif" if "gif" in content_type or image_url.lower().split("?")[0].endswith(".gif") else ".png"
+    digest = hashlib.sha256(f"{exercise_name}|{source_ref or image_url}".encode("utf-8")).hexdigest()[:18]
+    filename = secure_filename(f"{digest}{extension}")
+    path = os.path.join(app.config["UPLOAD_EXERCISE_DIR"], filename)
+    with open(path, "wb") as fh:
+        fh.write(response.content)
+    return filename
+
+
+def fetch_exercise_image_for_name(exercise_name: str, force: bool = False):
+    exercise_name = re.sub(r"\s+", " ", (exercise_name or "").strip())
+    if not exercise_name:
+        return {"matched": False, "reason": "empty"}
+
+    existing = ExerciseImage.query.filter_by(exercise_name=exercise_name).first()
+    if existing and existing.local_file and not force:
+        return {"matched": True, "cached": True, "exercise": exercise_name}
+    if existing and existing.source_ref == "no_match" and not force:
+        return {"matched": False, "cached": True, "exercise": exercise_name}
+
+    results = search_exercisedb_exercise(exercise_name)
+    candidates = [item for item in results if item.get("gifUrl")]
+    if not candidates:
+        if existing is None:
+            existing = ExerciseImage(exercise_name=exercise_name)
+            db.session.add(existing)
+        existing.source = "exercisedb"
+        existing.source_ref = "no_match"
+        existing.matched_name = None
+        existing.image_url = None
+        existing.local_file = None
+        existing.updated_at = utc_now()
+        db.session.flush()
+        return {"matched": False, "exercise": exercise_name}
+
+    best = max(candidates, key=lambda item: score_exercise_image_match(exercise_name, item))
+    image_url = best.get("gifUrl")
+    source_ref = str(best.get("id") or best.get("name") or "")
+    local_file = download_exercise_image(image_url, exercise_name, source_ref)
+
+    if existing is None:
+        existing = ExerciseImage(exercise_name=exercise_name)
+        db.session.add(existing)
+    existing.source = "exercisedb"
+    existing.source_ref = source_ref[:120] if source_ref else None
+    existing.matched_name = str(best.get("name") or exercise_name)[:160]
+    existing.image_url = image_url[:600]
+    existing.local_file = local_file
+    existing.updated_at = utc_now()
+    db.session.flush()
+    return {"matched": True, "exercise": exercise_name, "matched_name": existing.matched_name}
+
+
+def fetch_exercise_images_for_client(client_id: int, limit: int = 40, force: bool = False):
+    exercises = [
+        exercise
+        for exercise, _count in db.session.query(StrengthLogEntry.exercise, func.count(StrengthLogEntry.id))
+        .filter(StrengthLogEntry.client_id == client_id)
+        .group_by(StrengthLogEntry.exercise)
+        .order_by(func.count(StrengthLogEntry.id).desc(), StrengthLogEntry.exercise.asc())
+        .limit(limit)
+        .all()
+    ]
+    result = {"matched": 0, "skipped": 0, "failed": 0, "total": len(exercises)}
+    for exercise in exercises:
+        try:
+            match = fetch_exercise_image_for_name(exercise, force=force)
+            if match.get("matched"):
+                result["matched"] += 1
+            else:
+                result["skipped"] += 1
+        except Exception:
+            db.session.rollback()
+            result["failed"] += 1
+        else:
+            db.session.commit()
+    return result
 
 
 def serialize_food_log(log: FoodLogEntry):
@@ -4084,6 +4289,39 @@ def import_strength_data(client_id):
         client_id=client.id,
         tab="strength",
         msg=f"Imported {result['created']} strength sets from {source_label}." + (f" Skipped {result['skipped']} rows." if result["skipped"] else ""),
+    ))
+
+
+@app.route("/client/<int:client_id>/strength/fetch-images", methods=["POST"])
+@login_required
+def fetch_strength_exercise_images(client_id):
+    if not is_admin():
+        return "Forbidden", 403
+
+    client = get_or_404(Client, client_id)
+    if not app.config.get("RAPIDAPI_KEY", "").strip():
+        return redirect(url_for(
+            "client_profile",
+            client_id=client.id,
+            tab="strength",
+            err="RAPIDAPI_KEY is not configured. Add it locally and in Railway variables first.",
+        ))
+
+    try:
+        result = fetch_exercise_images_for_client(client.id)
+    except Exception:
+        return redirect(url_for(
+            "client_profile",
+            client_id=client.id,
+            tab="strength",
+            err="Could not fetch ExerciseDB images right now.",
+        ))
+
+    return redirect(url_for(
+        "client_profile",
+        client_id=client.id,
+        tab="strength",
+        msg=f"Exercise images: {result['matched']} matched, {result['skipped']} unavailable, {result['failed']} failed.",
     ))
 
 
