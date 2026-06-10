@@ -2054,103 +2054,116 @@ def font_that_fits(text: str, size: int, max_width: int, bold: bool = False, min
 
 def render_strength_poster_png(client_name: str, poster: dict):
     width, height = 1080, 1350
-    img = Image.new("RGB", (width, height), "#0a0d12")
+    img = Image.new("RGB", (width, height), "#111315")
     draw = ImageDraw.Draw(img, "RGBA")
+
+    def text_width(text, font):
+        bbox = draw.textbbox((0, 0), str(text), font=font)
+        return bbox[2] - bbox[0]
+
+    def right_text(x_right, y, text, font, fill):
+        draw.text((x_right - text_width(text, font), y), text, fill=fill, font=font)
 
     for y in range(height):
         ratio = y / height
-        r = int(9 + (22 - 9) * ratio)
-        g = int(14 + (29 - 14) * ratio)
-        b = int(22 + (35 - 22) * ratio)
+        r = int(15 + (23 - 15) * ratio)
+        g = int(17 + (23 - 17) * ratio)
+        b = int(18 + (20 - 18) * ratio)
         draw.line((0, y, width, y), fill=(r, g, b, 255))
 
-    draw.ellipse((-260, -180, 520, 520), fill=(24, 184, 166, 56))
-    draw.ellipse((650, 80, 1260, 720), fill=(245, 158, 11, 38))
-    draw.ellipse((460, 890, 1220, 1580), fill=(16, 185, 129, 42))
+    for x in range(72, width, 72):
+        draw.line((x, 0, x, height), fill=(255, 255, 255, 10), width=1)
+    for y in range(80, height, 80):
+        draw.line((0, y, width, y), fill=(255, 255, 255, 8), width=1)
 
-    title_font = poster_font(62, True)
-    name_font = poster_font(42, True)
-    label_font = poster_font(24, True)
-    body_font = poster_font(26)
-    small_font = poster_font(22)
-    number_font = poster_font(40, True)
-    lift_font = poster_font(29, True)
+    draw.rectangle((0, 0, 18, height), fill=(221, 255, 80, 255))
+    draw.polygon([(720, 0), (1080, 0), (1080, 520), (860, 420)], fill=(221, 255, 80, 22))
+    draw.polygon([(0, 980), (430, 1350), (0, 1350)], fill=(221, 255, 80, 16))
 
-    margin = 58
-    card_x1, card_y1, card_x2, card_y2 = margin, 58, width - margin, height - 58
-    draw.rounded_rectangle((card_x1, card_y1, card_x2, card_y2), radius=34, fill=(246, 248, 244, 242))
-    draw.rounded_rectangle((card_x1 + 2, card_y1 + 2, card_x2 - 2, card_y2 - 2), radius=32, outline=(255, 255, 255, 95), width=2)
+    title_font = poster_font(78, True)
+    title_small_font = poster_font(56, True)
+    section_font = poster_font(34, True)
+    label_font = poster_font(18, True)
+    body_font = poster_font(25)
+    small_font = poster_font(20)
+    tiny_font = poster_font(16, True)
+    number_font = poster_font(48, True)
+    lift_font = poster_font(30, True)
+    delta_font = poster_font(44, True)
 
-    ink = "#111827"
-    muted = "#64748b"
-    green = "#047857"
-    teal = "#0f766e"
-    amber = "#b45309"
-    line = (203, 213, 225, 210)
+    ink = "#f4f1ea"
+    muted = "#a8adb2"
+    soft = "#d4d8da"
+    accent = "#ddff50"
+    panel = (244, 241, 234, 242)
+    panel_dark = (26, 29, 31, 235)
+    line = (244, 241, 234, 46)
 
     date_range = f"{poster['start_date'].strftime('%d %b %Y')} - {poster['end_date'].strftime('%d %b %Y')}"
-    draw.text((94, 96), "STRENGTH PROGRESS", fill=teal, font=label_font)
+    draw.text((74, 76), "STRENGTH PROGRESS REPORT", fill=accent, font=label_font)
     client_title = str(client_name or "Client").strip()
-    title_font = font_that_fits(client_title, 62, 620, bold=True, min_size=36)
-    draw.text((94, 132), client_title, fill=ink, font=title_font)
-    draw.text((94, 204), date_range, fill=muted, font=body_font)
+    fitted_title = font_that_fits(client_title, 78, 640, bold=True, min_size=42)
+    draw.text((72, 112), client_title, fill=ink, font=fitted_title)
+    draw.text((76, 204), date_range, fill=muted, font=body_font)
+    draw.line((74, 246, 1006, 246), fill=line, width=2)
 
-    badge = (736, 98, 986, 190)
-    draw.rounded_rectangle(badge, radius=26, fill=(15, 118, 110, 255))
     weeks_label = f"{poster['weeks']} weeks"
-    weeks_font = font_that_fits(weeks_label, 42, 196, bold=True, min_size=30)
-    draw.text((766, 118), weeks_label, fill="#ffffff", font=weeks_font)
-    draw.text((769, 161), "tracked range", fill="#ccfbf1", font=small_font)
+    weeks_font = font_that_fits(weeks_label, 52, 240, bold=True, min_size=34)
+    right_text(1008, 84, weeks_label, weeks_font, accent)
+    right_text(1008, 142, "tracked range", small_font, muted)
 
-    summary_y = 260
-    summary_w = 288
-    summary_gap = 22
+    summary_y = 286
     summary_items = [
-        ("Body start", f"{poster['before_weight']:.1f} kg" if poster["before_weight"] is not None else "-"),
-        ("Body end", f"{poster['after_weight']:.1f} kg" if poster["after_weight"] is not None else "-"),
-        ("Change", f"{poster['body_delta']:+.1f} kg" if poster["body_delta"] is not None else "-"),
+        ("BODY START", f"{poster['before_weight']:.1f} kg" if poster["before_weight"] is not None else "-"),
+        ("BODY END", f"{poster['after_weight']:.1f} kg" if poster["after_weight"] is not None else "-"),
+        ("CHANGE", f"{poster['body_delta']:+.1f} kg" if poster["body_delta"] is not None else "-"),
     ]
+    summary_cols = [(74, 300), (390, 616), (706, 1006)]
     for idx, (label, value) in enumerate(summary_items):
-        x = 94 + idx * (summary_w + summary_gap)
-        draw.rounded_rectangle((x, summary_y, x + summary_w, summary_y + 116), radius=22, fill=(255, 255, 255, 215), outline=line, width=1)
-        draw.text((x + 24, summary_y + 20), label.upper(), fill=muted, font=small_font)
-        color = amber if label == "Change" and str(value).startswith("+") else ink
-        draw.text((x + 24, summary_y + 54), value, fill=color, font=number_font)
+        x1, x2 = summary_cols[idx]
+        draw.line((x1, summary_y, x2, summary_y), fill=line, width=2)
+        draw.text((x1, summary_y + 18), label, fill=muted, font=tiny_font)
+        value_font = font_that_fits(value, 48, x2 - x1 - 4, bold=True, min_size=30)
+        draw.text((x1, summary_y + 48), value, fill=ink if label != "CHANGE" else accent, font=value_font)
 
-    draw.text((94, 430), "TOP LIFT CHANGES", fill=ink, font=name_font)
-    draw.text((94, 478), "Lowest recorded set compared with highest recorded set", fill=muted, font=small_font)
+    draw.text((74, 430), "TOP LIFT CHANGES", fill=ink, font=title_small_font)
+    draw.text((76, 492), "Lowest recorded set  /  highest recorded set", fill=muted, font=small_font)
 
     rows = poster["rows"][:6]
-    y = 528
-    row_h = 100
+    y = 550
+    row_h = 96
     max_delta = max([abs(row["delta"]) for row in rows] or [1])
     for index, row in enumerate(rows, start=1):
-        draw.rounded_rectangle((94, y, 986, y + row_h), radius=24, fill=(255, 255, 255, 225), outline=line, width=1)
-        draw.rounded_rectangle((118, y + 24, 170, y + 76), radius=16, fill=(15, 118, 110, 255))
-        draw.text((135 if index < 10 else 128, y + 36), str(index), fill="#ffffff", font=label_font)
+        draw.rounded_rectangle((74, y, 1006, y + row_h), radius=8, fill=panel if index == 1 else panel_dark)
+        row_ink = "#111315" if index == 1 else ink
+        row_muted = "#586069" if index == 1 else muted
+        delta_fill = "#111315" if index == 1 else accent
+        bar_base = (17, 19, 21, 60) if index == 1 else (244, 241, 234, 52)
+        draw.text((100, y + 28), f"{index:02d}", fill=delta_fill, font=label_font)
+        draw.line((154, y + 22, 154, y + 74), fill=(17, 19, 21, 45) if index == 1 else line, width=2)
 
-        draw_text_fit(draw, row["exercise"], (192, y + 20), lift_font, ink, 410, max_lines=1)
-        lift_line = f"{row['start']:.1f}kg x {row['start_reps']}  ->  {row['end']:.1f}kg x {row['end_reps']}"
-        draw.text((192, y + 58), lift_line, fill=muted, font=body_font)
+        draw_text_fit(draw, row["exercise"], (178, y + 18), lift_font, row_ink, 420, max_lines=1)
+        lift_line = f"{row['start']:.1f} kg x {row['start_reps']}  ->  {row['end']:.1f} kg x {row['end_reps']}"
+        draw.text((178, y + 56), lift_line, fill=row_muted, font=body_font)
 
         delta_label = f"{row['delta']:+.1f} kg"
         pct_label = f"{row['pct']:+.1f}%"
-        draw.text((780, y + 16), delta_label, fill=green if row["delta"] >= 0 else amber, font=number_font)
-        draw.text((786, y + 58), pct_label, fill=muted, font=small_font)
+        right_text(970, y + 14, delta_label, delta_font, delta_fill)
+        right_text(970, y + 58, pct_label, small_font, row_muted)
 
-        bar_x, bar_y, bar_w = 594, y + 80, 350
-        draw.rounded_rectangle((bar_x, bar_y, bar_x + bar_w, bar_y + 10), radius=5, fill=(226, 232, 240, 255))
+        bar_x, bar_y, bar_w = 628, y + 82, 342
+        draw.rounded_rectangle((bar_x, bar_y, bar_x + bar_w, bar_y + 8), radius=4, fill=bar_base)
         fill_w = int(bar_w * min(1, abs(row["delta"]) / max_delta))
-        draw.rounded_rectangle((bar_x, bar_y, bar_x + max(8, fill_w), bar_y + 10), radius=5, fill=(16, 185, 129, 255))
-        y += row_h + 13
+        draw.rounded_rectangle((bar_x, bar_y, bar_x + max(8, fill_w), bar_y + 8), radius=4, fill=(221, 255, 80, 255))
+        y += row_h + 12
 
     if not rows:
-        draw.rounded_rectangle((94, y, 986, y + 160), radius=24, fill=(255, 255, 255, 225), outline=line, width=1)
-        draw.text((130, y + 58), "No comparable lift data in this range.", fill=amber, font=body_font)
+        draw.rounded_rectangle((74, y, 1006, y + 150), radius=8, fill=panel_dark)
+        draw.text((110, y + 56), "No comparable lift data in this range.", fill=accent, font=body_font)
 
-    footer = "Trainer App Progress Card"
-    footer_bbox = draw.textbbox((0, 0), footer, font=small_font)
-    draw.text(((width - (footer_bbox[2] - footer_bbox[0])) / 2, 1248), footer, fill="#64748b", font=small_font)
+    draw.line((74, 1230, 1006, 1230), fill=line, width=2)
+    draw.text((74, 1252), "TRAINER APP", fill=muted, font=tiny_font)
+    right_text(1006, 1252, "PROGRESS CARD", tiny_font, muted)
 
     output = io.BytesIO()
     img.save(output, format="PNG")
