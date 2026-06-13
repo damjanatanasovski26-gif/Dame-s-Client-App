@@ -2132,7 +2132,6 @@ def render_strength_poster_png(client_name: str, poster: dict):
         lift_title_y = 300
 
     draw.text((74, lift_title_y), "LIFT CHANGES", fill=ink, font=section_font)
-    draw.text((78, lift_title_y + 54), "Before set to after set", fill=muted, font=small_font)
 
     rows = poster["rows"][:6]
     y = lift_title_y + 104
