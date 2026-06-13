@@ -2099,8 +2099,6 @@ def render_strength_poster_png(client_name: str, poster: dict):
     line = (244, 241, 234, 46)
     panel_dark = (24, 28, 30, 238)
     panel_lift = (29, 34, 36, 246)
-    panel_top = (32, 38, 40, 250)
-    top_outline = (221, 255, 80, 82)
     date_range = f"{poster['start_date'].strftime('%d %b %Y')} - {poster['end_date'].strftime('%d %b %Y')}"
     client_title = str(client_name or "Client").strip()
     fitted_title = font_that_fits(client_title, 82, 660, bold=True, min_size=42)
@@ -2137,17 +2135,13 @@ def render_strength_poster_png(client_name: str, poster: dict):
     y = lift_title_y + 104
     row_h = 112
     for index, row in enumerate(rows, start=1):
-        is_top = index == 1
-        row_fill = panel_top if is_top else (panel_lift if index % 2 else panel_dark)
-        row_outline = top_outline if is_top else (255, 255, 255, 10)
+        row_fill = panel_lift if index % 2 else panel_dark
+        row_outline = (255, 255, 255, 10)
         rounded_box((74, y, 1006, y + row_h), row_fill, row_outline, radius=8, width=1)
         row_ink = ink
         row_muted = muted
         row_soft = soft
         delta_fill = accent
-
-        if is_top:
-            draw.rounded_rectangle((74, y, 82, y + row_h), radius=4, fill=(221, 255, 80, 255))
 
         draw.text((100, y + 30), f"{index:02d}", fill=accent, font=label_font)
         draw.line((178, y + 22, 178, y + row_h - 22), fill=line, width=2)
