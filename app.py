@@ -2068,13 +2068,6 @@ def render_strength_poster_png(client_name: str, poster: dict):
     def rounded_box(box, fill, outline=None, radius=8, width=1):
         draw.rounded_rectangle(box, radius=radius, fill=fill, outline=outline, width=width)
 
-    def draw_compare_chip(box, label, value, *, fill, outline, label_fill, value_fill):
-        rounded_box(box, fill, outline, radius=8)
-        x1, y1, x2, _y2 = box
-        draw.text((x1 + 12, y1 + 6), label, fill=label_fill, font=tiny_font)
-        value_font = font_that_fits(value, 20, x2 - x1 - 24, bold=True, min_size=16)
-        draw.text((x1 + 12, y1 + 22), value, fill=value_fill, font=value_font)
-
     for y in range(height):
         ratio = y / height
         r = int(15 + (22 - 15) * ratio)
@@ -2108,9 +2101,6 @@ def render_strength_poster_png(client_name: str, poster: dict):
     faint_line = (244, 241, 234, 24)
     panel_dark = (25, 29, 31, 236)
     panel_light = (244, 241, 234, 245)
-    chip_dark = (244, 241, 234, 20)
-    chip_light = (17, 19, 21, 22)
-
     date_range = f"{poster['start_date'].strftime('%d %b %Y')} - {poster['end_date'].strftime('%d %b %Y')}"
     client_title = str(client_name or "Client").strip()
     fitted_title = font_that_fits(client_title, 82, 660, bold=True, min_size=42)
@@ -2163,29 +2153,17 @@ def render_strength_poster_png(client_name: str, poster: dict):
 
         start_label = f"{row['start']:.1f} kg x {row['start_reps']}"
         end_label = f"{row['end']:.1f} kg x {row['end_reps']}"
-        chip_fill = chip_light if is_top else chip_dark
-        chip_outline = (17, 19, 21, 34) if is_top else faint_line
-        draw_compare_chip(
-            (202, y + 54, 394, y + 96),
-            "BEFORE",
-            start_label,
-            fill=chip_fill,
-            outline=chip_outline,
-            label_fill=row_soft,
-            value_fill=row_muted,
-        )
-        arrow_fill = (17, 19, 21, 72) if is_top else (221, 255, 80, 135)
-        draw.line((405, y + 75, 423, y + 75), fill=arrow_fill, width=3)
-        draw.polygon([(423, y + 75), (415, y + 69), (415, y + 81)], fill=arrow_fill)
-        draw_compare_chip(
-            (436, y + 54, 628, y + 96),
-            "AFTER",
-            end_label,
-            fill=chip_fill,
-            outline=chip_outline,
-            label_fill=accent if not is_top else row_soft,
-            value_fill=row_ink,
-        )
+        draw.text((202, y + 58), "BEFORE", fill=row_soft, font=tiny_font)
+        start_font = font_that_fits(start_label, 23, 166, bold=True, min_size=18)
+        draw.text((202, y + 76), start_label, fill=row_muted, font=start_font)
+
+        arrow_fill = (17, 19, 21, 70) if is_top else (221, 255, 80, 145)
+        draw.line((390, y + 82, 426, y + 82), fill=arrow_fill, width=3)
+        draw.polygon([(426, y + 82), (417, y + 75), (417, y + 89)], fill=arrow_fill)
+
+        draw.text((450, y + 58), "AFTER", fill=accent if not is_top else row_soft, font=tiny_font)
+        end_font = font_that_fits(end_label, 23, 178, bold=True, min_size=18)
+        draw.text((450, y + 76), end_label, fill=row_ink, font=end_font)
 
         delta_label = f"{row['delta']:+.1f} kg"
         pct_label = f"{row['pct']:+.1f}%"
