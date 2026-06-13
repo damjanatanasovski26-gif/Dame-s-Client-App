@@ -117,14 +117,8 @@ app.config["UPLOAD_LABEL_DIR"] = os.environ.get(
     "UPLOAD_LABEL_DIR",
     os.path.join(app.root_path, "static", "uploads", "nutrition_labels")
 )
-app.config["UPLOAD_EXERCISE_DIR"] = os.environ.get(
-    "UPLOAD_EXERCISE_DIR",
-    os.path.join(app.root_path, "static", "uploads", "exercise_images")
-)
 app.config["MAX_PHOTO_UPLOAD_BYTES"] = int(os.environ.get("MAX_PHOTO_UPLOAD_BYTES", str(10 * 1024 * 1024)))
 app.config["USDA_API_KEY"] = os.environ.get("USDA_API_KEY", "").strip()
-app.config["RAPIDAPI_KEY"] = os.environ.get("RAPIDAPI_KEY", "").strip()
-app.config["EXERCISEDB_HOST"] = os.environ.get("EXERCISEDB_HOST", "exercisedb.p.rapidapi.com").strip()
 app.config["GOOGLE_VISION_API_KEY"] = os.environ.get("GOOGLE_VISION_API_KEY", "").strip()
 app.config["GOOGLE_VISION_FEATURE_TYPE"] = os.environ.get("GOOGLE_VISION_FEATURE_TYPE", "DOCUMENT_TEXT_DETECTION").strip()
 app.config["GOOGLE_VISION_LANGUAGE_HINTS"] = os.environ.get("GOOGLE_VISION_LANGUAGE_HINTS", "en,mk,sq").strip()
@@ -133,7 +127,6 @@ app.config["TESSERACT_LANGS"] = os.environ.get("TESSERACT_LANGS", "eng+mkd+sqi")
 
 os.makedirs(app.config["UPLOAD_PROGRESS_DIR"], exist_ok=True)
 os.makedirs(app.config["UPLOAD_LABEL_DIR"], exist_ok=True)
-os.makedirs(app.config["UPLOAD_EXERCISE_DIR"], exist_ok=True)
 
 if os.environ.get("TRUST_PROXY", "1").lower() in ("1", "true", "yes", "on"):
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
@@ -415,18 +408,6 @@ class StrengthLogEntry(db.Model):
     set_type = db.Column(db.String(30))
     source_file = db.Column(db.String(255))
     created_at = db.Column(db.DateTime, default=utc_now, nullable=False)
-
-
-class ExerciseImage(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    exercise_name = db.Column(db.String(160), nullable=False, unique=True, index=True)
-    matched_name = db.Column(db.String(160))
-    source = db.Column(db.String(30), nullable=False, default="exercisedb")
-    source_ref = db.Column(db.String(120))
-    image_url = db.Column(db.String(600))
-    local_file = db.Column(db.String(255))
-    created_at = db.Column(db.DateTime, default=utc_now, nullable=False)
-    updated_at = db.Column(db.DateTime, default=utc_now, nullable=False)
 
 
 class Payment(db.Model):
@@ -781,27 +762,6 @@ def estimate_one_rep_max(weight: float | None, reps: int | None):
     if reps == 1:
         return round(weight, 1)
     return round(weight * (1 + (reps / 30)), 1)
-
-
-def normalize_exercise_image_key(name: str):
-    return re.sub(r"\s+", " ", (name or "").strip()).lower()
-
-
-def exercise_search_query(name: str):
-    cleaned = re.sub(r"\([^)]*\)", " ", name or "")
-    cleaned = re.sub(r"[^a-zA-Z0-9 ]+", " ", cleaned)
-    cleaned = re.sub(r"\s+", " ", cleaned).strip().lower()
-    replacements = {
-        "barbell": "",
-        "dumbbell": "",
-        "lever": "",
-        "cable": "",
-        "machine": "",
-        "weighted": "",
-    }
-    words = [replacements.get(word, word) for word in cleaned.split()]
-    cleaned = " ".join(word for word in words if word).strip()
-    return cleaned or normalize_exercise_image_key(name)
 
 
 def resolve_tesseract_cmd():
@@ -2024,21 +1984,6 @@ def build_strength_poster_data(
             reverse=True,
         )[:6]
 
-    image_matches = {
-        match.exercise_name: match
-        for match in ExerciseImage.query
-        .filter(ExerciseImage.exercise_name.in_([row["exercise"] for row in selected_rows]))
-        .all()
-    } if selected_rows else {}
-    for row in selected_rows:
-        image_match = image_matches.get(row["exercise"])
-        row["image_path"] = None
-        if image_match and image_match.local_file:
-            image_path = os.path.join(app.config["UPLOAD_EXERCISE_DIR"], image_match.local_file)
-            if os.path.exists(image_path):
-                row["image_path"] = image_path
-                row["image_matched_name"] = image_match.matched_name
-
     before_weight = weight_points[0].weight if weight_points else None
     after_weight = weight_points[-1].weight if weight_points else None
     body_delta = round(after_weight - before_weight, 1) if before_weight is not None and after_weight is not None else None
@@ -2108,29 +2053,9 @@ def font_that_fits(text: str, size: int, max_width: int, bold: bool = False, min
     return poster_font(min_size, bold)
 
 
-def draw_poster_exercise_image(base_img, draw, image_path: str | None, box, fallback_label: str):
-    if not image_path or not os.path.exists(image_path):
-        return False
-    try:
-        with Image.open(image_path) as exercise_img:
-            try:
-                exercise_img.seek(0)
-            except Exception:
-                pass
-            exercise_img = exercise_img.convert("RGBA")
-            exercise_img.thumbnail((box[2] - box[0], box[3] - box[1]), Image.LANCZOS)
-            x = box[0] + ((box[2] - box[0]) - exercise_img.width) // 2
-            y = box[1] + ((box[3] - box[1]) - exercise_img.height) // 2
-            base_img.paste(exercise_img, (x, y), exercise_img)
-            return True
-    except Exception:
-        draw.text((box[0], box[1] + 28), fallback_label[:2].upper(), fill="#ddff50", font=poster_font(18, True))
-        return False
-
-
 def render_strength_poster_png(client_name: str, poster: dict):
     width, height = 1080, 1350
-    img = Image.new("RGB", (width, height), "#111315")
+    img = Image.new("RGB", (width, height), "#f6f2ea")
     draw = ImageDraw.Draw(img, "RGBA")
 
     def text_width(text, font):
@@ -2140,115 +2065,101 @@ def render_strength_poster_png(client_name: str, poster: dict):
     def right_text(x_right, y, text, font, fill):
         draw.text((x_right - text_width(text, font), y), text, fill=fill, font=font)
 
-    for y in range(height):
-        ratio = y / height
-        r = int(15 + (23 - 15) * ratio)
-        g = int(17 + (23 - 17) * ratio)
-        b = int(18 + (20 - 18) * ratio)
-        draw.line((0, y, width, y), fill=(r, g, b, 255))
+    def rounded_box(box, fill, outline=None, radius=10, width=1):
+        draw.rounded_rectangle(box, radius=radius, fill=fill, outline=outline, width=width)
 
-    for x in range(72, width, 72):
-        draw.line((x, 0, x, height), fill=(255, 255, 255, 10), width=1)
-    for y in range(80, height, 80):
-        draw.line((0, y, width, y), fill=(255, 255, 255, 8), width=1)
+    draw.rectangle((0, 0, width, height), fill="#f6f2ea")
+    draw.rectangle((0, 0, width, 1350), outline=(27, 30, 31, 255), width=22)
 
-    draw.rectangle((0, 0, 18, height), fill=(221, 255, 80, 255))
-    draw.polygon([(720, 0), (1080, 0), (1080, 520), (860, 420)], fill=(221, 255, 80, 22))
-    draw.polygon([(0, 980), (430, 1350), (0, 1350)], fill=(221, 255, 80, 16))
+    name_font = poster_font(70, True)
+    section_font = poster_font(36, True)
+    label_font = poster_font(17, True)
+    body_font = poster_font(22)
+    small_font = poster_font(19)
+    tiny_font = poster_font(15, True)
+    lift_font = poster_font(26, True)
+    delta_font = poster_font(36, True)
 
-    title_font = poster_font(78, True)
-    title_small_font = poster_font(56, True)
-    section_font = poster_font(34, True)
-    label_font = poster_font(18, True)
-    body_font = poster_font(25)
-    small_font = poster_font(20)
-    tiny_font = poster_font(16, True)
-    number_font = poster_font(48, True)
-    lift_font = poster_font(30, True)
-    delta_font = poster_font(44, True)
-
-    ink = "#f4f1ea"
-    muted = "#a8adb2"
-    soft = "#d4d8da"
-    accent = "#ddff50"
-    panel = (244, 241, 234, 242)
-    panel_dark = (26, 29, 31, 235)
-    line = (244, 241, 234, 46)
+    ink = "#1b1e1f"
+    muted = "#6f7373"
+    soft = "#989b98"
+    accent = "#17665f"
+    accent_soft = (23, 102, 95, 30)
+    paper_line = (27, 30, 31, 58)
+    faint_line = (27, 30, 31, 24)
+    panel = (255, 255, 255, 120)
+    panel_strong = (255, 255, 255, 185)
 
     date_range = f"{poster['start_date'].strftime('%d %b %Y')} - {poster['end_date'].strftime('%d %b %Y')}"
-    draw.text((74, 76), "STRENGTH PROGRESS REPORT", fill=accent, font=label_font)
     client_title = str(client_name or "Client").strip()
-    fitted_title = font_that_fits(client_title, 78, 640, bold=True, min_size=42)
-    draw.text((72, 112), client_title, fill=ink, font=fitted_title)
-    draw.text((76, 204), date_range, fill=muted, font=body_font)
-    draw.line((74, 246, 1006, 246), fill=line, width=2)
+    fitted_title = font_that_fits(client_title, 76, 650, bold=True, min_size=40)
+    draw.text((74, 78), client_title, fill=ink, font=fitted_title)
+    draw.text((78, 168), date_range.upper(), fill=muted, font=small_font)
 
     weeks_label = f"{poster['weeks']} weeks"
-    weeks_font = font_that_fits(weeks_label, 52, 240, bold=True, min_size=34)
-    right_text(1008, 84, weeks_label, weeks_font, accent)
-    right_text(1008, 142, "tracked range", small_font, muted)
+    weeks_font = font_that_fits(weeks_label, 46, 260, bold=True, min_size=30)
+    rounded_box((748, 72, 1006, 164), panel_strong, faint_line, radius=8)
+    right_text(976, 88, weeks_label, weeks_font, ink)
+    draw.text((772, 126), "training window", fill=muted, font=tiny_font)
 
-    summary_y = 286
+    draw.line((74, 224, 1006, 224), fill=paper_line, width=2)
+
     summary_items = [
         ("BODY START", f"{poster['before_weight']:.1f} kg" if poster["before_weight"] is not None else "-"),
         ("BODY END", f"{poster['after_weight']:.1f} kg" if poster["after_weight"] is not None else "-"),
         ("CHANGE", f"{poster['body_delta']:+.1f} kg" if poster["body_delta"] is not None else "-"),
     ]
-    summary_cols = [(74, 300), (390, 616), (706, 1006)]
-    for idx, (label, value) in enumerate(summary_items):
-        x1, x2 = summary_cols[idx]
-        draw.line((x1, summary_y, x2, summary_y), fill=line, width=2)
-        draw.text((x1, summary_y + 18), label, fill=muted, font=tiny_font)
-        value_font = font_that_fits(value, 48, x2 - x1 - 4, bold=True, min_size=30)
-        draw.text((x1, summary_y + 48), value, fill=ink if label != "CHANGE" else accent, font=value_font)
+    has_body_summary = any(value != "-" for _label, value in summary_items)
+    if has_body_summary:
+        summary_y = 262
+        summary_cols = [(74, 300), (390, 616), (706, 1006)]
+        for idx, (label, value) in enumerate(summary_items):
+            x1, x2 = summary_cols[idx]
+            rounded_box((x1, summary_y, x2, summary_y + 104), panel, faint_line, radius=7)
+            draw.text((x1 + 16, summary_y + 16), label, fill=muted, font=tiny_font)
+            value_font = font_that_fits(value, 42, x2 - x1 - 32, bold=True, min_size=28)
+            draw.text((x1 + 16, summary_y + 46), value, fill=ink if label != "CHANGE" else accent, font=value_font)
+        lift_title_y = 390
+    else:
+        lift_title_y = 286
 
-    draw.text((74, 430), "TOP LIFT CHANGES", fill=ink, font=title_small_font)
-    draw.text((76, 492), "Lowest recorded set  /  highest recorded set", fill=muted, font=small_font)
+    draw.text((74, lift_title_y), "Top Lift Changes", fill=ink, font=section_font)
+    draw.text((78, lift_title_y + 50), "Start set compared with best recorded set", fill=muted, font=small_font)
 
     rows = poster["rows"][:6]
-    y = 550
-    row_h = 96
-    max_delta = max([abs(row["delta"]) for row in rows] or [1])
+    y = lift_title_y + 96
+    row_h = 108
     for index, row in enumerate(rows, start=1):
-        draw.rounded_rectangle((74, y, 1006, y + row_h), radius=8, fill=panel if index == 1 else panel_dark)
-        row_ink = "#111315" if index == 1 else ink
-        row_muted = "#586069" if index == 1 else muted
-        delta_fill = "#111315" if index == 1 else accent
-        bar_base = (17, 19, 21, 60) if index == 1 else (244, 241, 234, 52)
-        image_drawn = draw_poster_exercise_image(
-            img,
-            draw,
-            row.get("image_path"),
-            (94, y + 10, 164, y + 86),
-            row["exercise"],
-        )
-        if not image_drawn:
-            draw.text((100, y + 28), f"{index:02d}", fill=delta_fill, font=label_font)
-        draw.line((178, y + 22, 178, y + 74), fill=(17, 19, 21, 45) if index == 1 else line, width=2)
+        rounded_box((74, y, 1006, y + row_h), panel_strong if index == 1 else panel, faint_line, radius=8)
+        draw.text((96, y + 22), f"{index:02d}", fill=accent if index == 1 else soft, font=label_font)
+        draw.line((160, y + 20, 160, y + row_h - 20), fill=faint_line, width=2)
 
-        name_font = poster_font(24, True) if image_drawn else lift_font
-        draw_text_fit(draw, row["exercise"], (202, y + 17), name_font, row_ink, 400, max_lines=1)
-        lift_line = f"{row['start']:.1f} kg x {row['start_reps']}  ->  {row['end']:.1f} kg x {row['end_reps']}"
-        draw.text((202, y + 56), lift_line, fill=row_muted, font=body_font)
+        draw_text_fit(draw, row["exercise"], (188, y + 16), lift_font, ink, 420, max_lines=1)
+
+        start_label = f"{row['start']:.1f} kg x {row['start_reps']}"
+        end_label = f"{row['end']:.1f} kg x {row['end_reps']}"
+        draw.text((188, y + 62), "START", fill=soft, font=tiny_font)
+        draw.text((268, y + 58), start_label, fill=muted, font=body_font)
+        draw.text((460, y + 62), "BEST", fill=soft, font=tiny_font)
+        draw.text((530, y + 58), end_label, fill=ink, font=body_font)
 
         delta_label = f"{row['delta']:+.1f} kg"
         pct_label = f"{row['pct']:+.1f}%"
-        right_text(970, y + 14, delta_label, delta_font, delta_fill)
-        right_text(970, y + 58, pct_label, small_font, row_muted)
-
-        bar_x, bar_y, bar_w = 628, y + 82, 342
-        draw.rounded_rectangle((bar_x, bar_y, bar_x + bar_w, bar_y + 8), radius=4, fill=bar_base)
-        fill_w = int(bar_w * min(1, abs(row["delta"]) / max_delta))
-        draw.rounded_rectangle((bar_x, bar_y, bar_x + max(8, fill_w), bar_y + 8), radius=4, fill=(221, 255, 80, 255))
-        y += row_h + 12
+        right_text(972, y + 16, delta_label, delta_font, accent)
+        right_text(972, y + 58, pct_label, small_font, muted)
+        reps_delta = (row["end_reps"] or 0) - (row["start_reps"] or 0)
+        if reps_delta:
+            reps_label = f"{reps_delta:+d} reps"
+            reps_font = font_that_fits(reps_label, 18, 140, bold=True, min_size=15)
+            text_w = text_width(reps_label, reps_font)
+            pill = (970 - text_w - 24, y + 78, 972, y + 102)
+            rounded_box(pill, accent_soft, None, radius=13)
+            right_text(958, y + 81, reps_label, reps_font, accent)
+        y += row_h + 8
 
     if not rows:
-        draw.rounded_rectangle((74, y, 1006, y + 150), radius=8, fill=panel_dark)
+        rounded_box((74, y, 1006, y + 150), panel, faint_line, radius=8)
         draw.text((110, y + 56), "No comparable lift data in this range.", fill=accent, font=body_font)
-
-    draw.line((74, 1230, 1006, 1230), fill=line, width=2)
-    draw.text((74, 1252), "TRAINER APP", fill=muted, font=tiny_font)
-    right_text(1006, 1252, "PROGRESS CARD", tiny_font, muted)
 
     output = io.BytesIO()
     img.save(output, format="PNG")
@@ -2379,126 +2290,6 @@ def import_strength_export(client_id: int, uploaded_file, source_name: str):
 
     db.session.commit()
     return {"created": created, "skipped": skipped, "source": source}
-
-
-def exercisedb_headers():
-    api_key = app.config.get("RAPIDAPI_KEY", "").strip()
-    host = app.config.get("EXERCISEDB_HOST", "exercisedb.p.rapidapi.com").strip()
-    if not api_key:
-        raise RuntimeError("RAPIDAPI_KEY is not configured.")
-    return {
-        "X-RapidAPI-Key": api_key,
-        "X-RapidAPI-Host": host,
-    }
-
-
-def search_exercisedb_exercise(exercise_name: str):
-    if requests is None:
-        raise RuntimeError("requests is not installed.")
-    host = app.config.get("EXERCISEDB_HOST", "exercisedb.p.rapidapi.com").strip()
-    query = exercise_search_query(exercise_name)
-    url = f"https://{host}/exercises/name/{query}"
-    response = requests.get(url, headers=exercisedb_headers(), timeout=15)
-    response.raise_for_status()
-    results = response.json()
-    if isinstance(results, dict):
-        results = [results]
-    return results if isinstance(results, list) else []
-
-
-def score_exercise_image_match(exercise_name: str, candidate: dict):
-    target_words = set(exercise_search_query(exercise_name).split())
-    candidate_name = str(candidate.get("name") or "")
-    candidate_words = set(exercise_search_query(candidate_name).split())
-    if not target_words or not candidate_words:
-        return 0
-    overlap = len(target_words & candidate_words)
-    return (overlap * 10) - abs(len(candidate_words) - len(target_words))
-
-
-def download_exercise_image(image_url: str, exercise_name: str, source_ref: str | None = None):
-    if requests is None:
-        raise RuntimeError("requests is not installed.")
-    response = requests.get(image_url, timeout=20)
-    response.raise_for_status()
-    content_type = (response.headers.get("Content-Type") or "").lower()
-    extension = ".gif" if "gif" in content_type or image_url.lower().split("?")[0].endswith(".gif") else ".png"
-    digest = hashlib.sha256(f"{exercise_name}|{source_ref or image_url}".encode("utf-8")).hexdigest()[:18]
-    filename = secure_filename(f"{digest}{extension}")
-    path = os.path.join(app.config["UPLOAD_EXERCISE_DIR"], filename)
-    with open(path, "wb") as fh:
-        fh.write(response.content)
-    return filename
-
-
-def fetch_exercise_image_for_name(exercise_name: str, force: bool = False):
-    exercise_name = re.sub(r"\s+", " ", (exercise_name or "").strip())
-    if not exercise_name:
-        return {"matched": False, "reason": "empty"}
-
-    existing = ExerciseImage.query.filter_by(exercise_name=exercise_name).first()
-    if existing and existing.local_file and not force:
-        return {"matched": True, "cached": True, "exercise": exercise_name}
-    if existing and existing.source_ref == "no_match" and not force:
-        return {"matched": False, "cached": True, "exercise": exercise_name}
-
-    results = search_exercisedb_exercise(exercise_name)
-    candidates = [item for item in results if item.get("gifUrl")]
-    if not candidates:
-        if existing is None:
-            existing = ExerciseImage(exercise_name=exercise_name)
-            db.session.add(existing)
-        existing.source = "exercisedb"
-        existing.source_ref = "no_match"
-        existing.matched_name = None
-        existing.image_url = None
-        existing.local_file = None
-        existing.updated_at = utc_now()
-        db.session.flush()
-        return {"matched": False, "exercise": exercise_name}
-
-    best = max(candidates, key=lambda item: score_exercise_image_match(exercise_name, item))
-    image_url = best.get("gifUrl")
-    source_ref = str(best.get("id") or best.get("name") or "")
-    local_file = download_exercise_image(image_url, exercise_name, source_ref)
-
-    if existing is None:
-        existing = ExerciseImage(exercise_name=exercise_name)
-        db.session.add(existing)
-    existing.source = "exercisedb"
-    existing.source_ref = source_ref[:120] if source_ref else None
-    existing.matched_name = str(best.get("name") or exercise_name)[:160]
-    existing.image_url = image_url[:600]
-    existing.local_file = local_file
-    existing.updated_at = utc_now()
-    db.session.flush()
-    return {"matched": True, "exercise": exercise_name, "matched_name": existing.matched_name}
-
-
-def fetch_exercise_images_for_client(client_id: int, limit: int = 40, force: bool = False):
-    exercises = [
-        exercise
-        for exercise, _count in db.session.query(StrengthLogEntry.exercise, func.count(StrengthLogEntry.id))
-        .filter(StrengthLogEntry.client_id == client_id)
-        .group_by(StrengthLogEntry.exercise)
-        .order_by(func.count(StrengthLogEntry.id).desc(), StrengthLogEntry.exercise.asc())
-        .limit(limit)
-        .all()
-    ]
-    result = {"matched": 0, "skipped": 0, "failed": 0, "total": len(exercises)}
-    for exercise in exercises:
-        try:
-            match = fetch_exercise_image_for_name(exercise, force=force)
-            if match.get("matched"):
-                result["matched"] += 1
-            else:
-                result["skipped"] += 1
-        except Exception:
-            db.session.rollback()
-            result["failed"] += 1
-        else:
-            db.session.commit()
-    return result
 
 
 def serialize_food_log(log: FoodLogEntry):
@@ -4289,39 +4080,6 @@ def import_strength_data(client_id):
         client_id=client.id,
         tab="strength",
         msg=f"Imported {result['created']} strength sets from {source_label}." + (f" Skipped {result['skipped']} rows." if result["skipped"] else ""),
-    ))
-
-
-@app.route("/client/<int:client_id>/strength/fetch-images", methods=["POST"])
-@login_required
-def fetch_strength_exercise_images(client_id):
-    if not is_admin():
-        return "Forbidden", 403
-
-    client = get_or_404(Client, client_id)
-    if not app.config.get("RAPIDAPI_KEY", "").strip():
-        return redirect(url_for(
-            "client_profile",
-            client_id=client.id,
-            tab="strength",
-            err="RAPIDAPI_KEY is not configured. Add it locally and in Railway variables first.",
-        ))
-
-    try:
-        result = fetch_exercise_images_for_client(client.id)
-    except Exception:
-        return redirect(url_for(
-            "client_profile",
-            client_id=client.id,
-            tab="strength",
-            err="Could not fetch ExerciseDB images right now.",
-        ))
-
-    return redirect(url_for(
-        "client_profile",
-        client_id=client.id,
-        tab="strength",
-        msg=f"Exercise images: {result['matched']} matched, {result['skipped']} unavailable, {result['failed']} failed.",
     ))
 
 
