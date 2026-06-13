@@ -2101,8 +2101,6 @@ def render_strength_poster_png(client_name: str, poster: dict):
     faint_line = (244, 241, 234, 24)
     panel_dark = (25, 29, 31, 236)
     panel_light = (244, 241, 234, 245)
-    pill_dark = (17, 19, 21, 120)
-    accent_soft = (221, 255, 80, 26)
 
     date_range = f"{poster['start_date'].strftime('%d %b %Y')} - {poster['end_date'].strftime('%d %b %Y')}"
     client_title = str(client_name or "Client").strip()
@@ -2135,7 +2133,7 @@ def render_strength_poster_png(client_name: str, poster: dict):
         lift_title_y = 300
 
     draw.text((74, lift_title_y), "LIFT CHANGES", fill=ink, font=section_font)
-    draw.text((78, lift_title_y + 58), "Start set  /  best set", fill=muted, font=small_font)
+    draw.text((78, lift_title_y + 58), "Before set  /  after set", fill=muted, font=small_font)
 
     rows = poster["rows"][:6]
     y = lift_title_y + 116
@@ -2156,25 +2154,15 @@ def render_strength_poster_png(client_name: str, poster: dict):
 
         start_label = f"{row['start']:.1f} kg x {row['start_reps']}"
         end_label = f"{row['end']:.1f} kg x {row['end_reps']}"
-        draw.text((202, y + 58), "START", fill=row_soft, font=tiny_font)
+        draw.text((202, y + 58), "BEFORE", fill=row_soft, font=tiny_font)
         draw.text((274, y + 54), start_label, fill=row_muted, font=body_font)
-        draw.text((456, y + 58), "BEST", fill=row_soft, font=tiny_font)
+        draw.text((456, y + 58), "AFTER", fill=row_soft, font=tiny_font)
         draw.text((520, y + 54), end_label, fill=row_ink, font=body_font)
 
         delta_label = f"{row['delta']:+.1f} kg"
         pct_label = f"{row['pct']:+.1f}%"
         right_text(970, y + 14, delta_label, delta_font, delta_fill)
         right_text(970, y + 58, pct_label, small_font, row_muted)
-        reps_delta = (row["end_reps"] or 0) - (row["start_reps"] or 0)
-        if reps_delta:
-            reps_label = f"{reps_delta:+d} reps"
-            reps_font = font_that_fits(reps_label, 17, 140, bold=True, min_size=15)
-            text_w = text_width(reps_label, reps_font)
-            pill_fill = pill_dark if is_top else accent_soft
-            pill_text = row_muted if is_top else accent
-            pill = (970 - text_w - 24, y + 80, 970, y + 100)
-            rounded_box(pill, pill_fill, None, radius=10)
-            right_text(958, y + 82, reps_label, reps_font, pill_text)
         y += row_h + 12
 
     if not rows:
