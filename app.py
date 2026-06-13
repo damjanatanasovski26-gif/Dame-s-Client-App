@@ -2081,26 +2081,26 @@ def render_strength_poster_png(client_name: str, poster: dict):
         draw.line((0, y, width, y), fill=(255, 255, 255, 7), width=1)
 
     draw.rectangle((0, 0, 18, height), fill=(221, 255, 80, 255))
-    draw.polygon([(720, 0), (1080, 0), (1080, 440), (858, 376)], fill=(221, 255, 80, 20))
-    draw.polygon([(0, 1010), (400, 1350), (0, 1350)], fill=(221, 255, 80, 14))
+    draw.polygon([(840, 0), (1080, 0), (1080, 390), (936, 338)], fill=(221, 255, 80, 18))
+    draw.polygon([(0, 1040), (360, 1350), (0, 1350)], fill=(221, 255, 80, 13))
 
-    section_font = poster_font(52, True)
+    section_font = poster_font(48, True)
     label_font = poster_font(18, True)
-    body_font = poster_font(24)
+    body_font = poster_font(23)
     small_font = poster_font(20)
     tiny_font = poster_font(15, True)
-    lift_font = poster_font(28, True)
-    delta_font = poster_font(44, True)
+    lift_font = poster_font(27, True)
+    delta_font = poster_font(42, True)
 
     ink = "#f4f1ea"
-    dark_ink = "#111315"
     muted = "#a8adb2"
     soft = "#d4d8da"
     accent = "#ddff50"
     line = (244, 241, 234, 46)
-    faint_line = (244, 241, 234, 24)
-    panel_dark = (25, 29, 31, 236)
-    panel_light = (244, 241, 234, 245)
+    panel_dark = (24, 28, 30, 238)
+    panel_lift = (29, 34, 36, 246)
+    panel_top = (32, 38, 40, 250)
+    top_outline = (221, 255, 80, 82)
     date_range = f"{poster['start_date'].strftime('%d %b %Y')} - {poster['end_date'].strftime('%d %b %Y')}"
     client_title = str(client_name or "Client").strip()
     fitted_title = font_that_fits(client_title, 82, 660, bold=True, min_size=42)
@@ -2132,50 +2132,60 @@ def render_strength_poster_png(client_name: str, poster: dict):
         lift_title_y = 300
 
     draw.text((74, lift_title_y), "LIFT CHANGES", fill=ink, font=section_font)
-    draw.text((78, lift_title_y + 58), "Before set  /  after set", fill=muted, font=small_font)
+    draw.text((78, lift_title_y + 54), "Before set to after set", fill=muted, font=small_font)
 
     rows = poster["rows"][:6]
-    y = lift_title_y + 116
-    row_h = 104
+    y = lift_title_y + 104
+    row_h = 112
     for index, row in enumerate(rows, start=1):
         is_top = index == 1
-        row_fill = panel_light if is_top else panel_dark
-        rounded_box((74, y, 1006, y + row_h), row_fill, None, radius=8)
-        row_ink = dark_ink if is_top else ink
-        row_muted = "#586069" if is_top else muted
-        row_soft = "#777d80" if is_top else soft
-        delta_fill = dark_ink if is_top else accent
+        row_fill = panel_top if is_top else (panel_lift if index % 2 else panel_dark)
+        row_outline = top_outline if is_top else (255, 255, 255, 10)
+        rounded_box((74, y, 1006, y + row_h), row_fill, row_outline, radius=8, width=1)
+        row_ink = ink
+        row_muted = muted
+        row_soft = soft
+        delta_fill = accent
 
-        draw.text((100, y + 27), f"{index:02d}", fill=delta_fill if is_top else accent, font=label_font)
-        draw.line((178, y + 22, 178, y + row_h - 22), fill=(17, 19, 21, 45) if is_top else line, width=2)
+        if is_top:
+            draw.rounded_rectangle((74, y, 82, y + row_h), radius=4, fill=(221, 255, 80, 255))
 
-        draw_text_fit(draw, row["exercise"], (202, y + 14), lift_font, row_ink, 390, max_lines=1)
+        draw.text((100, y + 30), f"{index:02d}", fill=accent, font=label_font)
+        draw.line((178, y + 22, 178, y + row_h - 22), fill=line, width=2)
+
+        title_font = font_that_fits(row["exercise"], 28, 520, bold=True, min_size=20)
+        draw_text_fit(draw, row["exercise"], (202, y + 14), title_font, row_ink, 520, max_lines=1)
 
         start_label = f"{row['start']:.1f} kg x {row['start_reps']}"
         end_label = f"{row['end']:.1f} kg x {row['end_reps']}"
-        draw.text((202, y + 58), "BEFORE", fill=row_soft, font=tiny_font)
-        start_font = font_that_fits(start_label, 23, 166, bold=True, min_size=18)
-        draw.text((202, y + 76), start_label, fill=row_muted, font=start_font)
+        compare_y = y + 69
+        draw.text((202, compare_y), "BEFORE", fill=row_soft, font=tiny_font)
+        start_font = font_that_fits(start_label, 22, 164, bold=True, min_size=17)
+        draw.text((202, compare_y + 17), start_label, fill=row_muted, font=start_font)
 
-        arrow_fill = (17, 19, 21, 70) if is_top else (221, 255, 80, 145)
-        draw.line((390, y + 82, 426, y + 82), fill=arrow_fill, width=3)
-        draw.polygon([(426, y + 82), (417, y + 75), (417, y + 89)], fill=arrow_fill)
+        arrow_fill = (221, 255, 80, 150)
+        draw.line((388, compare_y + 24, 424, compare_y + 24), fill=arrow_fill, width=3)
+        draw.polygon(
+            [(424, compare_y + 24), (415, compare_y + 17), (415, compare_y + 31)],
+            fill=arrow_fill,
+        )
 
-        draw.text((450, y + 58), "AFTER", fill=accent if not is_top else row_soft, font=tiny_font)
-        end_font = font_that_fits(end_label, 23, 178, bold=True, min_size=18)
-        draw.text((450, y + 76), end_label, fill=row_ink, font=end_font)
+        draw.text((450, compare_y), "AFTER", fill=accent, font=tiny_font)
+        end_font = font_that_fits(end_label, 22, 180, bold=True, min_size=17)
+        draw.text((450, compare_y + 17), end_label, fill=row_ink, font=end_font)
 
         delta_label = f"{row['delta']:+.1f} kg"
         pct_label = f"{row['pct']:+.1f}%"
-        right_text(970, y + 14, delta_label, delta_font, delta_fill)
-        right_text(970, y + 58, pct_label, small_font, row_muted)
-        y += row_h + 12
+        right_text(970, y + 16, delta_label, delta_font, delta_fill)
+        pct_font = font_that_fits(pct_label, 20, 120, bold=False, min_size=17)
+        pct_w = text_width(pct_label, pct_font)
+        rounded_box((970 - pct_w - 24, y + 58, 970, y + 84), (244, 241, 234, 18), None, radius=13)
+        right_text(958, y + 62, pct_label, pct_font, row_muted)
+        y += row_h + 10
 
     if not rows:
         rounded_box((74, y, 1006, y + 150), panel_dark, None, radius=8)
         draw.text((110, y + 56), "No comparable lift data in this range.", fill=accent, font=body_font)
-
-    draw.line((74, 1230, 1006, 1230), fill=line, width=2)
 
     output = io.BytesIO()
     img.save(output, format="PNG")
