@@ -149,8 +149,12 @@
 
       // beforeinstallprompt/appinstalled firing (or not) after a real install is
       // inconsistent across browsers, so once the user completes the install
-      // flow we remember it permanently instead of relying on those events
-      // alone — the button must never come back after "Yes, Install".
+      // flow we remember it so the button doesn't reappear on the next visit.
+      // But this is just a cache, not a source of truth: if the app gets
+      // uninstalled, the browser offering beforeinstallprompt again is real
+      // proof it's no longer installed, and that always wins over the stale
+      // flag (see the beforeinstallprompt handler below) — otherwise
+      // uninstalling would permanently strand the button hidden.
       const installedKey = "pwa_app_installed_v1";
       function markInstalled() {
         localStorage.setItem(installedKey, "1");
@@ -160,7 +164,6 @@
       if (localStorage.getItem(installedKey) === "1") {
         btn.hidden = true;
         menuInstallButtons.forEach(function (menuButton) { menuButton.hidden = true; });
-        return;
       }
 
       let deferredPrompt = null;
@@ -255,6 +258,7 @@
       window.addEventListener("beforeinstallprompt", function (e) {
         e.preventDefault();
         deferredPrompt = e;
+        localStorage.removeItem(installedKey);
         showButton();
         maybeOpenAutoPrompt();
       });
