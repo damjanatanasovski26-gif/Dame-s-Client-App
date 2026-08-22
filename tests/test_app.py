@@ -285,7 +285,7 @@ class TrainerAppTests(unittest.TestCase):
         )
         self.assertEqual(resp.status_code, 200)
         self.assertIn(b"Daily calorie target updated", resp.data)
-        self.assertIn(b"2400 target", resp.data)
+        self.assertIn(b'<span class="nutrition-ring-goal">2400</span>', resp.data)
 
         with app.app_context():
             client = db.session.get(Client, client_id)
@@ -838,7 +838,7 @@ class TrainerAppTests(unittest.TestCase):
         )
         self.assertEqual(resp.status_code, 200)
         self.assertIn(b"Imported 2 strength sets from Lyfta", resp.data)
-        self.assertIn(b"Progress Poster Builder", resp.data)
+        self.assertIn(b"Poster Settings", resp.data)
         self.assertIn(b"Triceps Pushdown", resp.data)
         self.assertIn(b"82.0 kg", resp.data)
 
