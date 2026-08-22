@@ -13,11 +13,13 @@
         <div style="margin-top:var(--ds-space-1); color:var(--ds-text-muted);">No active payment plan yet.</div>
       {% endif %}
     </div>
-    {{ ds_button("Add Payment", icon="plus", attrs='data-ds-modal-open="addPaymentModal"') }}
   </div>
-  {% if current_status %}
-    {{ ds_button("Adjust Due Date", icon="calendar", variant="secondary", size="sm", attrs='data-ds-modal-open="adjustDueModal"') }}
-  {% endif %}
+  <div style="display:flex; align-items:center; gap:var(--ds-space-3); flex-wrap:wrap; margin-top:var(--ds-space-4);">
+    {% if current_status %}
+      {{ ds_button("Adjust Due Date", icon="calendar", variant="secondary", size="sm", attrs='data-ds-modal-open="adjustDueModal"') }}
+    {% endif %}
+    {{ ds_button("Add Payment", size="sm", attrs='data-ds-modal-open="addPaymentModal" style="margin-left:auto;"') }}
+  </div>
 {% endcall %}
 
 {% call ds_card(title="Payment History") %}
