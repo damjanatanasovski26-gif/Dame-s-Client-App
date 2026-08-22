@@ -147,6 +147,22 @@
       const laterBtn = document.getElementById("installPromptLater");
       if (!btn || !toast || !modal || !modalMessage || !confirmBtn || !laterBtn) return;
 
+      // beforeinstallprompt/appinstalled firing (or not) after a real install is
+      // inconsistent across browsers, so once the user completes the install
+      // flow we remember it permanently instead of relying on those events
+      // alone — the button must never come back after "Yes, Install".
+      const installedKey = "pwa_app_installed_v1";
+      function markInstalled() {
+        localStorage.setItem(installedKey, "1");
+        hideInstallButtons();
+        closeModal();
+      }
+      if (localStorage.getItem(installedKey) === "1") {
+        btn.hidden = true;
+        menuInstallButtons.forEach(function (menuButton) { menuButton.hidden = true; });
+        return;
+      }
+
       let deferredPrompt = null;
       const ua = navigator.userAgent || "";
       const isIos = /iPad|iPhone|iPod/.test(ua);
@@ -254,8 +270,7 @@
           try {
             const choice = await deferredPrompt.userChoice;
             if (choice && choice.outcome === "accepted") {
-              hideInstallButtons();
-              closeModal();
+              markInstalled();
               return;
             }
           } catch (_) {}
@@ -280,10 +295,7 @@
         openModal();
       });
 
-      window.addEventListener("appinstalled", function () {
-        hideInstallButtons();
-        closeModal();
-      });
+      window.addEventListener("appinstalled", markInstalled);
 
       confirmBtn.addEventListener("click", function () {
         handleInstallConfirm();
@@ -297,11 +309,6 @@
       modal.addEventListener("click", function (e) {
         if (e.target !== modal) return;
         dismissAutoPrompt(3);
-        closeModal();
-      });
-
-      window.addEventListener("appinstalled", function () {
-        btn.hidden = true;
         closeModal();
       });
     })();

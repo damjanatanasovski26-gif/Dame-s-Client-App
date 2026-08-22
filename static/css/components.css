@@ -1054,6 +1054,14 @@ body.ds-dashboard-page .container{
   color: var(--ds-text);
 }
 
+.ds-tab:focus{
+  outline: none;
+}
+
+.ds-tab:focus-visible{
+  box-shadow: var(--ds-focus-ring);
+}
+
 .ds-tab.active{
   background: var(--ds-accent);
   border-color: var(--ds-accent);

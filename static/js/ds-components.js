@@ -164,6 +164,12 @@ function dsSwapPage(html, finalUrl) {
   if (finalUrl && finalUrl !== window.location.href) {
     window.history.pushState({ dsAjax: true }, "", finalUrl);
   }
+  // A real browser navigation always starts scrolled to the top; since this
+  // is just an innerHTML swap, the browser has no reason to reset scroll on
+  // its own, so whatever position you were at on the previous page carries
+  // over (e.g. landing mid-list after opening a client from a scrolled
+  // dashboard).
+  window.scrollTo(0, 0);
   dsRunScripts(root);
   dsInitAlerts(root);
   window.dispatchEvent(new CustomEvent("ds:content-updated"));
