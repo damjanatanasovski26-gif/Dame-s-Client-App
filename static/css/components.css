@@ -734,6 +734,14 @@ body.ds-dashboard-page .container{
   gap: var(--ds-space-2);
 }
 
+.ds-client-card__actions > *{
+  flex: 1 1 96px;
+}
+
+.ds-client-card__actions .ds-btn{
+  width: 100%;
+}
+
 .ds-client-card__actions form{
   margin: 0;
 }
@@ -1771,6 +1779,10 @@ body.ds-dashboard-page .container{
   align-items: center;
   gap: var(--ds-space-2);
   margin: var(--ds-space-3) 0;
+}
+
+.ds-file-picker .ds-btn{
+  flex: 1 1 140px;
 }
 
 .ds-file-name{
