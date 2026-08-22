@@ -2017,18 +2017,18 @@ def build_strength_poster_data(
     }
 
 
-def poster_font(size: int, bold: bool = False):
-    root = os.path.dirname(os.path.abspath(__file__))
-    candidates = [
-        os.path.join(root, ".venv", "Lib", "site-packages", "reportlab", "fonts", "VeraBd.ttf" if bold else "Vera.ttf"),
-        "C:\\Windows\\Fonts\\arialbd.ttf" if bold else "C:\\Windows\\Fonts\\arial.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf",
-    ]
-    for path in candidates:
-        if path and os.path.exists(path):
-            return ImageFont.truetype(path, size=size)
-    return ImageFont.load_default()
+_poster_font_cache = {}
+
+
+def poster_font(size: int, weight: int = 500):
+    key = (size, weight)
+    if key not in _poster_font_cache:
+        root = os.path.dirname(os.path.abspath(__file__))
+        font_path = os.path.join(root, "static", "fonts", "Manrope-Variable.ttf")
+        font = ImageFont.truetype(font_path, size=size)
+        font.set_variation_by_axes([weight])
+        _poster_font_cache[key] = font
+    return _poster_font_cache[key]
 
 
 def draw_text_fit(draw, text: str, xy, font, fill, max_width: int, max_lines: int = 2, line_gap: int = 6):
@@ -2059,19 +2059,19 @@ def draw_text_fit(draw, text: str, xy, font, fill, max_width: int, max_lines: in
     return y
 
 
-def font_that_fits(text: str, size: int, max_width: int, bold: bool = False, min_size: int = 24):
+def font_that_fits(text: str, size: int, max_width: int, weight: int = 700, min_size: int = 24):
     text = str(text)
     for candidate_size in range(size, min_size - 1, -2):
-        font = poster_font(candidate_size, bold)
+        font = poster_font(candidate_size, weight)
         bbox = ImageDraw.Draw(Image.new("RGB", (1, 1))).textbbox((0, 0), text, font=font)
         if bbox[2] - bbox[0] <= max_width:
             return font
-    return poster_font(min_size, bold)
+    return poster_font(min_size, weight)
 
 
 def render_strength_poster_png(client_name: str, poster: dict):
     width, height = 1080, 1350
-    img = Image.new("RGB", (width, height), "#111315")
+    img = Image.new("RGB", (width, height), "#0a0d10")
     draw = ImageDraw.Draw(img, "RGBA")
 
     def text_width(text, font):
@@ -2081,50 +2081,71 @@ def render_strength_poster_png(client_name: str, poster: dict):
     def right_text(x_right, y, text, font, fill):
         draw.text((x_right - text_width(text, font), y), text, fill=fill, font=font)
 
+    def center_text(cx, y, text, font, fill):
+        w = text_width(text, font)
+        draw.text((cx - w / 2, y), text, fill=fill, font=font)
+
     def rounded_box(box, fill, outline=None, radius=8, width=1):
         draw.rounded_rectangle(box, radius=radius, fill=fill, outline=outline, width=width)
 
+    # base vertical gradient, matching the app's --ds-bg -> --ds-bg-elevated tokens
+    bg_top = (10, 13, 16)
+    bg_bottom = (18, 23, 27)
     for y in range(height):
         ratio = y / height
-        r = int(15 + (22 - 15) * ratio)
-        g = int(17 + (22 - 17) * ratio)
-        b = int(18 + (20 - 18) * ratio)
+        r = int(bg_top[0] + (bg_bottom[0] - bg_top[0]) * ratio)
+        g = int(bg_top[1] + (bg_bottom[1] - bg_top[1]) * ratio)
+        b = int(bg_top[2] + (bg_bottom[2] - bg_top[2]) * ratio)
         draw.line((0, y, width, y), fill=(r, g, b, 255))
 
+    # soft ambient glows, rendered on a separate blurred layer
+    glow_layer = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    glow_draw = ImageDraw.Draw(glow_layer)
+    glow_draw.ellipse((width - 520, -260, width + 260, 420), fill=(199, 255, 69, 40))
+    glow_draw.ellipse((-320, height - 520, 380, height + 260), fill=(117, 163, 255, 26))
+    glow_layer = glow_layer.filter(ImageFilter.GaussianBlur(90))
+    img.paste(Image.alpha_composite(img.convert("RGBA"), glow_layer).convert("RGB"), (0, 0))
+    draw = ImageDraw.Draw(img, "RGBA")
+
     for x in range(72, width, 72):
-        draw.line((x, 0, x, height), fill=(255, 255, 255, 9), width=1)
+        draw.line((x, 0, x, height), fill=(255, 255, 255, 7), width=1)
     for y in range(80, height, 80):
-        draw.line((0, y, width, y), fill=(255, 255, 255, 7), width=1)
+        draw.line((0, y, width, y), fill=(255, 255, 255, 6), width=1)
 
-    draw.rectangle((0, 0, 18, height), fill=(221, 255, 80, 255))
-    draw.polygon([(840, 0), (1080, 0), (1080, 390), (936, 338)], fill=(221, 255, 80, 18))
-    draw.polygon([(0, 1040), (360, 1350), (0, 1350)], fill=(221, 255, 80, 13))
+    accent = "#c7ff45"
+    accent_ink = "#10150a"
+    ink = "#f5f6f3"
+    muted = "#9aa1a8"
+    soft = "#c9cdd1"
+    line = (245, 246, 243, 40)
+    panel = (255, 255, 255, 9)
+    panel_border = (255, 255, 255, 14)
 
-    section_font = poster_font(48, True)
-    label_font = poster_font(18, True)
-    body_font = poster_font(23)
-    small_font = poster_font(20)
-    tiny_font = poster_font(15, True)
-    lift_font = poster_font(27, True)
-    delta_font = poster_font(42, True)
+    draw.rectangle((0, 0, 16, height), fill=(199, 255, 69, 255))
 
-    ink = "#f4f1ea"
-    muted = "#a8adb2"
-    soft = "#d4d8da"
-    accent = "#ddff50"
-    line = (244, 241, 234, 46)
-    panel_dark = (24, 28, 30, 238)
-    panel_lift = (29, 34, 36, 246)
+    kicker_font = poster_font(19, 800)
+    draw.rectangle((74, 70, 84, 80), fill=accent)
+    draw.text((96, 62), "STRENGTH PROGRESS REPORT", fill=accent, font=kicker_font)
+
     date_range = f"{poster['start_date'].strftime('%d %b %Y')} - {poster['end_date'].strftime('%d %b %Y')}"
-    client_title = str(client_name or "Client").strip()
-    fitted_title = font_that_fits(client_title, 82, 660, bold=True, min_size=42)
-    draw.text((74, 92), client_title, fill=ink, font=fitted_title)
-    draw.text((78, 194), date_range, fill=muted, font=body_font)
 
-    weeks_label = f"{poster['weeks']} weeks"
-    weeks_font = font_that_fits(weeks_label, 54, 260, bold=True, min_size=34)
-    right_text(1008, 94, weeks_label, weeks_font, accent)
-    draw.line((74, 250, 1006, 250), fill=line, width=2)
+    # weeks pill (top right) — computed first so the title never runs under it
+    weeks_label = f"{poster['weeks']} WEEKS"
+    weeks_font = font_that_fits(weeks_label, 34, 220, weight=800, min_size=22)
+    pill_w = text_width(weeks_label, weeks_font) + 56
+    pill_h = 62
+    pill_x2 = 1006
+    pill_x1 = pill_x2 - pill_w
+    rounded_box((pill_x1, 84, pill_x2, 84 + pill_h), accent, radius=pill_h // 2)
+    center_text((pill_x1 + pill_x2) / 2, 84 + (pill_h - 30) / 2, weeks_label, weeks_font, accent_ink)
+
+    client_title = str(client_name or "Client").strip()
+    title_max_width = pill_x1 - 74 - 32
+    fitted_title = font_that_fits(client_title, 86, title_max_width, weight=800, min_size=30)
+    draw.text((74, 104), client_title, fill=ink, font=fitted_title)
+    draw.text((78, 210), date_range, fill=muted, font=poster_font(23, 600))
+
+    draw.line((74, 268, 1006, 268), fill=line, width=2)
 
     summary_items = [
         ("BODY START", f"{poster['before_weight']:.1f} kg" if poster["before_weight"] is not None else "-"),
@@ -2133,68 +2154,97 @@ def render_strength_poster_png(client_name: str, poster: dict):
     ]
     has_body_summary = any(value != "-" for _label, value in summary_items)
     if has_body_summary:
-        summary_y = 288
-        summary_cols = [(74, 300), (390, 616), (706, 1006)]
+        chip_y1, chip_y2 = 300, 400
+        gap = 20
+        chip_w = (1006 - 74 - gap * 2) / 3
         for idx, (label, value) in enumerate(summary_items):
-            x1, x2 = summary_cols[idx]
-            draw.line((x1, summary_y, x2, summary_y), fill=line, width=2)
-            draw.text((x1, summary_y + 18), label, fill=muted, font=tiny_font)
-            value_font = font_that_fits(value, 44, x2 - x1 - 4, bold=True, min_size=28)
-            draw.text((x1, summary_y + 48), value, fill=ink if label != "CHANGE" else accent, font=value_font)
-        lift_title_y = 430
+            x1 = 74 + idx * (chip_w + gap)
+            x2 = x1 + chip_w
+            rounded_box((x1, chip_y1, x2, chip_y2), panel, panel_border, radius=16, width=1)
+            draw.text((x1 + 24, chip_y1 + 22), label, fill=muted, font=poster_font(16, 700))
+            value_font = font_that_fits(value, 42, chip_w - 48, weight=800, min_size=26)
+            fill = accent if label == "CHANGE" else ink
+            draw.text((x1 + 24, chip_y1 + 50), value, fill=fill, font=value_font)
+        lift_title_y = 442
     else:
-        lift_title_y = 300
+        lift_title_y = 306
 
-    draw.text((74, lift_title_y), "LIFT CHANGES", fill=ink, font=section_font)
+    draw.rectangle((74, lift_title_y + 10, 82, lift_title_y + 44), fill=accent)
+    draw.text((100, lift_title_y), "LIFT CHANGES", fill=ink, font=poster_font(42, 800))
 
     rows = poster["rows"][:6]
-    y = lift_title_y + 104
-    row_h = 112
+    max_delta = max((abs(row["delta"]) for row in rows), default=1) or 1
+
+    rows_top = lift_title_y + 78
+    rows_bottom_limit = height - 92
+    row_gap = 14
+    n = len(rows) or 1
+    row_h = min(150, (rows_bottom_limit - rows_top - row_gap * (n - 1)) / n)
+    block_height = row_h * n + row_gap * (n - 1)
+    leftover = max(0, (rows_bottom_limit - rows_top) - block_height)
+
+    y = rows_top + min(leftover / 2, 140)
     for index, row in enumerate(rows, start=1):
-        row_fill = panel_lift if index % 2 else panel_dark
-        row_outline = (255, 255, 255, 10)
-        rounded_box((74, y, 1006, y + row_h), row_fill, row_outline, radius=8, width=1)
-        row_ink = ink
-        row_muted = muted
-        row_soft = soft
-        delta_fill = accent
+        rounded_box((74, y, 1006, y + row_h), panel, panel_border, radius=14, width=1)
 
-        draw.text((100, y + 30), f"{index:02d}", fill=accent, font=label_font)
-        draw.line((178, y + 22, 178, y + row_h - 22), fill=line, width=2)
+        badge_cx, badge_cy, badge_r = 74 + 44, y + row_h / 2 - 12, 22
+        draw.ellipse(
+            (badge_cx - badge_r, badge_cy - badge_r, badge_cx + badge_r, badge_cy + badge_r),
+            fill=accent,
+        )
+        center_text(badge_cx, badge_cy - 13, f"{index}", poster_font(20, 800), accent_ink)
 
-        title_font = font_that_fits(row["exercise"], 28, 520, bold=True, min_size=20)
-        draw_text_fit(draw, row["exercise"], (202, y + 14), title_font, row_ink, 520, max_lines=1)
+        text_x = 74 + 88
+        title_font = font_that_fits(row["exercise"], 27, 500, weight=800, min_size=19)
+        draw_text_fit(draw, row["exercise"], (text_x, y + 12), title_font, ink, 500, max_lines=1)
 
         start_label = f"{row['start']:.1f} kg x {row['start_reps']}"
         end_label = f"{row['end']:.1f} kg x {row['end_reps']}"
-        compare_y = y + 69
-        draw.text((202, compare_y), "BEFORE", fill=row_soft, font=tiny_font)
-        start_font = font_that_fits(start_label, 22, 164, bold=True, min_size=17)
-        draw.text((202, compare_y + 17), start_label, fill=row_muted, font=start_font)
+        compare_y = y + 50
+        draw.text((text_x, compare_y), "BEFORE", fill=soft, font=poster_font(13, 800))
+        start_font = font_that_fits(start_label, 19, 150, weight=700, min_size=15)
+        draw.text((text_x, compare_y + 16), start_label, fill=muted, font=start_font)
 
-        arrow_fill = (221, 255, 80, 150)
-        draw.line((388, compare_y + 24, 424, compare_y + 24), fill=arrow_fill, width=3)
+        arrow_x = text_x + 158
+        arrow_fill = (199, 255, 69, 170)
+        draw.line((arrow_x, compare_y + 22, arrow_x + 30, compare_y + 22), fill=arrow_fill, width=3)
         draw.polygon(
-            [(424, compare_y + 24), (415, compare_y + 17), (415, compare_y + 31)],
+            [(arrow_x + 30, compare_y + 22), (arrow_x + 22, compare_y + 16), (arrow_x + 22, compare_y + 28)],
             fill=arrow_fill,
         )
 
-        draw.text((450, compare_y), "AFTER", fill=accent, font=tiny_font)
-        end_font = font_that_fits(end_label, 22, 180, bold=True, min_size=17)
-        draw.text((450, compare_y + 17), end_label, fill=row_ink, font=end_font)
+        after_x = arrow_x + 44
+        draw.text((after_x, compare_y), "AFTER", fill=accent, font=poster_font(13, 800))
+        end_font = font_that_fits(end_label, 19, 170, weight=700, min_size=15)
+        draw.text((after_x, compare_y + 16), end_label, fill=ink, font=end_font)
 
         delta_label = f"{row['delta']:+.1f} kg"
         pct_label = f"{row['pct']:+.1f}%"
-        right_text(970, y + 16, delta_label, delta_font, delta_fill)
-        pct_font = font_that_fits(pct_label, 20, 120, bold=False, min_size=17)
+        right_text(970, y + 12, delta_label, poster_font(30, 800), accent)
+        pct_font = poster_font(17, 700)
         pct_w = text_width(pct_label, pct_font)
-        rounded_box((970 - pct_w - 24, y + 58, 970, y + 84), (244, 241, 234, 18), None, radius=13)
-        right_text(958, y + 62, pct_label, pct_font, row_muted)
-        y += row_h + 10
+        rounded_box((970 - pct_w - 24, y + 54, 970, y + 80), (199, 255, 69, 22), None, radius=13)
+        right_text(958, y + 58, pct_label, pct_font, accent)
+
+        # relative progress bar, pinned to the row's bottom edge
+        bar_x1, bar_x2 = text_x, 946
+        bar_y = y + row_h - 12
+        rounded_box((bar_x1, bar_y, bar_x2, bar_y + 4), (255, 255, 255, 18), radius=2)
+        fill_ratio = min(1.0, abs(row["delta"]) / max_delta)
+        bar_fill_x2 = bar_x1 + (bar_x2 - bar_x1) * fill_ratio
+        if bar_fill_x2 > bar_x1:
+            rounded_box((bar_x1, bar_y, bar_fill_x2, bar_y + 4), accent, radius=2)
+
+        y += row_h + row_gap
 
     if not rows:
-        rounded_box((74, y, 1006, y + 150), panel_dark, None, radius=8)
-        draw.text((110, y + 56), "No comparable lift data in this range.", fill=accent, font=body_font)
+        rounded_box((74, y, 1006, y + 150), panel, panel_border, radius=14)
+        draw.text((110, y + 56), "No comparable lift data in this range.", fill=accent, font=poster_font(23, 600))
+        y += 150
+
+    footer_y = height - 54
+    draw.text((74, footer_y), "DAME'S CLIENT APP", fill=(255, 255, 255, 70), font=poster_font(16, 800))
+    right_text(1006, footer_y, date.today().strftime("Generated %d %b %Y"), poster_font(16, 600), (255, 255, 255, 70))
 
     output = io.BytesIO()
     img.save(output, format="PNG")

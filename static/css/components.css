@@ -533,6 +533,14 @@ body.ds-dashboard-page .container{
   text-align: left;
 }
 
+.ds-card.ds-stat-tile{
+  /* .ds-card + .ds-card adds margin-top for vertically-stacked cards elsewhere;
+     that rule fires here too since it only checks DOM order, not layout mode,
+     pushing every tile after the first down and making it look shorter. Needs
+     the same two-class specificity as that rule to actually win. */
+  margin-top: 0;
+}
+
 .ds-stat-number{
   display: block;
   margin-top: var(--ds-space-2);
@@ -546,6 +554,10 @@ body.ds-dashboard-page .container{
   grid-template-columns: 1fr;
   gap: var(--ds-space-4);
   margin-bottom: var(--ds-space-4);
+}
+
+.ds-dash-grid > .ds-card{
+  margin-top: 0;
 }
 
 @media (min-width: 860px){
