@@ -5,6 +5,16 @@
   used across the app. Depends on tokens.css being loaded first.
 */
 
+/* Mobile browsers flash a default rectangular highlight on tap. The legacy
+   stylesheet suppresses this per-selector in a dozen places, but never for
+   any of the .ds-* components introduced here — hence every new button/tab
+   still showing the browser's default "blue square" on press. One global
+   rule covers all of them (and any future ones) instead of chasing it
+   selector-by-selector again. */
+html, *{
+  -webkit-tap-highlight-color: transparent;
+}
+
 /* ---------- Card ---------- */
 .ds-card{
   background: var(--ds-surface);
@@ -1047,11 +1057,16 @@ body.ds-dashboard-page .container{
   font-weight: var(--ds-fw-semibold);
   text-decoration: none;
   white-space: nowrap;
-  transition: background var(--ds-duration-fast) var(--ds-ease), color var(--ds-duration-fast) var(--ds-ease), border-color var(--ds-duration-fast) var(--ds-ease);
+  transition: background var(--ds-duration-fast) var(--ds-ease), color var(--ds-duration-fast) var(--ds-ease), border-color var(--ds-duration-fast) var(--ds-ease), transform var(--ds-duration-fast) var(--ds-ease);
 }
 
 .ds-tab:hover{
   color: var(--ds-text);
+  background: var(--ds-surface-2);
+}
+
+.ds-tab:active{
+  transform: scale(.96);
 }
 
 .ds-tab:focus{
