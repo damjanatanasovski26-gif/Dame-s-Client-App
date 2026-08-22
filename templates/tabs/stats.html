@@ -104,16 +104,8 @@
     Graph updates automatically when you add a new measurement.
   </p>
 
-  {# Build a CSV string safely (Jinja loop scope-safe) #}
-{% set ns = namespace(csv="") %}
-{% for m in weight_measurements|reverse %}
-  {% if m.weight is not none %}
-    {% set ns.csv = ns.csv ~ m.date.strftime("%Y-%m-%d") ~ "," ~ m.weight ~ ";" %}
-  {% endif %}
-{% endfor %}
-
 <div id="weightChart"
-     data-points="{{ ns.csv|e }}"
+     data-points="{{ weight_chart_points|e }}"
      style="width:100%; overflow:auto;">
   <!-- JS will render an SVG chart here -->
 </div>

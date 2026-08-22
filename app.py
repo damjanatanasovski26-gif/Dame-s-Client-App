@@ -2860,13 +2860,20 @@ def client_profile(client_id):
         .order_by(Measurement.date.asc())
         .all()
     )
-    weight_labels = [m.date.strftime("%d/%m") for m in weight_points_asc]
-    weight_values = [m.weight for m in weight_points_asc]
     weight_latest = weight_points_asc[-1] if weight_points_asc else None
     weight_measurements = list(reversed(weight_points_asc))
     weight_change = None
     if len(weight_points_asc) >= 2:
         weight_change = round(weight_points_asc[-1].weight - weight_points_asc[0].weight, 1)
+
+    # The weight graph builds one SVG point per entry client-side; for a client
+    # logging very frequently that's an unbounded string-build + DOM write that
+    # visibly stutters on the one tab that renders it. A recent-trend window is
+    # both fast and more readable than plotting years of daily points at once.
+    CHART_MAX_POINTS = 200
+    weight_chart_points = "".join(
+        f"{m.date.strftime('%Y-%m-%d')},{m.weight};" for m in weight_points_asc[-CHART_MAX_POINTS:]
+    )
 
     # Clients who log frequently can accumulate hundreds of entries; rendering a
     # full edit modal per row (see stats.html) made the page balloon in DOM size.
@@ -3088,8 +3095,7 @@ def client_profile(client_id):
         weight_history_limit=weight_history_limit,
         weight_history_has_more=weight_history_has_more,
         weight_change=weight_change,
-        weight_labels=weight_labels,
-        weight_values=weight_values,
+        weight_chart_points=weight_chart_points,
 
         # sessions
         sessions=sessions,
