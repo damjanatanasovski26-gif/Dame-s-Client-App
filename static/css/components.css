@@ -1676,10 +1676,17 @@ body.ds-dashboard-page .container{
   border: 1px solid var(--ds-border);
 }
 
-.ds-table{
+/* table.ds-table (not just .ds-table) so this matches or beats the legacy
+   [data-theme="dark"] table/td/tbody-tr:nth-child(even) selectors in
+   style.css, which never got scoped to .ds-table and otherwise still win —
+   those rules never declared a background at all, so the old ones applied
+   unopposed instead of being overridden. */
+table.ds-table{
   width: 100%;
   border-collapse: collapse;
   font-size: var(--ds-text-sm);
+  background: var(--ds-surface);
+  border-color: var(--ds-border);
 }
 
 .ds-table th{
@@ -1698,6 +1705,11 @@ body.ds-dashboard-page .container{
   border-top: 1px solid var(--ds-border);
   color: var(--ds-text);
   vertical-align: middle;
+  background: var(--ds-surface);
+}
+
+.ds-table tbody tr:nth-child(even) td{
+  background: var(--ds-surface-soft);
 }
 
 .ds-table tbody tr:hover td{
