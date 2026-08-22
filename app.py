@@ -2868,6 +2868,25 @@ def client_profile(client_id):
     if len(weight_points_asc) >= 2:
         weight_change = round(weight_points_asc[-1].weight - weight_points_asc[0].weight, 1)
 
+    # Clients who log frequently can accumulate hundreds of entries; rendering a
+    # full edit modal per row (see stats.html) made the page balloon in DOM size.
+    # Cap what's actually listed/editable per view and let "Show more" raise it.
+    HISTORY_PAGE_SIZE = 50
+
+    def parse_history_limit(param_name):
+        try:
+            value = int(request.args.get(param_name, HISTORY_PAGE_SIZE))
+        except (TypeError, ValueError):
+            value = HISTORY_PAGE_SIZE
+        return max(HISTORY_PAGE_SIZE, value)
+
+    weight_history_limit = parse_history_limit("weight_limit")
+    measurement_history_limit = parse_history_limit("measurement_limit")
+    weight_history_display = weight_measurements[:weight_history_limit]
+    measurements_display = measurements[:measurement_history_limit]
+    weight_history_has_more = len(weight_measurements) > weight_history_limit
+    measurements_history_has_more = len(measurements) > measurement_history_limit
+
     # Sessions / Payments Plan
     sessions_per_week_from_payments, current_status = get_current_plan(client.id)
     sessions_per_week = (
@@ -3059,9 +3078,15 @@ def client_profile(client_id):
 
         # stats
         measurements=measurements,
+        measurements_display=measurements_display,
+        measurement_history_limit=measurement_history_limit,
+        measurements_history_has_more=measurements_history_has_more,
         latest=latest,
         weight_latest=weight_latest,
         weight_measurements=weight_measurements,
+        weight_history_display=weight_history_display,
+        weight_history_limit=weight_history_limit,
+        weight_history_has_more=weight_history_has_more,
         weight_change=weight_change,
         weight_labels=weight_labels,
         weight_values=weight_values,

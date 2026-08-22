@@ -128,47 +128,92 @@
 {% endcall %}
 
 {% call ds_card(title="Weight History") %}
-  {% if weight_measurements %}
+  {% if weight_history_display %}
     <div class="ds-item-list">
-      {% for m in weight_measurements %}
+      {% for m in weight_history_display %}
         <div class="ds-item-card" style="display:flex; align-items:center; justify-content:space-between; gap:var(--ds-space-3); padding:var(--ds-space-3) var(--ds-space-4);">
           <div>
             <div class="ds-item-card__title">{{ m.weight }} kg</div>
             <div class="ds-field__hint">{{ m.date.strftime("%d/%m/%Y") }}</div>
           </div>
-          {{ ds_button("", icon="edit", variant="ghost", size="sm", attrs=('aria-label="Edit weight entry" data-ds-modal-open="editWeightModal' ~ m.id ~ '"')) }}
+          {{ ds_button("", icon="edit", variant="ghost", size="sm", attrs=(
+            'aria-label="Edit weight entry" data-ds-modal-open="editWeightModal" data-edit-weight'
+            ~ ' data-id="' ~ m.id ~ '"'
+            ~ ' data-date="' ~ m.date.strftime("%d/%m/%Y") ~ '"'
+            ~ ' data-weight="' ~ (m.weight if m.weight is not none else '') ~ '"'
+            ~ ' data-chest="' ~ (m.chest if m.chest is not none else '') ~ '"'
+            ~ ' data-waist="' ~ (m.waist if m.waist is not none else '') ~ '"'
+            ~ ' data-stomach="' ~ (m.stomach if m.stomach is not none else '') ~ '"'
+            ~ ' data-glutes="' ~ (m.glutes if m.glutes is not none else '') ~ '"'
+            ~ ' data-arm-left="' ~ (m.arm_left if m.arm_left is not none else '') ~ '"'
+            ~ ' data-arm-right="' ~ (m.arm_right if m.arm_right is not none else '') ~ '"'
+            ~ ' data-quad-left="' ~ (m.quad_left if m.quad_left is not none else '') ~ '"'
+            ~ ' data-quad-right="' ~ (m.quad_right if m.quad_right is not none else '') ~ '"'
+            ~ ' data-calf-left="' ~ (m.calf_left if m.calf_left is not none else '') ~ '"'
+            ~ ' data-calf-right="' ~ (m.calf_right if m.calf_right is not none else '') ~ '"'
+          )) }}
         </div>
       {% endfor %}
     </div>
 
-    {% for m in weight_measurements %}
-      {% call ds_modal("editWeightModal" ~ m.id, "Edit Weight — " ~ m.date.strftime("%d/%m/%Y")) %}
-        <form action="{{ url_for('update_measurement', client_id=client.id, measurement_id=m.id) }}" method="POST">
+    {% if weight_history_has_more %}
+      <div style="margin-top:var(--ds-space-4);">
+        {{ ds_button("Show more", variant="secondary", block=True, href=url_for('client_profile', client_id=client.id, tab='stats', weight_limit=(weight_history_limit + 50), measurement_limit=measurement_history_limit), attrs='data-ds-nav') }}
+      </div>
+    {% endif %}
+
+    {% call ds_modal("editWeightModal", "Edit Weight") %}
+      <form id="editWeightForm" method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="ds-field__hint" id="editWeightModalDate" style="margin-bottom:var(--ds-space-3);"></div>
+        {{ ds_input("weight", label="Weight (kg)", type="text", id="editWeightInput", attrs='inputmode="decimal" pattern="-?\d+([.,]\d+)?"') }}
+        <input type="hidden" name="chest" id="editWeightChest">
+        <input type="hidden" name="waist" id="editWeightWaist">
+        <input type="hidden" name="stomach" id="editWeightStomach">
+        <input type="hidden" name="glutes" id="editWeightGlutes">
+        <input type="hidden" name="arm_left" id="editWeightArmLeft">
+        <input type="hidden" name="arm_right" id="editWeightArmRight">
+        <input type="hidden" name="quad_left" id="editWeightQuadLeft">
+        <input type="hidden" name="quad_right" id="editWeightQuadRight">
+        <input type="hidden" name="calf_left" id="editWeightCalfLeft">
+        <input type="hidden" name="calf_right" id="editWeightCalfRight">
+        {{ ds_button("Save", type="submit", block=True) }}
+      </form>
+      {% if is_admin %}
+        <form id="editWeightDeleteForm" method="POST" data-ds-confirm="Delete this weight entry?" style="margin-top:var(--ds-space-3);">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          {{ ds_input("weight", label="Weight (kg)", type="text", value=(m.weight if m.weight is not none else ''), attrs='inputmode="decimal" pattern="-?\d+([.,]\d+)?"') }}
-          <input type="hidden" name="chest" value="{{ m.chest if m.chest is not none else '' }}">
-          <input type="hidden" name="waist" value="{{ m.waist if m.waist is not none else '' }}">
-          <input type="hidden" name="stomach" value="{{ m.stomach if m.stomach is not none else '' }}">
-          <input type="hidden" name="glutes" value="{{ m.glutes if m.glutes is not none else '' }}">
-          <input type="hidden" name="arm_left" value="{{ m.arm_left if m.arm_left is not none else '' }}">
-          <input type="hidden" name="arm_right" value="{{ m.arm_right if m.arm_right is not none else '' }}">
-          <input type="hidden" name="quad_left" value="{{ m.quad_left if m.quad_left is not none else '' }}">
-          <input type="hidden" name="quad_right" value="{{ m.quad_right if m.quad_right is not none else '' }}">
-          <input type="hidden" name="calf_left" value="{{ m.calf_left if m.calf_left is not none else '' }}">
-          <input type="hidden" name="calf_right" value="{{ m.calf_right if m.calf_right is not none else '' }}">
-          {{ ds_button("Save", type="submit", block=True) }}
+          {{ ds_button("Delete Entry", type="submit", variant="danger", block=True) }}
         </form>
-        {% if is_admin %}
-          <form action="{{ url_for('delete_measurement', client_id=client.id, measurement_id=m.id) }}"
-                method="POST"
-                data-ds-confirm="Delete this weight entry?"
-                style="margin-top:var(--ds-space-3);">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            {{ ds_button("Delete Entry", type="submit", variant="danger", block=True) }}
-          </form>
-        {% endif %}
-      {% endcall %}
-    {% endfor %}
+      {% endif %}
+    {% endcall %}
+
+    <script>
+      (function () {
+        if (window.__dsStatsWeightEditBound) return;
+        window.__dsStatsWeightEditBound = true;
+        document.addEventListener("click", function (event) {
+          const btn = event.target.closest("[data-edit-weight]");
+          if (!btn) return;
+          const id = btn.dataset.id;
+          const updateForm = document.getElementById("editWeightForm");
+          const deleteForm = document.getElementById("editWeightDeleteForm");
+          if (updateForm) updateForm.action = "{{ url_for('update_measurement', client_id=client.id, measurement_id=999999999) }}".replace("999999999", id);
+          if (deleteForm) deleteForm.action = "{{ url_for('delete_measurement', client_id=client.id, measurement_id=999999999) }}".replace("999999999", id);
+          document.getElementById("editWeightModalDate").textContent = "Editing entry from " + (btn.dataset.date || "");
+          document.getElementById("editWeightInput").value = btn.dataset.weight || "";
+          document.getElementById("editWeightChest").value = btn.dataset.chest || "";
+          document.getElementById("editWeightWaist").value = btn.dataset.waist || "";
+          document.getElementById("editWeightStomach").value = btn.dataset.stomach || "";
+          document.getElementById("editWeightGlutes").value = btn.dataset.glutes || "";
+          document.getElementById("editWeightArmLeft").value = btn.dataset.armLeft || "";
+          document.getElementById("editWeightArmRight").value = btn.dataset.armRight || "";
+          document.getElementById("editWeightQuadLeft").value = btn.dataset.quadLeft || "";
+          document.getElementById("editWeightQuadRight").value = btn.dataset.quadRight || "";
+          document.getElementById("editWeightCalfLeft").value = btn.dataset.calfLeft || "";
+          document.getElementById("editWeightCalfRight").value = btn.dataset.calfRight || "";
+        });
+      })();
+    </script>
   {% else %}
     <div class="ds-empty">No weight history yet.</div>
   {% endif %}
@@ -191,13 +236,28 @@
 {% endcall %}
 
 {% call ds_card(title="History") %}
-  {% if measurements %}
+  {% if measurements_display %}
     <div class="ds-item-list">
-      {% for m in measurements %}
+      {% for m in measurements_display %}
         <div class="ds-item-card">
           <div class="ds-item-card__top">
             <div class="ds-item-card__title">{{ m.date.strftime("%d/%m/%Y") }}</div>
-            {{ ds_button("Edit", icon="edit", variant="ghost", size="sm", attrs='data-ds-modal-open="editMeasurementModal' ~ m.id ~ '"') }}
+            {{ ds_button("Edit", icon="edit", variant="ghost", size="sm", attrs=(
+              'data-ds-modal-open="editMeasurementModal" data-edit-measurement'
+              ~ ' data-id="' ~ m.id ~ '"'
+              ~ ' data-date="' ~ m.date.strftime("%d/%m/%Y") ~ '"'
+              ~ ' data-weight="' ~ (m.weight if m.weight is not none else '') ~ '"'
+              ~ ' data-chest="' ~ (m.chest if m.chest is not none else '') ~ '"'
+              ~ ' data-waist="' ~ (m.waist if m.waist is not none else '') ~ '"'
+              ~ ' data-stomach="' ~ (m.stomach if m.stomach is not none else '') ~ '"'
+              ~ ' data-glutes="' ~ (m.glutes if m.glutes is not none else '') ~ '"'
+              ~ ' data-arm-left="' ~ (m.arm_left if m.arm_left is not none else '') ~ '"'
+              ~ ' data-arm-right="' ~ (m.arm_right if m.arm_right is not none else '') ~ '"'
+              ~ ' data-quad-left="' ~ (m.quad_left if m.quad_left is not none else '') ~ '"'
+              ~ ' data-quad-right="' ~ (m.quad_right if m.quad_right is not none else '') ~ '"'
+              ~ ' data-calf-left="' ~ (m.calf_left if m.calf_left is not none else '') ~ '"'
+              ~ ' data-calf-right="' ~ (m.calf_right if m.calf_right is not none else '') ~ '"'
+            )) }}
           </div>
           <div class="ds-measure-grid">
             {% for label, val in [("Weight", m.weight), ("Chest", m.chest), ("Waist", m.waist), ("Stomach", m.stomach), ("Glutes", m.glutes), ("Arm L", m.arm_left), ("Arm R", m.arm_right), ("Quad L", m.quad_left), ("Quad R", m.quad_right), ("Calf L", m.calf_left), ("Calf R", m.calf_right)] %}
@@ -209,41 +269,71 @@
         </div>
       {% endfor %}
     </div>
+
+    {% if measurements_history_has_more %}
+      <div style="margin-top:var(--ds-space-4);">
+        {{ ds_button("Show more", variant="secondary", block=True, href=url_for('client_profile', client_id=client.id, tab='stats', weight_limit=weight_history_limit, measurement_limit=(measurement_history_limit + 50)), attrs='data-ds-nav') }}
+      </div>
+    {% endif %}
   {% else %}
     <div class="ds-empty">No full-body history yet. Weight-only entries are shown above.</div>
   {% endif %}
 {% endcall %}
 
-{% for m in measurements %}
-  {% call ds_modal("editMeasurementModal" ~ m.id, "Edit " ~ m.date.strftime("%d/%m/%Y")) %}
-    <form action="{{ url_for('update_measurement', client_id=client.id, measurement_id=m.id) }}" method="POST">
+{% call ds_modal("editMeasurementModal", "Edit Measurement") %}
+  <form id="editMeasurementForm" method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="ds-field__hint" id="editMeasurementModalDate" style="margin-bottom:var(--ds-space-3);"></div>
+    <div class="ds-grid-2">
+      <input class="ds-input" id="editMeasurementWeight" name="weight" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Weight (kg)" style="margin-bottom:var(--ds-space-2);">
+      <input class="ds-input" id="editMeasurementChest" name="chest" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Chest (cm)" style="margin-bottom:var(--ds-space-2);">
+      <input class="ds-input" id="editMeasurementWaist" name="waist" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Waist (cm)" style="margin-bottom:var(--ds-space-2);">
+      <input class="ds-input" id="editMeasurementStomach" name="stomach" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Stomach (cm)" style="margin-bottom:var(--ds-space-2);">
+      <input class="ds-input" id="editMeasurementGlutes" name="glutes" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Glutes (cm)" style="margin-bottom:var(--ds-space-2);">
+      <input class="ds-input" id="editMeasurementArmLeft" name="arm_left" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Arm Left (cm)" style="margin-bottom:var(--ds-space-2);">
+      <input class="ds-input" id="editMeasurementArmRight" name="arm_right" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Arm Right (cm)" style="margin-bottom:var(--ds-space-2);">
+      <input class="ds-input" id="editMeasurementQuadLeft" name="quad_left" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Quad Left (cm)" style="margin-bottom:var(--ds-space-2);">
+      <input class="ds-input" id="editMeasurementQuadRight" name="quad_right" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Quad Right (cm)" style="margin-bottom:var(--ds-space-2);">
+      <input class="ds-input" id="editMeasurementCalfLeft" name="calf_left" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Calf Left (cm)" style="margin-bottom:var(--ds-space-2);">
+      <input class="ds-input" id="editMeasurementCalfRight" name="calf_right" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Calf Right (cm)" style="margin-bottom:var(--ds-space-2);">
+    </div>
+    {{ ds_button("Save Changes", type="submit", block=True) }}
+  </form>
+  {% if is_admin %}
+    <form id="editMeasurementDeleteForm" method="POST" data-ds-confirm="Delete this measurement?" style="margin-top:var(--ds-space-3);">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <div class="ds-grid-2">
-        <input class="ds-input" name="weight" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" value="{{ m.weight if m.weight is not none else '' }}" placeholder="Weight (kg)" style="margin-bottom:var(--ds-space-2);">
-        <input class="ds-input" name="chest" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" value="{{ m.chest if m.chest is not none else '' }}" placeholder="Chest (cm)" style="margin-bottom:var(--ds-space-2);">
-        <input class="ds-input" name="waist" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" value="{{ m.waist if m.waist is not none else '' }}" placeholder="Waist (cm)" style="margin-bottom:var(--ds-space-2);">
-        <input class="ds-input" name="stomach" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" value="{{ m.stomach if m.stomach is not none else '' }}" placeholder="Stomach (cm)" style="margin-bottom:var(--ds-space-2);">
-        <input class="ds-input" name="glutes" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" value="{{ m.glutes if m.glutes is not none else '' }}" placeholder="Glutes (cm)" style="margin-bottom:var(--ds-space-2);">
-        <input class="ds-input" name="arm_left" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" value="{{ m.arm_left if m.arm_left is not none else '' }}" placeholder="Arm Left (cm)" style="margin-bottom:var(--ds-space-2);">
-        <input class="ds-input" name="arm_right" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" value="{{ m.arm_right if m.arm_right is not none else '' }}" placeholder="Arm Right (cm)" style="margin-bottom:var(--ds-space-2);">
-        <input class="ds-input" name="quad_left" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" value="{{ m.quad_left if m.quad_left is not none else '' }}" placeholder="Quad Left (cm)" style="margin-bottom:var(--ds-space-2);">
-        <input class="ds-input" name="quad_right" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" value="{{ m.quad_right if m.quad_right is not none else '' }}" placeholder="Quad Right (cm)" style="margin-bottom:var(--ds-space-2);">
-        <input class="ds-input" name="calf_left" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" value="{{ m.calf_left if m.calf_left is not none else '' }}" placeholder="Calf Left (cm)" style="margin-bottom:var(--ds-space-2);">
-        <input class="ds-input" name="calf_right" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" value="{{ m.calf_right if m.calf_right is not none else '' }}" placeholder="Calf Right (cm)" style="margin-bottom:var(--ds-space-2);">
-      </div>
-      {{ ds_button("Save Changes", type="submit", block=True) }}
+      {{ ds_button("Delete Entry", type="submit", variant="danger", block=True) }}
     </form>
-    {% if is_admin %}
-      <form action="{{ url_for('delete_measurement', client_id=client.id, measurement_id=m.id) }}"
-            method="POST"
-            data-ds-confirm="Delete this measurement?"
-            style="margin-top:var(--ds-space-3);">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        {{ ds_button("Delete Entry", type="submit", variant="danger", block=True) }}
-      </form>
-    {% endif %}
-  {% endcall %}
-{% endfor %}
+  {% endif %}
+{% endcall %}
+
+<script>
+  (function () {
+    if (window.__dsStatsMeasurementEditBound) return;
+    window.__dsStatsMeasurementEditBound = true;
+    document.addEventListener("click", function (event) {
+      const btn = event.target.closest("[data-edit-measurement]");
+      if (!btn) return;
+      const id = btn.dataset.id;
+      const updateForm = document.getElementById("editMeasurementForm");
+      const deleteForm = document.getElementById("editMeasurementDeleteForm");
+      if (updateForm) updateForm.action = "{{ url_for('update_measurement', client_id=client.id, measurement_id=999999999) }}".replace("999999999", id);
+      if (deleteForm) deleteForm.action = "{{ url_for('delete_measurement', client_id=client.id, measurement_id=999999999) }}".replace("999999999", id);
+      document.getElementById("editMeasurementModalDate").textContent = "Editing entry from " + (btn.dataset.date || "");
+      document.getElementById("editMeasurementWeight").value = btn.dataset.weight || "";
+      document.getElementById("editMeasurementChest").value = btn.dataset.chest || "";
+      document.getElementById("editMeasurementWaist").value = btn.dataset.waist || "";
+      document.getElementById("editMeasurementStomach").value = btn.dataset.stomach || "";
+      document.getElementById("editMeasurementGlutes").value = btn.dataset.glutes || "";
+      document.getElementById("editMeasurementArmLeft").value = btn.dataset.armLeft || "";
+      document.getElementById("editMeasurementArmRight").value = btn.dataset.armRight || "";
+      document.getElementById("editMeasurementQuadLeft").value = btn.dataset.quadLeft || "";
+      document.getElementById("editMeasurementQuadRight").value = btn.dataset.quadRight || "";
+      document.getElementById("editMeasurementCalfLeft").value = btn.dataset.calfLeft || "";
+      document.getElementById("editMeasurementCalfRight").value = btn.dataset.calfRight || "";
+    });
+  })();
+</script>
 
 <script>
 (function () {
