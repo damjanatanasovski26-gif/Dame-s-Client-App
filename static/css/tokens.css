@@ -1,0 +1,142 @@
+/*
+  Design tokens — v1
+  Consolidated, single source of truth for the new design system.
+  style.css currently defines --bg-a/--surface/--text/etc. three separate
+  times (lines ~3, ~4389, ~4981) with later blocks silently overriding
+  earlier ones. This file does NOT touch those — it defines a fresh,
+  namespaced token set (--ds-*) so nothing here can collide with or change
+  existing legacy pages. Legacy --accent/--primary/etc. values are mirrored
+  here for continuity (same colors), not reinvented.
+*/
+
+:root{
+  /*
+    Tells the browser to render NATIVE form widgets (date/time picker
+    popups, number spinner arrows, checkboxes, scrollbars) using dark
+    chrome instead of the OS/browser light default. Without this, every
+    date input you open shows a light-mode calendar popup no matter what
+    the surrounding CSS looks like.
+  */
+  color-scheme: dark;
+
+  /* ---- color: dark (default) ---- */
+  --ds-bg: #0a0d10;
+  --ds-bg-elevated: #12171b;
+  --ds-surface: #171d22;
+  --ds-surface-soft: #1c232a;
+  --ds-surface-2: #232b32;
+  --ds-border: rgba(245, 247, 246, .10);
+  --ds-border-strong: rgba(245, 247, 246, .18);
+
+  --ds-text: #f5f7f6;
+  --ds-text-muted: #a3ada8;
+  --ds-text-faint: #6f7a75;
+
+  --ds-primary: #75a3ff;
+  --ds-primary-strong: #5b8df0;
+  --ds-accent: #c7ff45;
+  --ds-accent-strong: #b0eb2c;
+  --ds-accent-ink: #10150a; /* text placed on top of accent-filled surfaces */
+
+  --ds-success: #3dd68c;
+  --ds-warn: #ffd166;
+  --ds-danger: #ff675a;
+
+  --ds-focus-ring: 0 0 0 3px color-mix(in srgb, var(--ds-accent) 45%, transparent);
+
+  /* ---- shadow / glow ---- */
+  --ds-shadow-sm: 0 2px 8px rgba(0, 0, 0, .28);
+  --ds-shadow-md: 0 10px 28px rgba(0, 0, 0, .34);
+  --ds-shadow-lg: 0 22px 54px rgba(0, 0, 0, .42);
+  --ds-glow-accent: 0 0 0 1px color-mix(in srgb, var(--ds-accent) 30%, transparent), 0 16px 40px color-mix(in srgb, var(--ds-accent) 16%, transparent);
+
+  /* ---- radius ---- */
+  --ds-radius-sm: 8px;
+  --ds-radius-md: 14px;
+  --ds-radius-lg: 20px;
+  --ds-radius-xl: 28px;
+  --ds-radius-full: 999px;
+
+  /* ---- spacing (4px grid) ---- */
+  --ds-space-1: 4px;
+  --ds-space-2: 8px;
+  --ds-space-3: 12px;
+  --ds-space-4: 16px;
+  --ds-space-5: 20px;
+  --ds-space-6: 24px;
+  --ds-space-7: 32px;
+  --ds-space-8: 48px;
+
+  /* ---- typography ---- */
+  --ds-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, Helvetica, Arial, sans-serif;
+
+  --ds-text-xs: .75rem;    /* 12px */
+  --ds-text-sm: .8125rem;  /* 13px */
+  --ds-text-base: .9375rem;/* 15px */
+  --ds-text-md: 1.0625rem; /* 17px */
+  --ds-text-lg: 1.25rem;   /* 20px */
+  --ds-text-xl: 1.625rem;  /* 26px */
+  --ds-text-2xl: 2rem;     /* 32px */
+  --ds-text-3xl: 2.5rem;   /* 40px */
+
+  --ds-fw-regular: 400;
+  --ds-fw-medium: 500;
+  --ds-fw-semibold: 600;
+  --ds-fw-bold: 700;
+  --ds-fw-black: 800;
+
+  --ds-leading-tight: 1.15;
+  --ds-leading-snug: 1.35;
+  --ds-leading-normal: 1.5;
+
+  --ds-tracking-tight: -0.01em;
+  --ds-tracking-wide: 0.04em;
+
+  /* ---- motion ---- */
+  --ds-ease: cubic-bezier(.2, .8, .2, 1);
+  --ds-duration-fast: 140ms;
+  --ds-duration-base: 220ms;
+
+  /* ---- touch / layout ---- */
+  --ds-tap-min: 44px;
+  --ds-container-max: 640px;
+
+  /* ---- z-index scale ---- */
+  --ds-z-sticky: 50;
+  --ds-z-modal: 1000;
+  --ds-z-toast: 1100;
+}
+
+/*
+  Light mode kept for parity with the existing theme toggle
+  (data-theme="light" is set by the same JS in base.html).
+*/
+:root[data-theme="light"]{
+  color-scheme: light;
+  --ds-bg: #f5f7f4;
+  --ds-bg-elevated: #e9eeea;
+  --ds-surface: #ffffff;
+  --ds-surface-soft: #f3f5f2;
+  --ds-surface-2: #e9edea;
+  --ds-border: rgba(16, 20, 22, .10);
+  --ds-border-strong: rgba(16, 20, 22, .16);
+
+  --ds-text: #101416;
+  --ds-text-muted: #5f6a64;
+  --ds-text-faint: #8a938d;
+
+  --ds-primary: #1f5eff;
+  --ds-primary-strong: #1648c8;
+  --ds-accent: #8fd400;
+  --ds-accent-strong: #79b800;
+  --ds-accent-ink: #0c1200;
+
+  --ds-success: #16a36a;
+  --ds-warn: #b7791f;
+  --ds-danger: #d33f32;
+
+  --ds-shadow-sm: 0 2px 8px rgba(16, 20, 22, .06);
+  --ds-shadow-md: 0 10px 28px rgba(16, 20, 22, .08);
+  --ds-shadow-lg: 0 22px 54px rgba(16, 20, 22, .12);
+  --ds-glow-accent: 0 0 0 1px color-mix(in srgb, var(--ds-accent) 35%, transparent), 0 16px 40px color-mix(in srgb, var(--ds-accent) 14%, transparent);
+}

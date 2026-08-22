@@ -1,74 +1,29 @@
-<div class="card">
-  <h3>Add Payment</h3>
+{% from "components.html" import ds_card, ds_button, ds_input, ds_badge, ds_modal, ds_icon %}
 
-  <form id="paymentEntryForm" class="form" action="{{ url_for('add_payment', client_id=client.id) }}" method="POST" style="max-width:700px;">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div class="grid-2">
-      <div>
-        <label class="label">Start date (DD/MM/YYYY)</label>
-        <input id="paymentStartDate" class="input" name="start_date" placeholder="09/02/2026" required>
-      </div>
-
-      <div>
-        <label class="label">Amount paid (MKD)</label>
-        <input id="paymentAmount" class="input" name="amount_paid" type="number" min="0" step="1" placeholder="e.g. 5000, 10000, 14000" required>
-      </div>
-
-      <div style="grid-column: 1 / -1;">
-        <label class="label">Optional note</label>
-        <input class="input" name="note" placeholder="e.g. cash, bank transfer">
-      </div>
-    </div>
-
-    <button class="btn" type="submit">Save Payment</button>
-  </form>
-
-  <div id="paymentPreview" class="alert" style="margin-top:12px;">
-    Enter start date and amount to preview plan details.
-  </div>
-
-  <p class="muted" style="margin-top:10px;">
-    Rules: 5000 = 1 month / 3 sessions week, 7000 = 1 month / 5 sessions week. Multiples = multiple months.
-  </p>
-</div>
-
-<div class="card">
-  <h3>Adjust Current Due Date</h3>
-  {% if current_status %}
-    <div class="muted" style="margin-bottom:10px;">
-      Current due date: <b>{{ current_status.paid_until.strftime("%d/%m/%Y") }}</b>
-      {% if current_status.days_left >= 0 %}
-        ({{ current_status.days_left }} day(s) left)
+{% call ds_card() %}
+  <div class="ds-section-head">
+    <div>
+      <span class="ds-card__eyebrow">Current Plan</span>
+      {% if current_status %}
+        <div style="display:flex; align-items:center; gap:var(--ds-space-3); margin-top:var(--ds-space-1);">
+          <b style="font-size:var(--ds-text-lg); font-weight:var(--ds-fw-black);">{{ current_status.paid_until.strftime("%d %b %Y") }}</b>
+          {{ ds_badge((current_status.days_left|string ~ " day(s) left") if current_status.days_left >= 0 else ("Overdue " ~ (-current_status.days_left) ~ "d"), variant=("danger" if current_status.days_left < 0 else ("warn" if current_status.days_left <= 7 else "success"))) }}
+        </div>
       {% else %}
-        (<span style="color:var(--danger); font-weight:700;">Overdue {{ -current_status.days_left }} day(s)</span>)
+        <div style="margin-top:var(--ds-space-1); color:var(--ds-text-muted);">No active payment plan yet.</div>
       {% endif %}
     </div>
-    <form class="form" action="{{ url_for('adjust_current_payment_due', client_id=client.id) }}" method="POST" style="max-width:700px;">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <div class="grid-2">
-        <div>
-          <label class="label">Extend by days</label>
-          <input class="input" name="extend_days" type="number" min="1" step="1" placeholder="e.g. 7">
-        </div>
-        <div>
-          <label class="label">Or set exact due date (DD/MM/YYYY)</label>
-          <input class="input" name="new_due_date" placeholder="e.g. 25/12/2026">
-        </div>
-      </div>
-      <button class="btn" type="submit">Update Due Date</button>
-    </form>
-    <div class="muted" style="margin-top:8px;">Use one field at a time.</div>
-  {% else %}
-    <div class="empty-state">No active payment plan yet.</div>
+    {{ ds_button("Add Payment", icon="plus", attrs='data-ds-modal-open="addPaymentModal"') }}
+  </div>
+  {% if current_status %}
+    {{ ds_button("Adjust Due Date", icon="calendar", variant="secondary", size="sm", attrs='data-ds-modal-open="adjustDueModal"') }}
   {% endif %}
-</div>
+{% endcall %}
 
-<div class="card">
-  <h3>Payment History</h3>
-
+{% call ds_card(title="Payment History") %}
   {% if payments_view %}
-    <div class="table-wrap">
-      <table>
+    <div class="ds-table-wrap">
+      <table class="ds-table">
         <tr>
           <th>Start</th>
           <th>Months</th>
@@ -90,7 +45,7 @@
             <td>
               {{ row.due.strftime("%d/%m/%Y") }}
               {% if p.due_date_override %}
-                <div class="muted" style="font-size:12px;">Manual due date</div>
+                <div class="ds-field__hint">Manual due date</div>
               {% endif %}
             </td>
 
@@ -99,9 +54,7 @@
                 {% if row.days_left >= 0 %}
                   {{ row.days_left }}
                 {% else %}
-                  <span style="color:var(--danger); font-weight:800;">
-                    OVERDUE {{ (-row.days_left) }}
-                  </span>
+                  {{ ds_badge("Overdue " ~ (-row.days_left), variant="danger") }}
                 {% endif %}
               {% else %}
                 Past plan
@@ -113,10 +66,10 @@
             <td style="text-align:right;">
               <form action="{{ url_for('delete_payment', client_id=client.id, payment_id=p.id) }}"
                     method="POST"
-                    onsubmit="return confirm('Delete this payment?');"
+                    data-ds-confirm="Delete this payment?"
                     style="margin:0;">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button class="btn danger" type="submit">Delete</button>
+                {{ ds_button("", type="submit", variant="danger", size="sm", icon="trash", attrs='aria-label="Delete payment"') }}
               </form>
             </td>
           </tr>
@@ -124,16 +77,82 @@
       </table>
     </div>
   {% else %}
-    <div class="empty-state">No payments yet.</div>
+    <div class="ds-empty-icon">
+      {{ ds_icon("card", 32) }}
+      <span>No payments yet. Tap "Add Payment" to record the first one.</span>
+    </div>
   {% endif %}
-</div>
+{% endcall %}
+
+{% call ds_modal("addPaymentModal", "Add Payment") %}
+  <form id="paymentEntryForm" action="{{ url_for('add_payment', client_id=client.id) }}" method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="ds-plan-toggle" role="radiogroup" aria-label="Plan type">
+      <label class="ds-plan-toggle__option">
+        <input type="radio" name="plan_type" value="" checked data-plan-toggle="standard"> Standard
+      </label>
+      <label class="ds-plan-toggle__option">
+        <input type="radio" name="plan_type" value="custom" data-plan-toggle="custom"> Custom
+      </label>
+    </div>
+
+    {{ ds_input("start_date", label="Start date (DD/MM/YYYY)", placeholder="09/02/2026", required=True, id="paymentStartDate") }}
+    {{ ds_input("amount_paid", label="Amount paid (MKD)", type="number", placeholder="e.g. 5000, 10000, 14000", required=True, id="paymentAmount", attrs='min="0" step="1"') }}
+
+    <div id="customPlanFields" hidden>
+      {{ ds_input("custom_months", label="Length (months)", type="number", placeholder="e.g. 2", attrs='min="1" step="1"') }}
+      {{ ds_input("custom_sessions_per_week", label="Weekly sessions", type="number", placeholder="e.g. 4", attrs='min="1" step="1"') }}
+    </div>
+
+    {{ ds_input("note", label="Optional note", placeholder="e.g. cash, bank transfer") }}
+
+    <div id="paymentPreview" class="ds-field__hint" style="margin-bottom:var(--ds-space-3);">
+      Enter start date and amount to preview plan details.
+    </div>
+
+    <p class="ds-field__hint" id="standardPlanRules" style="margin-bottom:var(--ds-space-3);">
+      Standard rules: 5000 = 1 month / 3 sessions week, 7000 = 1 month / 5 sessions week. Multiples = multiple months.
+      Use Custom for any other amount, length, or weekly session count.
+    </p>
+
+    {{ ds_button("Save Payment", type="submit", block=True) }}
+  </form>
+{% endcall %}
+
+{% if current_status %}
+{% call ds_modal("adjustDueModal", "Adjust Current Due Date") %}
+  <div class="ds-field__hint" style="margin-bottom:var(--ds-space-3);">
+    Current due date: <b>{{ current_status.paid_until.strftime("%d/%m/%Y") }}</b>
+    {% if current_status.days_left >= 0 %}
+      ({{ current_status.days_left }} day(s) left)
+    {% else %}
+      ({{ ds_badge("Overdue " ~ (-current_status.days_left) ~ " day(s)", variant="danger") }})
+    {% endif %}
+  </div>
+  <form action="{{ url_for('adjust_current_payment_due', client_id=client.id) }}" method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {{ ds_input("extend_days", label="Extend by days", type="number", placeholder="e.g. 7", attrs='min="1" step="1"') }}
+    {{ ds_input("new_due_date", label="Or set exact due date (DD/MM/YYYY)", placeholder="e.g. 25/12/2026") }}
+    <div class="ds-field__hint" style="margin-bottom:var(--ds-space-3);">Use one field at a time.</div>
+    {{ ds_button("Update Due Date", type="submit", block=True) }}
+  </form>
+{% endcall %}
+{% endif %}
 
 <script>
   (function () {
     const startEl = document.getElementById("paymentStartDate");
     const amountEl = document.getElementById("paymentAmount");
     const previewEl = document.getElementById("paymentPreview");
+    const rulesEl = document.getElementById("standardPlanRules");
+    const customFields = document.getElementById("customPlanFields");
+    const planToggles = document.querySelectorAll('[data-plan-toggle]');
+    const customMonthsEl = document.getElementById("ds-field-custom_months");
+    const customSessionsEl = document.getElementById("ds-field-custom_sessions_per_week");
     if (!startEl || !amountEl || !previewEl) return;
+
+    let isCustom = false;
 
     function parseDate(value) {
       const parts = (value || "").split("/");
@@ -168,8 +187,22 @@
       const amount = Number(amountEl.value || 0);
       const startDate = parseDate(startEl.value);
 
+      if (isCustom) {
+        const months = Number((customMonthsEl && customMonthsEl.value) || 0);
+        const sessions = Number((customSessionsEl && customSessionsEl.value) || 0);
+        if (!amount || !startDate || !months || !sessions) {
+          previewEl.className = "ds-field__hint";
+          previewEl.textContent = "Enter start date, amount, length, and weekly sessions to preview.";
+          return;
+        }
+        const dueDate = addMonths(startDate, months);
+        previewEl.className = "ds-field__hint";
+        previewEl.textContent = "Preview: " + months + " month(s), " + sessions + "/week, due on " + fmtDate(dueDate) + ".";
+        return;
+      }
+
       if (!amount || !startDate) {
-        previewEl.className = "alert";
+        previewEl.className = "ds-field__hint";
         previewEl.textContent = "Enter start date and amount to preview plan details.";
         return;
       }
@@ -182,21 +215,38 @@
       } else if (amount % 7000 === 0 && amount % 5000 !== 0) {
         monthlyPrice = 7000; sessions = 5; months = amount / 7000;
       } else if (amount % 5000 === 0 && amount % 7000 === 0) {
-        previewEl.className = "alert error";
-        previewEl.textContent = "Ambiguous amount: use a non-overlapping multiple, or split it into separate payments.";
+        previewEl.className = "ds-field__error";
+        previewEl.textContent = "Ambiguous amount: use a non-overlapping multiple, switch to Custom, or split into separate payments.";
         return;
       } else {
-        previewEl.className = "alert error";
-        previewEl.textContent = "Invalid amount: must be divisible by 5000 or 7000.";
+        previewEl.className = "ds-field__error";
+        previewEl.textContent = "Invalid amount: must be divisible by 5000 or 7000, or switch to Custom.";
         return;
       }
 
       const dueDate = addMonths(startDate, months);
-      previewEl.className = "alert success";
+      previewEl.className = "ds-field__hint";
       previewEl.textContent = "Preview: " + months + " month(s), " + sessions + "/week, monthly price " + monthlyPrice + " MKD, due on " + fmtDate(dueDate) + ".";
     }
 
+    function applyPlanMode() {
+      if (customFields) customFields.hidden = !isCustom;
+      if (rulesEl) rulesEl.hidden = isCustom;
+      renderPreview();
+    }
+
+    planToggles.forEach(function (toggle) {
+      toggle.addEventListener("change", function () {
+        isCustom = toggle.getAttribute("data-plan-toggle") === "custom" && toggle.checked;
+        applyPlanMode();
+      });
+    });
+
     startEl.addEventListener("input", renderPreview);
     amountEl.addEventListener("input", renderPreview);
+    if (customMonthsEl) customMonthsEl.addEventListener("input", renderPreview);
+    if (customSessionsEl) customSessionsEl.addEventListener("input", renderPreview);
+
+    applyPlanMode();
   })();
 </script>

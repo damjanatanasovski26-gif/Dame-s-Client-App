@@ -1,66 +1,67 @@
-<div class="card">
-  <h3>Body Measurements</h3>
+{% from "components.html" import ds_card, ds_button, ds_input, ds_badge, ds_modal, ds_icon %}
 
-  <details class="measurement-entry-panel">
-    <summary class="btn secondary">Add Body Measurements</summary>
-    <form id="statsEntryForm" class="form" action="{{ url_for('add_measurement', client_id=client.id) }}" method="POST" style="max-width:900px; margin-top:14px;">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <div class="grid-2">
-        <input class="input" name="weight" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Weight (kg)">
-
-        <input class="input" name="chest" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Chest (cm)">
-        <input class="input" name="waist" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Waist (cm)">
-        <input class="input" name="stomach" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Stomach (cm)">
-        <input class="input" name="glutes" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Glutes (cm)">
-
-        <input class="input" name="arm_left" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Arm Left (cm)">
-        <input class="input" name="arm_right" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Arm Right (cm)">
-
-        <input class="input" name="quad_left" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Quad Left (cm)">
-        <input class="input" name="quad_right" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Quad Right (cm)">
-
-        <input class="input" name="calf_left" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Calf Left (cm)">
-        <input class="input" name="calf_right" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Calf Right (cm)">
-      </div>
-
-      <button class="btn" type="submit">Save Measurements</button>
-    </form>
-  </details>
-</div>
-
-<div class="card">
-  <h3>Progress Photos</h3>
-  <form id="progressPhotoForm" class="form" action="{{ url_for('upload_progress_photo', client_id=client.id) }}" method="POST" enctype="multipart/form-data" style="max-width:700px;">
+{% call ds_modal("addMeasurementModal", "Add Body Measurements") %}
+  <form id="statsEntryForm" action="{{ url_for('add_measurement', client_id=client.id) }}" method="POST">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <input class="nutrition-file-input" id="progressPhotoFile" type="file" name="photo" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" required>
-    <div class="nutrition-file-picker">
-      <button class="btn secondary" id="chooseProgressPhoto" type="button">Choose from Gallery</button>
-      <button class="btn secondary" id="takeProgressPhoto" type="button">Use Camera</button>
-      <div class="nutrition-file-name" id="progressPhotoFileName">No photo selected</div>
+    <div class="ds-grid-2">
+      <input class="ds-input" name="weight" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Weight (kg)" style="margin-bottom:var(--ds-space-3);">
+      <input class="ds-input" name="chest" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Chest (cm)" style="margin-bottom:var(--ds-space-3);">
+      <input class="ds-input" name="waist" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Waist (cm)" style="margin-bottom:var(--ds-space-3);">
+      <input class="ds-input" name="stomach" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Stomach (cm)" style="margin-bottom:var(--ds-space-3);">
+      <input class="ds-input" name="glutes" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Glutes (cm)" style="margin-bottom:var(--ds-space-3);">
+      <input class="ds-input" name="arm_left" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Arm Left (cm)" style="margin-bottom:var(--ds-space-3);">
+      <input class="ds-input" name="arm_right" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Arm Right (cm)" style="margin-bottom:var(--ds-space-3);">
+      <input class="ds-input" name="quad_left" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Quad Left (cm)" style="margin-bottom:var(--ds-space-3);">
+      <input class="ds-input" name="quad_right" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Quad Right (cm)" style="margin-bottom:var(--ds-space-3);">
+      <input class="ds-input" name="calf_left" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Calf Left (cm)" style="margin-bottom:var(--ds-space-3);">
+      <input class="ds-input" name="calf_right" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" placeholder="Calf Right (cm)" style="margin-bottom:var(--ds-space-3);">
     </div>
-    <div class="muted nutrition-file-hint">JPG, PNG, or WEBP. Max 8 MB.</div>
-    <button class="btn" id="progressPhotoSubmit" type="submit">Upload Photo</button>
+    {{ ds_button("Save Measurements", type="submit", block=True) }}
   </form>
+{% endcall %}
+
+{% call ds_card() %}
+  <div class="ds-section-head">
+    <h3 class="ds-card__title">Progress Photos</h3>
+    {{ ds_button("Upload", icon="camera", size="sm", attrs='data-ds-modal-open="uploadPhotoModal"') }}
+  </div>
 
   {% if photos %}
-    <div class="photo-grid">
+    <div class="ds-photo-grid">
       {% for p in photos %}
-        <div class="photo-card">
+        <div class="ds-card ds-photo-card">
           <img src="{{ url_for('static', filename='uploads/progress/' ~ p.file_name) }}" alt="Progress photo">
-          <div class="muted" style="margin-top:8px;">{{ p.created_at.strftime("%d/%m/%Y %H:%M") }}</div>
+          <div class="ds-field__hint" style="margin-top:var(--ds-space-2);">{{ p.created_at.strftime("%d/%m/%Y %H:%M") }}</div>
           {% if is_admin %}
-            <form action="{{ url_for('delete_progress_photo', client_id=client.id, photo_id=p.id) }}" method="POST" style="margin-top:8px;" onsubmit="return confirm('Delete this progress photo?');">
+            <form action="{{ url_for('delete_progress_photo', client_id=client.id, photo_id=p.id) }}" method="POST" style="margin-top:var(--ds-space-2);" data-ds-confirm="Delete this progress photo?">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <button class="btn danger" type="submit">Delete</button>
+              {{ ds_button("Delete", type="submit", variant="danger", size="sm") }}
             </form>
           {% endif %}
         </div>
       {% endfor %}
     </div>
   {% else %}
-    <div class="empty-state" style="margin-top:10px;">No progress photos yet.</div>
+    <div class="ds-empty-icon">
+      {{ ds_icon("camera", 32) }}
+      <span>No progress photos yet.</span>
+    </div>
   {% endif %}
-</div>
+{% endcall %}
+
+{% call ds_modal("uploadPhotoModal", "Upload Progress Photo") %}
+  <form id="progressPhotoForm" action="{{ url_for('upload_progress_photo', client_id=client.id) }}" method="POST" enctype="multipart/form-data">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input class="nutrition-file-input" id="progressPhotoFile" type="file" name="photo" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" required>
+    <div class="ds-file-picker">
+      {{ ds_button("Choose from Gallery", variant="secondary", size="sm", attrs='id="chooseProgressPhoto"') }}
+      {{ ds_button("Use Camera", variant="secondary", size="sm", attrs='id="takeProgressPhoto"') }}
+    </div>
+    <div class="ds-file-name" id="progressPhotoFileName" style="margin-bottom:var(--ds-space-2);">No photo selected</div>
+    <div class="ds-field__hint" style="margin-bottom:var(--ds-space-3);">JPG, PNG, or WEBP. Max 8 MB.</div>
+    {{ ds_button("Upload Photo", type="submit", block=True, attrs='id="progressPhotoSubmit"') }}
+  </form>
+{% endcall %}
 
 <script>
   (function () {
@@ -94,12 +95,12 @@
   })();
 </script>
 
-<!-- =========================
-     WEIGHT GRAPH (ONLY)
-     ========================= -->
-<div class="card">
-  <h3>Weight Progress</h3>
-  <p class="muted" style="margin-top:-6px;">
+{% call ds_card() %}
+  <div class="ds-section-head">
+    <h3 class="ds-card__title">Weight Progress</h3>
+    {{ ds_button("Add", icon="plus", size="sm", attrs='data-ds-modal-open="addMeasurementModal"') }}
+  </div>
+  <p class="ds-field__hint" style="margin-top:calc(var(--ds-space-2) * -1); margin-bottom:var(--ds-space-3);">
     Graph updates automatically when you add a new measurement.
   </p>
 
@@ -117,176 +118,132 @@
   <!-- JS will render an SVG chart here -->
 </div>
 
-  <div class="muted" style="margin-top:10px;">
+  <div class="ds-field__hint" style="margin-top:var(--ds-space-3);">
     {% if weight_latest %}
       Latest weight: <b>{{ weight_latest.weight }}</b> kg ({{ weight_latest.date.strftime("%d/%m/%Y") }})
     {% else %}
       No weight entries yet.
     {% endif %}
   </div>
-</div>
+{% endcall %}
 
-<div class="card">
-  <h3>Weight History</h3>
-
+{% call ds_card(title="Weight History") %}
   {% if weight_measurements %}
-    <div class="table-wrap">
-      <table>
-        <tr>
-          <th>Date</th>
-          <th>Weight (kg)</th>
-          <th></th>
-        </tr>
-        {% for m in weight_measurements %}
-        <tr>
-          <td>{{ m.date.strftime("%d/%m/%Y") }}</td>
-          <td>{{ m.weight }}</td>
-          <td style="text-align:right;">
-            <div class="actions" style="justify-content:flex-end;">
-              <form action="{{ url_for('update_measurement', client_id=client.id, measurement_id=m.id) }}"
-                    method="POST"
-                    style="margin:0; display:flex; gap:6px; align-items:center;">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <input class="input" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" name="weight" value="{{ m.weight if m.weight is not none else '' }}" placeholder="Weight" style="max-width:110px;">
-                <input type="hidden" name="chest" value="{{ m.chest if m.chest is not none else '' }}">
-                <input type="hidden" name="waist" value="{{ m.waist if m.waist is not none else '' }}">
-                <input type="hidden" name="stomach" value="{{ m.stomach if m.stomach is not none else '' }}">
-                <input type="hidden" name="glutes" value="{{ m.glutes if m.glutes is not none else '' }}">
-                <input type="hidden" name="arm_left" value="{{ m.arm_left if m.arm_left is not none else '' }}">
-                <input type="hidden" name="arm_right" value="{{ m.arm_right if m.arm_right is not none else '' }}">
-                <input type="hidden" name="quad_left" value="{{ m.quad_left if m.quad_left is not none else '' }}">
-                <input type="hidden" name="quad_right" value="{{ m.quad_right if m.quad_right is not none else '' }}">
-                <input type="hidden" name="calf_left" value="{{ m.calf_left if m.calf_left is not none else '' }}">
-                <input type="hidden" name="calf_right" value="{{ m.calf_right if m.calf_right is not none else '' }}">
-                <button class="btn secondary" type="submit">Save</button>
-              </form>
-              {% if is_admin %}
-                <form action="{{ url_for('delete_measurement', client_id=client.id, measurement_id=m.id) }}"
-                      method="POST"
-                      onsubmit="return confirm('Delete this weight entry?');"
-                      style="margin:0;">
-                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                  <button class="btn danger" type="submit">Delete</button>
-                </form>
-              {% endif %}
-            </div>
-          </td>
-        </tr>
-        {% endfor %}
-      </table>
+    <div class="ds-item-list">
+      {% for m in weight_measurements %}
+        <div class="ds-item-card" style="display:flex; align-items:center; justify-content:space-between; gap:var(--ds-space-3); padding:var(--ds-space-3) var(--ds-space-4);">
+          <div>
+            <div class="ds-item-card__title">{{ m.weight }} kg</div>
+            <div class="ds-field__hint">{{ m.date.strftime("%d/%m/%Y") }}</div>
+          </div>
+          {{ ds_button("", icon="edit", variant="ghost", size="sm", attrs=('aria-label="Edit weight entry" data-ds-modal-open="editWeightModal' ~ m.id ~ '"')) }}
+        </div>
+      {% endfor %}
     </div>
-  {% else %}
-    <div class="empty-state">No weight history yet.</div>
-  {% endif %}
-</div>
 
-<div class="card">
-  <h3>Latest</h3>
+    {% for m in weight_measurements %}
+      {% call ds_modal("editWeightModal" ~ m.id, "Edit Weight — " ~ m.date.strftime("%d/%m/%Y")) %}
+        <form action="{{ url_for('update_measurement', client_id=client.id, measurement_id=m.id) }}" method="POST">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          {{ ds_input("weight", label="Weight (kg)", type="text", value=(m.weight if m.weight is not none else ''), attrs='inputmode="decimal" pattern="-?\d+([.,]\d+)?"') }}
+          <input type="hidden" name="chest" value="{{ m.chest if m.chest is not none else '' }}">
+          <input type="hidden" name="waist" value="{{ m.waist if m.waist is not none else '' }}">
+          <input type="hidden" name="stomach" value="{{ m.stomach if m.stomach is not none else '' }}">
+          <input type="hidden" name="glutes" value="{{ m.glutes if m.glutes is not none else '' }}">
+          <input type="hidden" name="arm_left" value="{{ m.arm_left if m.arm_left is not none else '' }}">
+          <input type="hidden" name="arm_right" value="{{ m.arm_right if m.arm_right is not none else '' }}">
+          <input type="hidden" name="quad_left" value="{{ m.quad_left if m.quad_left is not none else '' }}">
+          <input type="hidden" name="quad_right" value="{{ m.quad_right if m.quad_right is not none else '' }}">
+          <input type="hidden" name="calf_left" value="{{ m.calf_left if m.calf_left is not none else '' }}">
+          <input type="hidden" name="calf_right" value="{{ m.calf_right if m.calf_right is not none else '' }}">
+          {{ ds_button("Save", type="submit", block=True) }}
+        </form>
+        {% if is_admin %}
+          <form action="{{ url_for('delete_measurement', client_id=client.id, measurement_id=m.id) }}"
+                method="POST"
+                data-ds-confirm="Delete this weight entry?"
+                style="margin-top:var(--ds-space-3);">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            {{ ds_button("Delete Entry", type="submit", variant="danger", block=True) }}
+          </form>
+        {% endif %}
+      {% endcall %}
+    {% endfor %}
+  {% else %}
+    <div class="ds-empty">No weight history yet.</div>
+  {% endif %}
+{% endcall %}
+
+{% call ds_card(title="Latest") %}
   {% if latest %}
-    <div class="muted">Recorded: {{ latest.date.strftime("%d/%m/%Y %H:%M") }}</div>
+    <div class="ds-field__hint" style="margin-bottom:var(--ds-space-3);">Recorded: {{ latest.date.strftime("%d/%m/%Y %H:%M") }}</div>
 
-    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-top:10px;">
-      <div><b>Weight:</b> {{ latest.weight or "-" }}</div>
-      <div><b>Chest:</b> {{ latest.chest or "-" }}</div>
-      <div><b>Waist:</b> {{ latest.waist or "-" }}</div>
-
-      <div><b>Stomach:</b> {{ latest.stomach or "-" }}</div>
-      <div><b>Glutes:</b> {{ latest.glutes or "-" }}</div>
-
-      <div><b>Arm L:</b> {{ latest.arm_left or "-" }}</div>
-      <div><b>Arm R:</b> {{ latest.arm_right or "-" }}</div>
-
-      <div><b>Quad L:</b> {{ latest.quad_left or "-" }}</div>
-      <div><b>Quad R:</b> {{ latest.quad_right or "-" }}</div>
-
-      <div><b>Calf L:</b> {{ latest.calf_left or "-" }}</div>
-      <div><b>Calf R:</b> {{ latest.calf_right or "-" }}</div>
+    <div class="ds-metric-grid">
+      {% for label, val in [("Weight", latest.weight), ("Chest", latest.chest), ("Waist", latest.waist), ("Stomach", latest.stomach), ("Glutes", latest.glutes), ("Arm L", latest.arm_left), ("Arm R", latest.arm_right), ("Quad L", latest.quad_left), ("Quad R", latest.quad_right), ("Calf L", latest.calf_left), ("Calf R", latest.calf_right)] %}
+        {% if val is not none %}
+          <div class="ds-metric-tile"><span>{{ label }}</span><b>{{ val }}</b></div>
+        {% endif %}
+      {% endfor %}
     </div>
   {% else %}
-    <div class="empty-state">No full-body measurements yet. Weight-only entries are shown above.</div>
+    <div class="ds-empty">No full-body measurements yet. Weight-only entries are shown above.</div>
   {% endif %}
-</div>
+{% endcall %}
 
-<div class="card">
-  <h3>History</h3>
-
+{% call ds_card(title="History") %}
   {% if measurements %}
-    <div class="table-wrap">
-      <table>
-        <tr>
-          <th>Date</th>
-          <th>Weight</th>
-          <th>Chest</th>
-          <th>Waist</th>
-          <th>Stomach</th>
-          <th>Glutes</th>
-          <th>Arm L</th>
-          <th>Arm R</th>
-          <th>Quad L</th>
-          <th>Quad R</th>
-          <th>Calf L</th>
-          <th>Calf R</th>
-          <th></th>
-        </tr>
-
-        {% for m in measurements %}
-        <tr>
-          <td>{{ m.date.strftime("%d/%m/%Y") }}</td>
-          <td>{{ m.weight or "-" }}</td>
-          <td>{{ m.chest or "-" }}</td>
-          <td>{{ m.waist or "-" }}</td>
-          <td>{{ m.stomach or "-" }}</td>
-          <td>{{ m.glutes or "-" }}</td>
-          <td>{{ m.arm_left or "-" }}</td>
-          <td>{{ m.arm_right or "-" }}</td>
-          <td>{{ m.quad_left or "-" }}</td>
-          <td>{{ m.quad_right or "-" }}</td>
-          <td>{{ m.calf_left or "-" }}</td>
-          <td>{{ m.calf_right or "-" }}</td>
-            <td style="text-align:right;">
-              <details>
-                <summary class="btn secondary" style="cursor:pointer; list-style:none;">Edit</summary>
-                <form action="{{ url_for('update_measurement', client_id=client.id, measurement_id=m.id) }}"
-                      method="POST"
-                      class="form"
-                      style="margin-top:8px; min-width:340px;">
-                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                  <div class="grid-2">
-                    <input class="input" name="weight" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" value="{{ m.weight if m.weight is not none else '' }}" placeholder="Weight (kg)">
-                    <input class="input" name="chest" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" value="{{ m.chest if m.chest is not none else '' }}" placeholder="Chest (cm)">
-                    <input class="input" name="waist" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" value="{{ m.waist if m.waist is not none else '' }}" placeholder="Waist (cm)">
-                    <input class="input" name="stomach" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" value="{{ m.stomach if m.stomach is not none else '' }}" placeholder="Stomach (cm)">
-                    <input class="input" name="glutes" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" value="{{ m.glutes if m.glutes is not none else '' }}" placeholder="Glutes (cm)">
-                    <input class="input" name="arm_left" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" value="{{ m.arm_left if m.arm_left is not none else '' }}" placeholder="Arm Left (cm)">
-                    <input class="input" name="arm_right" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" value="{{ m.arm_right if m.arm_right is not none else '' }}" placeholder="Arm Right (cm)">
-                    <input class="input" name="quad_left" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" value="{{ m.quad_left if m.quad_left is not none else '' }}" placeholder="Quad Left (cm)">
-                    <input class="input" name="quad_right" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" value="{{ m.quad_right if m.quad_right is not none else '' }}" placeholder="Quad Right (cm)">
-                    <input class="input" name="calf_left" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" value="{{ m.calf_left if m.calf_left is not none else '' }}" placeholder="Calf Left (cm)">
-                    <input class="input" name="calf_right" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" value="{{ m.calf_right if m.calf_right is not none else '' }}" placeholder="Calf Right (cm)">
-                  </div>
-                  <div class="actions">
-                    <button class="btn secondary" type="submit">Save</button>
-                  </div>
-                </form>
-                {% if is_admin %}
-                  <form action="{{ url_for('delete_measurement', client_id=client.id, measurement_id=m.id) }}"
-                        method="POST"
-                        onsubmit="return confirm('Delete this measurement?');"
-                        style="margin-top:8px;">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <button class="btn danger" type="submit">Delete</button>
-                  </form>
-                {% endif %}
-              </details>
-            </td>
-        </tr>
-        {% endfor %}
-      </table>
+    <div class="ds-item-list">
+      {% for m in measurements %}
+        <div class="ds-item-card">
+          <div class="ds-item-card__top">
+            <div class="ds-item-card__title">{{ m.date.strftime("%d/%m/%Y") }}</div>
+            {{ ds_button("Edit", icon="edit", variant="ghost", size="sm", attrs='data-ds-modal-open="editMeasurementModal' ~ m.id ~ '"') }}
+          </div>
+          <div class="ds-measure-grid">
+            {% for label, val in [("Weight", m.weight), ("Chest", m.chest), ("Waist", m.waist), ("Stomach", m.stomach), ("Glutes", m.glutes), ("Arm L", m.arm_left), ("Arm R", m.arm_right), ("Quad L", m.quad_left), ("Quad R", m.quad_right), ("Calf L", m.calf_left), ("Calf R", m.calf_right)] %}
+              {% if val is not none %}
+                <div><span>{{ label }}</span><b>{{ val }}</b></div>
+              {% endif %}
+            {% endfor %}
+          </div>
+        </div>
+      {% endfor %}
     </div>
   {% else %}
-    <div class="empty-state">No full-body history yet. Weight-only entries are shown above.</div>
+    <div class="ds-empty">No full-body history yet. Weight-only entries are shown above.</div>
   {% endif %}
-</div>
+{% endcall %}
+
+{% for m in measurements %}
+  {% call ds_modal("editMeasurementModal" ~ m.id, "Edit " ~ m.date.strftime("%d/%m/%Y")) %}
+    <form action="{{ url_for('update_measurement', client_id=client.id, measurement_id=m.id) }}" method="POST">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="ds-grid-2">
+        <input class="ds-input" name="weight" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" value="{{ m.weight if m.weight is not none else '' }}" placeholder="Weight (kg)" style="margin-bottom:var(--ds-space-2);">
+        <input class="ds-input" name="chest" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" value="{{ m.chest if m.chest is not none else '' }}" placeholder="Chest (cm)" style="margin-bottom:var(--ds-space-2);">
+        <input class="ds-input" name="waist" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" value="{{ m.waist if m.waist is not none else '' }}" placeholder="Waist (cm)" style="margin-bottom:var(--ds-space-2);">
+        <input class="ds-input" name="stomach" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" value="{{ m.stomach if m.stomach is not none else '' }}" placeholder="Stomach (cm)" style="margin-bottom:var(--ds-space-2);">
+        <input class="ds-input" name="glutes" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" value="{{ m.glutes if m.glutes is not none else '' }}" placeholder="Glutes (cm)" style="margin-bottom:var(--ds-space-2);">
+        <input class="ds-input" name="arm_left" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" value="{{ m.arm_left if m.arm_left is not none else '' }}" placeholder="Arm Left (cm)" style="margin-bottom:var(--ds-space-2);">
+        <input class="ds-input" name="arm_right" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" value="{{ m.arm_right if m.arm_right is not none else '' }}" placeholder="Arm Right (cm)" style="margin-bottom:var(--ds-space-2);">
+        <input class="ds-input" name="quad_left" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" value="{{ m.quad_left if m.quad_left is not none else '' }}" placeholder="Quad Left (cm)" style="margin-bottom:var(--ds-space-2);">
+        <input class="ds-input" name="quad_right" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" value="{{ m.quad_right if m.quad_right is not none else '' }}" placeholder="Quad Right (cm)" style="margin-bottom:var(--ds-space-2);">
+        <input class="ds-input" name="calf_left" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" value="{{ m.calf_left if m.calf_left is not none else '' }}" placeholder="Calf Left (cm)" style="margin-bottom:var(--ds-space-2);">
+        <input class="ds-input" name="calf_right" type="text" inputmode="decimal" pattern="-?\d+([.,]\d+)?" value="{{ m.calf_right if m.calf_right is not none else '' }}" placeholder="Calf Right (cm)" style="margin-bottom:var(--ds-space-2);">
+      </div>
+      {{ ds_button("Save Changes", type="submit", block=True) }}
+    </form>
+    {% if is_admin %}
+      <form action="{{ url_for('delete_measurement', client_id=client.id, measurement_id=m.id) }}"
+            method="POST"
+            data-ds-confirm="Delete this measurement?"
+            style="margin-top:var(--ds-space-3);">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {{ ds_button("Delete Entry", type="submit", variant="danger", block=True) }}
+      </form>
+    {% endif %}
+  {% endcall %}
+{% endfor %}
 
 <script>
 (function () {
@@ -294,7 +251,6 @@
   if (!holder) return;
 
   const raw = holder.dataset.points || "";
-  // raw format: "YYYY-MM-DD,85.2;YYYY-MM-DD,84.6;..."
   const items = raw.split(";").map(s => s.trim()).filter(Boolean);
 
   const points = items.map(s => {
@@ -303,67 +259,65 @@
   }).filter(p => !Number.isNaN(p.value));
 
   if (points.length < 2) {
-    holder.innerHTML = '<div class="empty-state">Add at least 2 weight entries to show the graph.</div>';
+    holder.innerHTML = '<div class="ds-empty">Add at least 2 weight entries to show the graph.</div>';
     return;
   }
 
-  const w = 900;           // internal SVG width
-  const h = 260;           // internal SVG height
+  const styles = getComputedStyle(document.documentElement);
+  const cardBg = styles.getPropertyValue("--ds-surface").trim() || "#171d22";
+  const gridColor = styles.getPropertyValue("--ds-border").trim() || "rgba(245,247,246,.1)";
+  const axisColor = styles.getPropertyValue("--ds-border-strong").trim() || "rgba(245,247,246,.18)";
+  const lineColor = styles.getPropertyValue("--ds-accent").trim() || "#c7ff45";
+  const labelBg = styles.getPropertyValue("--ds-accent").trim() || "#c7ff45";
+  const labelText = styles.getPropertyValue("--ds-accent-ink").trim() || "#10150a";
+  const mutedText = styles.getPropertyValue("--ds-text-muted").trim() || "#a3ada8";
+
+  const w = 900;
+  const h = 260;
   const pad = 40;
 
   const values = points.map(p => p.value);
   let minV = Math.min(...values);
   let maxV = Math.max(...values);
-
-  // add small padding so flat lines still show
   if (minV === maxV) { minV -= 1; maxV += 1; }
   const range = maxV - minV;
 
   const xStep = (w - pad * 2) / (points.length - 1);
-
   function x(i) { return pad + i * xStep; }
   function y(v) { return (h - pad) - ((v - minV) / range) * (h - pad * 2); }
 
-  // grid lines
   const gridLines = [];
   for (let i = 0; i <= 4; i++) {
     const yy = pad + i * ((h - pad * 2) / 4);
-    gridLines.push(`<line x1="${pad}" y1="${yy}" x2="${w-pad}" y2="${yy}" stroke="#e6eaf2" />`);
+    gridLines.push(`<line x1="${pad}" y1="${yy}" x2="${w-pad}" y2="${yy}" stroke="${gridColor}" />`);
   }
 
-  // path
   const d = points.map((p, i) => `${i===0 ? "M" : "L"} ${x(i)} ${y(p.value)}`).join(" ");
 
-  // dots + labels (last point)
   const last = points.length - 1;
   const lastX = x(last), lastY = y(points[last].value);
 
   const svg = `
     <svg viewBox="0 0 ${w} ${h}" width="100%" style="max-width:900px; display:block;">
-      <rect x="0" y="0" width="${w}" height="${h}" rx="14" fill="#ffffff" />
+      <rect x="0" y="0" width="${w}" height="${h}" rx="14" fill="${cardBg}" />
       ${gridLines.join("")}
 
-      <!-- axes -->
-      <line x1="${pad}" y1="${pad}" x2="${pad}" y2="${h-pad}" stroke="#cfd6e4" />
-      <line x1="${pad}" y1="${h-pad}" x2="${w-pad}" y2="${h-pad}" stroke="#cfd6e4" />
+      <line x1="${pad}" y1="${pad}" x2="${pad}" y2="${h-pad}" stroke="${axisColor}" />
+      <line x1="${pad}" y1="${h-pad}" x2="${w-pad}" y2="${h-pad}" stroke="${axisColor}" />
 
-      <!-- line -->
-      <path d="${d}" fill="none" stroke="#2563eb" stroke-width="3" />
+      <path d="${d}" fill="none" stroke="${lineColor}" stroke-width="3" />
 
-      <!-- dots -->
-      ${points.map((p,i)=>`<circle cx="${x(i)}" cy="${y(p.value)}" r="4" fill="#2563eb" />`).join("")}
+      ${points.map((p,i)=>`<circle cx="${x(i)}" cy="${y(p.value)}" r="4" fill="${lineColor}" />`).join("")}
 
-      <!-- last value label -->
-      <rect x="${lastX+10}" y="${lastY-18}" width="92" height="26" rx="8" fill="#2563eb" opacity="0.95"></rect>
-      <text x="${lastX+18}" y="${lastY}" font-size="14" fill="#fff" font-family="Arial" dominant-baseline="middle">
+      <rect x="${lastX+10}" y="${lastY-18}" width="92" height="26" rx="8" fill="${labelBg}" opacity="0.95"></rect>
+      <text x="${lastX+18}" y="${lastY}" font-size="14" fill="${labelText}" font-family="Arial" dominant-baseline="middle">
         ${points[last].value.toFixed(1)} kg
       </text>
 
-      <!-- min/max labels -->
-      <text x="${pad}" y="${pad-10}" font-size="12" fill="#667085" font-family="Arial">
+      <text x="${pad}" y="${pad-10}" font-size="12" fill="${mutedText}" font-family="Arial">
         max: ${maxV.toFixed(1)}
       </text>
-      <text x="${pad}" y="${h-10}" font-size="12" fill="#667085" font-family="Arial">
+      <text x="${pad}" y="${h-10}" font-size="12" fill="${mutedText}" font-family="Arial">
         min: ${minV.toFixed(1)}
       </text>
     </svg>

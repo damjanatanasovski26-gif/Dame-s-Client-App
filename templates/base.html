@@ -1,3 +1,4 @@
+{% from "components.html" import ds_icon %}
 <!DOCTYPE html>
 <html>
 <head>
@@ -11,28 +12,43 @@
   <link rel="manifest" href="{{ url_for('pwa_manifest') }}?v=4">
   <link rel="icon" href="{{ url_for('static', filename='images/barbell.png') }}?v=2">
   <link rel="apple-touch-icon" href="{{ url_for('static', filename='images/barbell.png') }}?v=2">
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=50">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v={{ asset_v('style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/tokens.css') }}?v={{ asset_v('css/tokens.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/components.css') }}?v={{ asset_v('css/components.css') }}">
 </head>
 <body class="{{ page_class or '' }}">
-  <button id="themeToggle" class="theme-toggle" type="button" aria-label="Toggle dark mode">
-    <span class="theme-icon sun" aria-hidden="true">&#9728;</span>
-    <span class="theme-icon moon" aria-hidden="true">&#9790;</span>
+  <button id="themeToggle" class="ds-icon-btn ds-theme-toggle" type="button" aria-label="Toggle dark mode">
+    <span class="ds-theme-icon sun" aria-hidden="true">&#9728;</span>
+    <span class="ds-theme-icon moon" aria-hidden="true">&#9790;</span>
   </button>
-  <button id="installAppBtn" class="install-app-btn" type="button" hidden>Install App</button>
-  <div id="installPromptModal" class="modal-backdrop install-modal-backdrop" hidden>
-    <div class="modal-card install-modal-card" role="dialog" aria-modal="true" aria-labelledby="installPromptTitle">
-      <h3 id="installPromptTitle">Install Damjan's Client App?</h3>
-      <p id="installPromptMessage" class="muted install-modal-text">
+  <button id="installAppBtn" class="ds-btn ds-btn--secondary ds-btn--sm ds-install-btn" type="button" hidden>Install App</button>
+  <div id="installPromptModal" class="ds-modal-backdrop" hidden>
+    <div class="ds-modal" role="dialog" aria-modal="true" aria-labelledby="installPromptTitle">
+      <h3 class="ds-modal__title" id="installPromptTitle">Install Damjan's Client App?</h3>
+      <p id="installPromptMessage" class="ds-field__hint">
         Add Damjan's Client App to your home screen for faster access and an app-like experience.
       </p>
-      <div class="actions install-modal-actions">
-        <button id="installPromptConfirm" type="button" class="btn">Yes, Install</button>
-        <button id="installPromptLater" type="button" class="btn secondary">Maybe Later</button>
+      <div class="ds-modal__actions">
+        <button id="installPromptConfirm" type="button" class="ds-btn ds-btn--primary">Yes, Install</button>
+        <button id="installPromptLater" type="button" class="ds-btn ds-btn--secondary">Maybe Later</button>
       </div>
     </div>
   </div>
-  <div id="installHelpToast" class="install-help-toast" hidden></div>
-  <div class="container">
+  <div id="installHelpToast" class="ds-toast" hidden></div>
+
+  <div id="dsConfirmModal" class="ds-modal-backdrop" data-ds-modal>
+    <div class="ds-modal ds-confirm-modal" role="alertdialog" aria-modal="true" aria-labelledby="dsConfirmTitle">
+      <div class="ds-confirm-modal__icon">{{ ds_icon("alert-triangle", 28) }}</div>
+      <h3 class="ds-modal__title" id="dsConfirmTitle">Are you sure?</h3>
+      <p class="ds-field__hint" id="dsConfirmMessage"></p>
+      <div class="ds-modal__actions">
+        <button type="button" class="ds-btn ds-btn--secondary" id="dsConfirmCancel" data-ds-modal-close>Cancel</button>
+        <button type="button" class="ds-btn ds-btn--danger" id="dsConfirmOk">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="dsPageRoot" class="container">
     {% block content %}{% endblock %}
   </div>
   <script>
@@ -290,5 +306,6 @@
       });
     })();
   </script>
+  <script src="{{ url_for('static', filename='js/ds-components.js') }}?v={{ asset_v('js/ds-components.js') }}" defer></script>
 </body>
 </html>

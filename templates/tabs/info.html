@@ -1,176 +1,402 @@
-<div class="card">
-  <h3>Client Info</h3>
+{% from "components.html" import ds_card, ds_button, ds_input, ds_badge, ds_modal, ds_icon %}
 
-  {% if is_admin %}
-    <form class="form" action="{{ url_for('update_client_admin', client_id=client.id) }}" method="POST" style="max-width:700px;">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <label class="label">Name</label>
-      <input class="input" name="name" value="{{ client.name }}" required>
+<div data-ds-segment-scope>
+  <div class="ds-segmented" data-ds-segmented>
+    <button type="button" class="active" data-ds-segment="profile">Profile</button>
+    <button type="button" data-ds-segment="sessions">Sessions</button>
+    <button type="button" data-ds-segment="goals">Goals</button>
+  </div>
 
-      <label class="label" style="margin-top:12px;">Phone</label>
-      <input class="input" name="phone" value="{{ client.phone or '' }}" inputmode="tel" pattern="\+?\d*" title="Use only digits and optional leading +">
+  <div data-ds-segment-panel="profile">
+    {% call ds_card(title="Client Info") %}
+      {% if is_admin %}
+        <form action="{{ url_for('update_client_admin', client_id=client.id) }}" method="POST">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          {{ ds_input("name", label="Name", value=client.name, required=True) }}
+          {{ ds_input("phone", label="Phone", value=(client.phone or ''), attrs='inputmode="tel" pattern="\+?\d*" title="Use only digits and optional leading +"') }}
+          {{ ds_input("plan", label="Plan", value=(client.plan or '')) }}
+          {{ ds_input("sessions_per_week_readonly", label="Current sessions per week (from payments)", value=(sessions_per_week or 0), attrs="disabled") }}
+          {{ ds_input("weekly", label="Fallback sessions per week (used if no payments exist)", type="number", value=(client.weekly_sessions or 0), attrs='min="0"') }}
+          {{ ds_button("Save Info", type="submit") }}
+        </form>
 
-      <label class="label" style="margin-top:12px;">Plan</label>
-      <input class="input" name="plan" value="{{ client.plan or '' }}">
+        <hr class="ds-hr">
 
-      <label class="label" style="margin-top:12px;">Current sessions per week (from payments)</label>
-      <input class="input" value="{{ sessions_per_week or 0 }}" disabled>
-
-      <label class="label" style="margin-top:12px;">Fallback sessions per week (used if no payments exist)</label>
-      <input class="input" type="number" name="weekly" min="0" value="{{ client.weekly_sessions or 0 }}">
-
-      <button class="btn" type="submit" style="margin-top:14px;">Save Info</button>
-    </form>
-
-    <hr class="sep">
-
-    {% if not client_user %}
-      <h3>Create Client Login</h3>
-      <form class="form" action="{{ url_for('create_client_login', client_id=client.id) }}" method="POST" style="max-width:700px;">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <label class="label">Username</label>
-        <input class="input" name="username" required>
-
-        <label class="label">Temporary Password</label>
-        <div class="password-wrap">
-          <input id="createClientPassword" class="input" name="password" type="password" required>
-          <button class="password-toggle" type="button" data-password-target="createClientPassword" aria-label="Show password" aria-pressed="false">&#128065;</button>
-        </div>
-
-        <button class="btn" type="submit">Create Login</button>
-      </form>
-
-      <p class="muted" style="margin-top:10px;">
-        Give these credentials to the client. They can log in at <b>/login</b>.
-      </p>
-    {% else %}
-      <h3>Client Login</h3>
-      <div class="muted">
-        Username: <b>{{ client_user.username }}</b> |
-        Status:
-        {% if client_user.role == "disabled" %}
-          <b style="color:var(--danger);">Deactivated</b>
-        {% else %}
-          <b style="color:var(--success);">Active</b>
-        {% endif %}
-      </div>
-      <div class="muted" style="margin-top:6px;">
-        Activity:
-        {% if client_online_now %}
-          <b style="color:var(--success);">Online now</b>
-        {% else %}
-          <b>Offline</b>
-        {% endif %}
-        | Last seen: <b>{{ client_last_seen_display }}</b>
-        | Last login: <b>{{ client_last_login_display }}</b>
-      </div>
-
-      <form class="form" action="{{ url_for('admin_reset_client_password', client_id=client.id) }}" method="POST" style="max-width:700px;">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <label class="label">New temporary password</label>
-        <div class="password-wrap">
-          <input id="resetClientPassword" class="input" name="new_password" type="password" required>
-          <button class="password-toggle" type="button" data-password-target="resetClientPassword" aria-label="Show password" aria-pressed="false">&#128065;</button>
-        </div>
-        <button class="btn" type="submit">Reset Password</button>
-      </form>
-
-      <div class="actions" style="margin-top:8px;">
-        {% if client_user.role == "disabled" %}
-          <form action="{{ url_for('reactivate_client_login', client_id=client.id) }}" method="POST" style="margin:0;">
+        {% if not client_user %}
+          <h3 class="ds-card__title">Create Client Login</h3>
+          <form action="{{ url_for('create_client_login', client_id=client.id) }}" method="POST">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button class="btn" type="submit">Reactivate Login</button>
+            {{ ds_input("username", label="Username", required=True) }}
+            <div class="ds-field">
+              <label class="ds-field__label" for="createClientPassword">Temporary Password</label>
+              <div class="password-wrap">
+                <input id="createClientPassword" class="ds-input" name="password" type="password" required>
+                <button class="password-toggle" type="button" data-password-target="createClientPassword" aria-label="Show password" aria-pressed="false">&#128065;</button>
+              </div>
+            </div>
+            {{ ds_button("Create Login", type="submit") }}
           </form>
+          <p class="ds-field__hint" style="margin-top:var(--ds-space-3);">
+            Give these credentials to the client. They can log in at <b>/login</b>.
+          </p>
         {% else %}
-          <form action="{{ url_for('deactivate_client_login', client_id=client.id) }}" method="POST" style="margin:0;"
-                onsubmit="return confirm('Deactivate this client login?');">
+          <h3 class="ds-card__title">Client Login</h3>
+          <div class="ds-field__hint">
+            Username: <b>{{ client_user.username }}</b> &middot;
+            Status: {{ ds_badge(("Deactivated" if client_user.role == "disabled" else "Active"), variant=("danger" if client_user.role == "disabled" else "success")) }}
+          </div>
+          <div class="ds-field__hint" style="margin-top:var(--ds-space-2);">
+            {{ ds_badge(("Online now" if client_online_now else "Offline"), variant=("success" if client_online_now else "neutral")) }}
+            &middot; Last seen: <b>{{ client_last_seen_display }}</b>
+            &middot; Last login: <b>{{ client_last_login_display }}</b>
+          </div>
+
+          <form style="margin-top:var(--ds-space-4);" action="{{ url_for('admin_reset_client_password', client_id=client.id) }}" method="POST">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button class="btn danger" type="submit">Deactivate Login</button>
+            <div class="ds-field">
+              <label class="ds-field__label" for="resetClientPassword">New temporary password</label>
+              <div class="password-wrap">
+                <input id="resetClientPassword" class="ds-input" name="new_password" type="password" required>
+                <button class="password-toggle" type="button" data-password-target="resetClientPassword" aria-label="Show password" aria-pressed="false">&#128065;</button>
+              </div>
+            </div>
+            {{ ds_button("Reset Password", type="submit") }}
+          </form>
+
+          <div class="ds-form-actions" style="margin-top:var(--ds-space-3);">
+            {% if client_user.role == "disabled" %}
+              <form action="{{ url_for('reactivate_client_login', client_id=client.id) }}" method="POST" style="margin:0;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                {{ ds_button("Reactivate Login", type="submit") }}
+              </form>
+            {% else %}
+              <form action="{{ url_for('deactivate_client_login', client_id=client.id) }}" method="POST" style="margin:0;"
+                    data-ds-confirm="Deactivate this client login?">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                {{ ds_button("Deactivate Login", type="submit", variant="danger") }}
+              </form>
+            {% endif %}
+          </div>
+        {% endif %}
+
+      {% else %}
+        {{ ds_input("name_readonly", label="Name", value=client.name, attrs="disabled") }}
+
+        {% if client.phone %}
+          <p class="ds-field__hint">You can edit your phone number. Contact your coach for other changes.</p>
+          <form action="{{ url_for('update_client_phone', client_id=client.id) }}" method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            {{ ds_input("phone", label="Phone", value=client.phone, required=True, attrs='inputmode="tel" pattern="\+?\d+" title="Use only digits and optional leading +"') }}
+            {{ ds_button("Save Phone", type="submit") }}
           </form>
         {% endif %}
-      </div>
-    {% endif %}
 
-  {% else %}
-    <div class="form" style="max-width:700px;">
-      <label class="label">Name</label>
-      <input class="input" value="{{ client.name }}" disabled>
-    </div>
-
-    {% if client.phone %}
-      <div class="muted" style="margin:14px 0 10px;">
-        You can edit your phone number. Contact your coach for other changes.
-      </div>
-      <form class="form" action="{{ url_for('update_client_phone', client_id=client.id) }}" method="POST" style="max-width:700px;">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <label class="label" style="margin-top:12px;">Phone</label>
-        <input class="input" name="phone" value="{{ client.phone }}" inputmode="tel" pattern="\+?\d+" title="Use only digits and optional leading +" required>
-        <button class="btn" type="submit" style="margin-top:14px;">Save Phone</button>
-      </form>
-    {% endif %}
-
-    {% if client.plan or (sessions_per_week and sessions_per_week > 0) %}
-      <div class="form" style="max-width:700px; margin-top:12px;">
         {% if client.plan %}
-          <label class="label" style="margin-top:12px;">Plan</label>
-        <input class="input" value="{{ client.plan }}" disabled>
+          {{ ds_input("plan_readonly", label="Plan", value=client.plan, attrs="disabled") }}
         {% endif %}
-
         {% if sessions_per_week and sessions_per_week > 0 %}
-          <label class="label" style="margin-top:12px;">Sessions per week</label>
-          <input class="input" value="{{ sessions_per_week }}" disabled>
+          {{ ds_input("sessions_readonly", label="Sessions per week", value=sessions_per_week, attrs="disabled") }}
         {% endif %}
+      {% endif %}
+    {% endcall %}
+  </div>
+
+  <div data-ds-segment-panel="sessions" hidden>
+    {% call ds_card() %}
+      <div class="ds-section-head">
+        <div class="ds-quota-row">
+          <b class="ds-quota-count">{{ used_this_week }}/{{ allowed }}</b>
+          <span>sessions this week &middot; {{ remaining }} remaining</span>
+          {% if bonus and bonus > 0 %}{{ ds_badge("Rollover +" ~ bonus, variant="accent") }}{% endif %}
+        </div>
+        {{ ds_button("Log Session", icon="plus", size="sm", attrs='data-ds-modal-open="logSessionModal"') }}
       </div>
-    {% endif %}
+      {% if is_admin %}
+        <form action="{{ url_for('transfer_sessions', client_id=client.id) }}" method="POST" style="margin:0;">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          {{ ds_button("Transfer " ~ remaining ~ " unused to next week", type="submit", variant="secondary", size="sm", disabled=(remaining <= 0)) }}
+        </form>
+      {% endif %}
+    {% endcall %}
 
-  {% endif %}
+    {% call ds_card(title=session_calendar.month_name ~ " " ~ session_calendar.year, eyebrow="Session Calendar") %}
+      <div class="session-calendar">
+        {% for label in session_calendar.weekday_labels %}
+          <div class="session-calendar-head">{{ label }}</div>
+        {% endfor %}
+        {% for cell in session_calendar.cells %}
+          <div
+            class="session-calendar-cell {% if cell.is_today %}today{% endif %} {% if cell.count > 0 %}has-session{% endif %} {% if cell.day %}clickable{% endif %}"
+            {% if cell.day %}
+              data-calendar-day="{{ '%04d-%02d-%02d'|format(session_calendar.year, session_calendar.month, cell.day) }}"
+            {% endif %}
+          >
+            {% if cell.day %}
+              <div class="session-calendar-day">{{ cell.day }}</div>
+              {% if cell.count > 0 %}
+                <div class="session-calendar-count">{{ cell.count }} session{% if cell.count != 1 %}s{% endif %}</div>
+              {% else %}
+                <div class="session-calendar-empty">-</div>
+              {% endif %}
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+    {% endcall %}
 
-  <hr class="sep">
+    {% call ds_card() %}
+      <div class="ds-section-head">
+        <h3 class="ds-card__title">Appointments</h3>
+        {{ ds_button("Schedule", icon="plus", size="sm", variant="secondary", attrs='id="openAppointmentModalBtn" data-ds-modal-open="scheduleAppointmentModal"') }}
+      </div>
 
-  <h3>Goals</h3>
-  <form class="form" action="{{ url_for('add_client_goal', client_id=client.id) }}" method="POST" style="max-width:700px;">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <label class="label">Name your goal</label>
-    <input class="input" name="title" maxlength="120" placeholder="e.g. Lose 4kg by summer" required>
-    <button class="btn" type="submit">Add Goal</button>
-  </form>
+      {% if appointments %}
+        <div class="ds-table-wrap">
+          <table class="ds-table">
+            <tr>
+              <th>Date</th>
+              <th>Status</th>
+              <th>Note</th>
+              <th>Created By</th>
+              <th></th>
+            </tr>
+            {% for a in appointments %}
+              <tr>
+                <td>{{ a.scheduled_for.strftime("%d/%m/%Y %H:%M") }}</td>
+                <td>{{ ds_badge(a.status, variant=("success" if a.status == "confirmed" else ("danger" if a.status == "cancelled" else "warn"))) }}</td>
+                <td>{{ a.note or "-" }}</td>
+                <td>{{ a.created_by_role }}</td>
+                <td style="text-align:right;">
+                  {% if is_admin %}
+                    <form action="{{ url_for('update_appointment_status', client_id=client.id, appointment_id=a.id) }}" method="POST" style="display:flex; gap:6px; align-items:center; margin:0 0 6px 0;">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                      <select class="ds-input" name="status" style="max-width:130px; min-height:36px;">
+                        <option value="requested" {% if a.status=='requested' %}selected{% endif %}>requested</option>
+                        <option value="confirmed" {% if a.status=='confirmed' %}selected{% endif %}>confirmed</option>
+                        <option value="completed" {% if a.status=='completed' %}selected{% endif %}>completed</option>
+                        <option value="cancelled" {% if a.status=='cancelled' %}selected{% endif %}>cancelled</option>
+                      </select>
+                      {{ ds_button("Save", type="submit", variant="secondary", size="sm") }}
+                    </form>
+                    <form action="{{ url_for('delete_appointment', client_id=client.id, appointment_id=a.id) }}" method="POST" data-ds-confirm="Delete this appointment?" style="margin:0;">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                      {{ ds_button("", type="submit", variant="danger", size="sm", icon="trash", attrs='aria-label="Delete appointment"') }}
+                    </form>
+                  {% else %}
+                    -
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </table>
+        </div>
+      {% else %}
+        <div class="ds-empty-icon">
+          {{ ds_icon("bell", 32) }}
+          <span>No appointments yet.</span>
+        </div>
+      {% endif %}
+    {% endcall %}
 
-  {% if goals %}
-    <div class="table-wrap" style="margin-top:10px;">
-      <table>
-        <tr>
-          <th>Goal</th>
-          <th>Status</th>
-          <th></th>
-        </tr>
-        {% for g in goals %}
-          <tr>
-            <td>{{ g.title }}</td>
-            <td>{{ g.status }}</td>
-            <td style="text-align:right;">
+    {% call ds_card(title="Recent Sessions") %}
+      {% if sessions %}
+        <div class="ds-table-wrap">
+          <table class="ds-table">
+            <tr><th>Date</th><th>Note</th><th></th></tr>
+            {% for s in sessions %}
+            <tr>
+              <td>{{ s.date.strftime("%d/%m/%Y %H:%M") }}</td>
+              <td>{{ s.note or "-" }}</td>
+              <td style="text-align:right;">
+                {% if is_admin %}
+                  <form action="{{ url_for('delete_session', client_id=client.id, session_id=s.id) }}"
+                        method="POST"
+                        data-ds-confirm="Delete this session?"
+                        style="margin:0;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    {{ ds_button("", type="submit", variant="danger", size="sm", icon="trash", attrs='aria-label="Delete session"') }}
+                  </form>
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </table>
+        </div>
+      {% else %}
+        <div class="ds-empty-icon">
+          {{ ds_icon("clock", 32) }}
+          <span>No sessions logged yet.</span>
+        </div>
+      {% endif %}
+    {% endcall %}
+  </div>
+
+  <div data-ds-segment-panel="goals" hidden>
+    {% call ds_card() %}
+      <div class="ds-section-head">
+        <h3 class="ds-card__title">Goals</h3>
+        {{ ds_button("Add Goal", icon="plus", size="sm", attrs='data-ds-modal-open="addGoalModal"') }}
+      </div>
+
+      {% if goals %}
+        <div class="ds-item-list">
+          {% for g in goals %}
+            <div class="ds-goal-card {{ 'is-completed' if g.status == 'completed' else '' }} {{ 'is-paused' if g.status == 'paused' else '' }}">
               {% if is_admin %}
-                <form action="{{ url_for('update_client_goal', client_id=client.id, goal_id=g.id) }}" method="POST" style="display:flex; gap:6px; align-items:center; justify-content:flex-end; margin:0 0 6px 0;">
+                <form action="{{ url_for('update_client_goal', client_id=client.id, goal_id=g.id) }}" method="POST" style="margin:0;">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                  <select class="input" name="status" style="max-width:120px;">
-                    <option value="active" {% if g.status=='active' %}selected{% endif %}>active</option>
-                    <option value="completed" {% if g.status=='completed' %}selected{% endif %}>completed</option>
-                    <option value="paused" {% if g.status=='paused' %}selected{% endif %}>paused</option>
-                  </select>
-                  <button class="btn secondary" type="submit">Update</button>
-                </form>
-                <form action="{{ url_for('delete_client_goal', client_id=client.id, goal_id=g.id) }}" method="POST" onsubmit="return confirm('Delete this goal?');" style="margin:0;">
-                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                  <button class="btn danger" type="submit">Delete</button>
+                  <input type="hidden" name="status" value="{{ 'active' if g.status == 'completed' else 'completed' }}">
+                  <button type="submit" class="ds-goal-checkbox {{ 'is-checked' if g.status == 'completed' else '' }}" aria-label="{{ 'Mark as not completed' if g.status == 'completed' else 'Mark as completed' }}">
+                    {% if g.status == 'completed' %}{{ ds_icon("check", 16) }}{% endif %}
+                  </button>
                 </form>
               {% else %}
-                -
+                <div class="ds-goal-checkbox {{ 'is-checked' if g.status == 'completed' else '' }}">
+                  {% if g.status == 'completed' %}{{ ds_icon("check", 16) }}{% endif %}
+                </div>
               {% endif %}
-            </td>
-          </tr>
-        {% endfor %}
-      </table>
-    </div>
-  {% else %}
-    <div class="empty-state" style="margin-top:10px;">No goals set yet.</div>
-  {% endif %}
+
+              <div class="ds-goal-card__body">
+                <div class="ds-goal-card__title">{{ g.title }}</div>
+                {% if g.status == 'paused' %}
+                  <div class="ds-goal-card__meta"><span class="ds-goal-paused-tag">Paused</span></div>
+                {% endif %}
+              </div>
+
+              {% if is_admin %}
+                <div class="ds-goal-card__actions">
+                  {% if g.status != 'completed' %}
+                    <form action="{{ url_for('update_client_goal', client_id=client.id, goal_id=g.id) }}" method="POST" style="margin:0;">
+                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                      <input type="hidden" name="status" value="{{ 'active' if g.status == 'paused' else 'paused' }}">
+                      {{ ds_button("", type="submit", variant="ghost", size="sm", icon=("play" if g.status == "paused" else "pause"), attrs=('aria-label="' ~ ('Resume goal' if g.status == 'paused' else 'Pause goal') ~ '"')) }}
+                    </form>
+                  {% endif %}
+                  <form action="{{ url_for('delete_client_goal', client_id=client.id, goal_id=g.id) }}" method="POST" data-ds-confirm="Delete this goal?" style="margin:0;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    {{ ds_button("", type="submit", variant="ghost", size="sm", icon="trash", attrs='aria-label="Delete goal"') }}
+                  </form>
+                </div>
+              {% endif %}
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="ds-empty-icon">
+          {{ ds_icon("target", 32) }}
+          <span>No goals set yet.</span>
+        </div>
+      {% endif %}
+    {% endcall %}
+  </div>
 </div>
+
+{% call ds_modal("addGoalModal", "Add Goal") %}
+  <form action="{{ url_for('add_client_goal', client_id=client.id) }}" method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {{ ds_input("title", label="Name your goal", placeholder="e.g. Lose 4kg by summer", required=True, attrs='maxlength="120"') }}
+    {{ ds_button("Add Goal", type="submit", block=True) }}
+  </form>
+{% endcall %}
+
+{% call ds_modal("logSessionModal", "Log Session") %}
+  <form id="logSessionForm" action="{{ url_for('add_session', client_id=client.id) }}" method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {{ ds_input("session_date", label="Session date", type="date", hint="Optional, defaults to today") }}
+    {{ ds_input("note", label="Note", placeholder="Optional note (Push / Pull / Rehab)") }}
+    {{ ds_button("Log Session", type="submit", block=True) }}
+  </form>
+{% endcall %}
+
+{% call ds_modal("calendarAppointmentModal", "Calendar Actions") %}
+  <div id="calendarActionDateLabel" class="ds-field__hint" style="margin-bottom:var(--ds-space-4);">Select a day</div>
+
+  {% call ds_card(title="Log Session") %}
+    <form action="{{ url_for('add_session', client_id=client.id) }}" method="POST">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input id="calendarSessionDate" type="hidden" name="session_date">
+      {{ ds_input("note", label="Note", placeholder="Optional note (Push / Pull / Rehab)", attrs='maxlength="200"') }}
+      {{ ds_button("Log Session For Selected Day", type="submit", variant="secondary", block=True) }}
+    </form>
+  {% endcall %}
+
+  {% call ds_card(title="Appointment") %}
+    <form action="{{ url_for('add_appointment', client_id=client.id) }}" method="POST">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      {{ ds_input("scheduled_for", label="Date & time", type="datetime-local", required=True, id="calendarAppointmentDatetime") }}
+      {{ ds_input("note", label="Note", placeholder="Optional appointment note", attrs='maxlength="200"') }}
+      <div class="ds-modal__actions">
+        {{ ds_button(("Add Appointment" if is_admin else "Request Appointment"), type="submit") }}
+        {{ ds_button("Close", variant="secondary", attrs='id="closeAppointmentModalBtn"') }}
+      </div>
+    </form>
+  {% endcall %}
+{% endcall %}
+
+{% call ds_modal("scheduleAppointmentModal", ("Add Appointment" if is_admin else "Request Appointment")) %}
+  <form action="{{ url_for('add_appointment', client_id=client.id) }}" method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {{ ds_input("scheduled_for", label="Date & time", type="datetime-local", required=True) }}
+    {{ ds_input("note", label="Note", placeholder="Optional appointment note", attrs='maxlength="200"') }}
+    {{ ds_button(("Add Appointment" if is_admin else "Request Appointment"), type="submit", block=True) }}
+  </form>
+{% endcall %}
+
+<script>
+  (function () {
+    const modal = document.getElementById("calendarAppointmentModal");
+    const datetimeInput = document.getElementById("calendarAppointmentDatetime");
+    const sessionDateInput = document.getElementById("calendarSessionDate");
+    const dateLabel = document.getElementById("calendarActionDateLabel");
+    const closeBtn = document.getElementById("closeAppointmentModalBtn");
+    if (!modal || !datetimeInput || !sessionDateInput || !dateLabel || !closeBtn) return;
+
+    function displayDate(dateStr) {
+      if (!dateStr) return "today";
+      const parts = dateStr.split("-");
+      if (parts.length !== 3) return dateStr;
+      return parts[2] + "/" + parts[1] + "/" + parts[0];
+    }
+
+    function openModal(dateStr) {
+      let selectedDate = dateStr;
+      if (dateStr) {
+        const current = datetimeInput.value || "";
+        const existingTime = current.includes("T") ? current.split("T")[1] : "";
+        const timePart = existingTime || "09:00";
+        datetimeInput.value = dateStr + "T" + timePart;
+      } else if (!datetimeInput.value) {
+        const now = new Date();
+        const y = now.getFullYear();
+        const m = String(now.getMonth() + 1).padStart(2, "0");
+        const d = String(now.getDate()).padStart(2, "0");
+        selectedDate = y + "-" + m + "-" + d;
+        datetimeInput.value = selectedDate + "T09:00";
+      } else {
+        selectedDate = datetimeInput.value.split("T")[0];
+      }
+      sessionDateInput.value = selectedDate || "";
+      dateLabel.textContent = "Selected day: " + displayDate(selectedDate);
+      modal.classList.add("is-open");
+      datetimeInput.focus();
+    }
+
+    function closeModal() {
+      modal.classList.remove("is-open");
+    }
+
+    closeBtn.addEventListener("click", closeModal);
+
+    modal.addEventListener("click", function (e) {
+      if (e.target === modal) closeModal();
+    });
+
+    document.querySelectorAll("[data-calendar-day]").forEach(function (cell) {
+      cell.addEventListener("click", function () {
+        openModal(cell.getAttribute("data-calendar-day"));
+      });
+    });
+  })();
+</script>

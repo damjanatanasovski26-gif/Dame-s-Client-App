@@ -1,109 +1,79 @@
-<div class="nutrition-app strength-app" id="strengthApp">
-  <section class="nutrition-view is-active">
-    <header class="nutrition-panel-header">
-      <a class="nutrition-round-btn nutrition-back-btn" href="{{ url_for('client_profile', client_id=client.id, tab='info') }}" aria-label="Back to client tabs"></a>
-      <div>
-        <h2>Strength</h2>
-        <span>Progress Poster Builder</span>
-      </div>
-      <button class="nutrition-sort-btn" type="button" id="strengthRefreshBtn">Refresh</button>
-    </header>
+{% from "components.html" import ds_card, ds_button, ds_icon, ds_badge, ds_file_input %}
 
-    <div class="card">
-      <h3>Import Strength Data</h3>
-      <div class="muted" style="margin-bottom:10px;">Upload a Lyfta or Hevy export and replace current imported lift history for this client.</div>
-      <form class="form" action="{{ url_for('import_strength_data', client_id=client.id) }}" method="POST" enctype="multipart/form-data">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <input class="input" type="file" name="strength_csv" accept=".csv,.xlsx,.xlsm,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
-        <button class="btn" type="submit">Import Export</button>
-      </form>
+{% call ds_card(title="Import Strength Data") %}
+  <p class="ds-field__hint" style="margin-bottom:var(--ds-space-3);">Upload a Lyfta or Hevy export and replace current imported lift history for this client.</p>
+  <form action="{{ url_for('import_strength_data', client_id=client.id) }}" method="POST" enctype="multipart/form-data">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div style="margin-bottom:var(--ds-space-3);">
+      {{ ds_file_input("strength_csv", id="strengthCsvFile", accept=".csv,.xlsx,.xlsm,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", required=True, label="Choose CSV / Excel File") }}
     </div>
+    {{ ds_button("Import Export", type="submit", block=True) }}
+  </form>
+{% endcall %}
 
-    {% if strength_summary.exercises %}
-      <div class="card">
-        <h3>Poster Settings</h3>
-        <form class="form" action="{{ url_for('strength_poster_png', client_id=client.id) }}" method="GET" id="posterConfigForm">
-          <div class="strength-range-pill">
-            <span>Imported range</span>
-            <b>{{ strength_poster.start_date.strftime("%d/%m/%Y") }} - {{ strength_poster.end_date.strftime("%d/%m/%Y") }}</b>
-          </div>
-
-          <label class="label">Choose up to 6 lifts</label>
-          <div class="nutrition-search-field">
-            <span aria-hidden="true"></span>
-            <input type="search" id="strengthLiftSearch" placeholder="Search for exercise" autocomplete="off">
-          </div>
-
-          <div class="strength-picker-meta">
-            <b id="strengthPickerCount">{{ strength_poster.available_exercises|length }} imported exercises</b>
-            <span id="strengthPickerHint">Showing top progress lifts</span>
-          </div>
-          <div class="strength-search-results" id="strengthSearchResults"></div>
-
-          <div class="poster-lift-chips" id="selectedPosterLifts"></div>
-          <div id="posterLiftHiddenInputs"></div>
-
-          <div class="actions">
-            <button class="btn" type="submit">Download Poster Card</button>
-          </div>
-        </form>
+{% if strength_summary.exercises %}
+  {% call ds_card(title="Poster Settings") %}
+    <form action="{{ url_for('strength_poster_png', client_id=client.id) }}" method="GET" id="posterConfigForm" data-no-ajax>
+      <div class="ds-badge" style="margin-bottom:var(--ds-space-4);">
+        Imported range: {{ strength_poster.start_date.strftime("%d/%m/%Y") }} &ndash; {{ strength_poster.end_date.strftime("%d/%m/%Y") }}
       </div>
 
-      <div class="stats-grid">
-        <div class="card nutrition-metric-card">
-          <span class="muted">Weeks</span>
-          <div class="nutrition-metric-value">{{ strength_poster.weeks }}</div>
-        </div>
-        <div class="card nutrition-metric-card">
-          <span class="muted">Bodyweight Start</span>
-          <div class="nutrition-metric-value">{% if strength_poster.before_weight is not none %}{{ strength_poster.before_weight }}{% else %}-{% endif %}</div>
-        </div>
-        <div class="card nutrition-metric-card">
-          <span class="muted">Bodyweight End</span>
-          <div class="nutrition-metric-value">{% if strength_poster.after_weight is not none %}{{ strength_poster.after_weight }}{% else %}-{% endif %}</div>
-        </div>
-      </div>
+      <label class="ds-field__label" style="display:block; margin-bottom:var(--ds-space-2);">Choose up to 6 lifts</label>
+      <input class="ds-input" type="search" id="strengthLiftSearch" placeholder="Search for exercise" autocomplete="off" style="margin-bottom:var(--ds-space-3);">
 
-      <div class="card">
-        <h3>Lift Comparison (Weakest to Strongest)</h3>
-        {% if strength_poster.rows %}
-          <div class="strength-poster-list">
-            {% for row in strength_poster.rows %}
-              <article class="strength-poster-item">
-                <h4>{{ row.exercise }}</h4>
-                <div class="muted">
-                  Lowest: <b>{{ row.start }} kg x {{ row.start_reps }}</b> ({{ row.start_date.strftime("%d/%m/%Y") }})
-                </div>
-                <div class="muted">
-                  Highest: <b>{{ row.end }} kg x {{ row.end_reps }}</b> ({{ row.end_date.strftime("%d/%m/%Y") }})
-                </div>
-                <div class="strength-poster-change">{{ row.delta|round(1) }} kg ({{ row.pct|round(1) }}%)</div>
-              </article>
-            {% endfor %}
+      <div class="ds-field__hint" style="display:flex; justify-content:space-between; margin-bottom:var(--ds-space-2);">
+        <b id="strengthPickerCount" style="color:var(--ds-text);">{{ strength_poster.available_exercises|length }} imported exercises</b>
+        <span id="strengthPickerHint">Showing top progress lifts</span>
+      </div>
+      <div class="ds-strength-results" id="strengthSearchResults"></div>
+
+      <div class="ds-chip-row" id="selectedPosterLifts"></div>
+      <div id="posterLiftHiddenInputs"></div>
+
+      <div style="margin-top:var(--ds-space-4);">
+        {{ ds_button("Download Poster Card", type="submit", icon="chart", block=True) }}
+      </div>
+    </form>
+  {% endcall %}
+
+  <div class="ds-metric-grid" style="margin-bottom:var(--ds-space-4);">
+    <div class="ds-metric-tile"><span>Weeks</span><b>{{ strength_poster.weeks }}</b></div>
+    <div class="ds-metric-tile"><span>Bodyweight Start</span><b>{% if strength_poster.before_weight is not none %}{{ strength_poster.before_weight }}{% else %}-{% endif %}</b></div>
+    <div class="ds-metric-tile"><span>Bodyweight End</span><b>{% if strength_poster.after_weight is not none %}{{ strength_poster.after_weight }}{% else %}-{% endif %}</b></div>
+  </div>
+
+  {% call ds_card(title="Lift Comparison", eyebrow="Weakest to Strongest") %}
+    {% if strength_poster.rows %}
+      <div class="ds-item-list">
+        {% for row in strength_poster.rows %}
+          <div class="ds-item-card">
+            <div class="ds-item-card__top">
+              <div class="ds-item-card__title">{{ row.exercise }}</div>
+              {{ ds_badge((row.delta|round(1)|string) ~ " kg (" ~ (row.pct|round(1)|string) ~ "%)", variant=("success" if row.delta > 0 else "neutral")) }}
+            </div>
+            <div class="ds-measure-grid" style="grid-template-columns:1fr 1fr;">
+              <div><span>Lowest</span><b>{{ row.start }} kg &times; {{ row.start_reps }}</b><div class="ds-field__hint">{{ row.start_date.strftime("%d/%m/%Y") }}</div></div>
+              <div><span>Highest</span><b>{{ row.end }} kg &times; {{ row.end_reps }}</b><div class="ds-field__hint">{{ row.end_date.strftime("%d/%m/%Y") }}</div></div>
+            </div>
           </div>
-        {% else %}
-          <div class="empty-state">No comparable lift data in this date range.</div>
-        {% endif %}
+        {% endfor %}
       </div>
     {% else %}
-      <div class="card">
-        <h3>Strength Progress</h3>
-        <div class="empty-state">No imported strength data yet. Upload a Lyfta or Hevy export first.</div>
-      </div>
+      <div class="ds-empty">No comparable lift data in this date range.</div>
     {% endif %}
-  </section>
-</div>
+  {% endcall %}
+{% else %}
+  {% call ds_card(title="Strength Progress") %}
+    <div class="ds-empty-icon">
+      {{ ds_icon("dumbbell", 32) }}
+      <span>No imported strength data yet. Upload a Lyfta or Hevy export first.</span>
+    </div>
+  {% endcall %}
+{% endif %}
 
 {% if strength_summary.exercises %}
 <script>
   (function () {
-    const refreshBtn = document.getElementById("strengthRefreshBtn");
-    if (refreshBtn) {
-      refreshBtn.addEventListener("click", function () {
-        window.location.reload();
-      });
-    }
-
     const searchInput = document.getElementById("strengthLiftSearch");
     const resultsWrap = document.getElementById("strengthSearchResults");
     const chipsWrap = document.getElementById("selectedPosterLifts");
@@ -137,12 +107,13 @@
       chipsWrap.innerHTML = "";
       selected.forEach(function (lift, idx) {
         const chip = document.createElement("div");
-        chip.className = "poster-lift-chip";
+        chip.className = "ds-badge ds-badge--accent ds-chip";
         const text = document.createElement("span");
         text.textContent = lift;
         const remove = document.createElement("button");
         remove.type = "button";
-        remove.textContent = "x";
+        remove.setAttribute("aria-label", "Remove " + lift);
+        remove.textContent = "×";
         remove.addEventListener("click", function () {
           selected.splice(idx, 1);
           renderChips();
@@ -189,7 +160,7 @@
       resultsWrap.innerHTML = "";
       if (!filtered.length) {
         const empty = document.createElement("div");
-        empty.className = "empty-state";
+        empty.className = "ds-empty";
         empty.textContent = query ? "No matching exercise." : "No more exercises available.";
         resultsWrap.appendChild(empty);
         return;
@@ -198,7 +169,7 @@
       filtered.forEach(function (item) {
         const button = document.createElement("button");
         button.type = "button";
-        button.className = "strength-search-item";
+        button.className = "ds-strength-result";
         const name = document.createElement("b");
         name.textContent = item;
         const note = document.createElement("span");

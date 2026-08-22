@@ -204,6 +204,22 @@ def inject_csrf_token():
     return {"csrf_token": get_csrf_token}
 
 
+def asset_v(static_path: str) -> str:
+    """Cache-busting version derived from the file's own mtime, so edits are
+    always picked up by the browser without needing a manually-bumped
+    query string."""
+    full_path = os.path.join(app.static_folder, static_path)
+    try:
+        return str(int(os.path.getmtime(full_path)))
+    except OSError:
+        return "0"
+
+
+@app.context_processor
+def inject_asset_v():
+    return {"asset_v": asset_v}
+
+
 @app.before_request
 def touch_last_seen():
     uid = session.get("user_id")
@@ -2800,6 +2816,9 @@ def client_profile(client_id):
     err = request.args.get("err")
     msg = request.args.get("msg")
     viewer = current_user()
+    # The old standalone "sessions" tab was folded into "info".
+    if tab == "sessions":
+        return redirect(url_for("client_profile", client_id=client.id, tab="info"))
     # Keep client navigation on allowed tabs only.
     if not is_admin() and tab in ("payments", "strength"):
         return redirect(url_for("client_profile", client_id=client.id, tab="info"))
@@ -4323,7 +4342,7 @@ def add_appointment(client_id):
     client = get_or_404(Client, client_id)
     dt = parse_datetime_local(request.form.get("scheduled_for"))
     if not dt:
-        return redirect(url_for("client_profile", client_id=client.id, tab="sessions", err="Invalid appointment date/time."))
+        return redirect(url_for("client_profile", client_id=client.id, tab="info", err="Invalid appointment date/time."))
     note = (request.form.get("note") or "").strip()
     a = Appointment(
         client_id=client.id,
@@ -4334,7 +4353,7 @@ def add_appointment(client_id):
     )
     db.session.add(a)
     db.session.commit()
-    return redirect(url_for("client_profile", client_id=client.id, tab="sessions", msg="Appointment saved."))
+    return redirect(url_for("client_profile", client_id=client.id, tab="info", msg="Appointment saved."))
 
 
 @app.route("/client/<int:client_id>/appointments/respond/<int:appointment_id>", methods=["POST"])
@@ -4378,10 +4397,10 @@ def update_appointment_status(client_id, appointment_id):
         abort(404)
     status = (request.form.get("status") or "").strip().lower()
     if status not in ("requested", "confirmed", "completed", "cancelled"):
-        return redirect(url_for("client_profile", client_id=client_id, tab="sessions", err="Invalid appointment status."))
+        return redirect(url_for("client_profile", client_id=client_id, tab="info", err="Invalid appointment status."))
     a.status = status
     db.session.commit()
-    return redirect(url_for("client_profile", client_id=client_id, tab="sessions", msg="Appointment status updated."))
+    return redirect(url_for("client_profile", client_id=client_id, tab="info", msg="Appointment status updated."))
 
 
 @app.route("/client/<int:client_id>/appointments/delete/<int:appointment_id>", methods=["POST"])
@@ -4394,7 +4413,7 @@ def delete_appointment(client_id, appointment_id):
         abort(404)
     db.session.delete(a)
     db.session.commit()
-    return redirect(url_for("client_profile", client_id=client_id, tab="sessions", msg="Appointment deleted."))
+    return redirect(url_for("client_profile", client_id=client_id, tab="info", msg="Appointment deleted."))
 
 
 @app.route("/client/<int:client_id>/sessions/add", methods=["POST"], endpoint="add_session")
@@ -4419,14 +4438,14 @@ def add_session(client_id):
         return redirect(url_for(
             "client_profile",
             client_id=client.id,
-            tab="sessions",
+            tab="info",
             err="Invalid session date."
         ))
     if session_day > date.today():
         return redirect(url_for(
             "client_profile",
             client_id=client.id,
-            tab="sessions",
+            tab="info",
             err="Session date cannot be in the future."
         ))
 
@@ -4447,7 +4466,7 @@ def add_session(client_id):
         return redirect(url_for(
             "client_profile",
             client_id=client.id,
-            tab="sessions",
+            tab="info",
             err=f"Weekly limit reached for week of {target_week_start.strftime('%d/%m/%Y')} ({used_this_week}/{allowed})."
         ))
 
@@ -4461,7 +4480,7 @@ def add_session(client_id):
         url_for(
             "client_profile",
             client_id=client.id,
-            tab="sessions",
+            tab="info",
             msg=f"Session logged for {session_day.strftime('%d/%m/%Y')}"
         )
     )
@@ -4478,7 +4497,7 @@ def delete_session(client_id, session_id):
         abort(404)
     db.session.delete(s)
     db.session.commit()
-    return redirect(url_for("client_profile", client_id=client_id, tab="sessions"))
+    return redirect(url_for("client_profile", client_id=client_id, tab="info"))
 
 
 @app.route("/client/<int:client_id>/sessions/transfer", methods=["POST"], endpoint="transfer_sessions")
@@ -4502,7 +4521,7 @@ def transfer_sessions(client_id):
 
     if client.last_transfer_week == ws:
         return redirect(url_for(
-            "client_profile", client_id=client.id, tab="sessions",
+            "client_profile", client_id=client.id, tab="info",
             err="Transfer already done for this week."
         ))
 
@@ -4520,7 +4539,7 @@ def transfer_sessions(client_id):
     db.session.commit()
 
     return redirect(url_for(
-        "client_profile", client_id=client.id, tab="sessions",
+        "client_profile", client_id=client.id, tab="info",
         msg=f"Transferred {transfer_amount} unused session(s) to next week."
     ))
 
@@ -4547,7 +4566,21 @@ def add_payment(client_id):
     if amount_paid <= 0:
         return redirect(url_for("client_profile", client_id=client.id, tab="payments", err="Enter a valid amount."))
 
-    if plan_type in ("5000", "7000"):
+    if plan_type == "custom":
+        months = to_int(request.form.get("custom_months"), default=0)
+        sessions_per_week = to_int(request.form.get("custom_sessions_per_week"), default=0)
+        if months <= 0:
+            return redirect(url_for(
+                "client_profile", client_id=client.id, tab="payments",
+                err="Enter a valid length (in months) for the custom plan."
+            ))
+        if sessions_per_week <= 0:
+            return redirect(url_for(
+                "client_profile", client_id=client.id, tab="payments",
+                err="Enter a valid number of weekly sessions for the custom plan."
+            ))
+        monthly_price = amount_paid // months
+    elif plan_type in ("5000", "7000"):
         monthly_price = int(plan_type)
         sessions_per_week = 3 if monthly_price == 5000 else 5
         if amount_paid % monthly_price != 0:

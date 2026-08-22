@@ -10,3 +10,6 @@ tests/__pycache__/
 
 .env
 .env.local
+
+imports/
+logs/

@@ -1,161 +1,190 @@
 {% extends "base.html" %}
+{% from "components.html" import ds_card, ds_button, ds_input, ds_badge, ds_modal, ds_icon, ds_alert %}
 {% set title = "Dashboard" %}
+{% set page_class = "ds-dashboard-page" %}
 
 {% block content %}
-<div class="topbar">
-  <h1>Dame's Client App</h1>
-  <a href="{{ url_for('logout') }}" class="btn danger">Log out</a>
+<div class="ds-dash-hero">
+  <div>
+    <span class="ds-badge ds-badge--accent">Coach Command Center</span>
+    <h1 class="ds-dash-title">Dame's Client App</h1>
+    <p class="ds-field__hint" style="font-size:var(--ds-text-base);">Manage clients, payments, sessions, and backups from one clean workspace.</p>
+  </div>
+  <div class="ds-dash-hero-actions">
+    {{ ds_button("Add Client", icon="plus", attrs='data-ds-modal-open="addClientModal"') }}
+    {{ ds_button("Log out", href=url_for('logout'), variant="danger", icon="logout") }}
+  </div>
 </div>
 
 {% if err %}
-  <div class="alert error" style="margin-bottom:14px;">
-    <b style="color:var(--danger);">Error:</b> {{ err }}
-  </div>
+  {{ ds_alert(err, variant="danger") }}
 {% endif %}
 
 {% if msg %}
-  <div class="alert success" style="margin-bottom:14px;">
-    <b style="color:var(--success);">OK:</b> {{ msg }}
-  </div>
+  {{ ds_alert(msg, variant="success") }}
 {% endif %}
 
-<div class="card">
-  <h3>Data Tools</h3>
-  <div class="actions">
-    <a class="btn secondary" href="{{ url_for('export_clients_csv') }}">Export Clients CSV</a>
-    <a class="btn secondary" href="{{ url_for('export_sessions_csv') }}">Export Sessions CSV</a>
-    <a class="btn secondary" href="{{ url_for('export_payments_csv') }}">Export Payments CSV</a>
-    <a class="btn" href="{{ url_for('backup_database') }}">Download DB Backup</a>
-    <form action="{{ url_for('import_capnutra_admin') }}" method="POST" style="margin:0;"
-          onsubmit="return confirm('Import CAPNUTRA foods into the shared nutrition library? This can take around a minute.');">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button class="btn secondary" type="submit">Import CAPNUTRA Foods</button>
-    </form>
+<div class="ds-stat-row">
+  <div class="ds-card ds-stat-tile">
+    <span class="ds-card__eyebrow">Visible Clients</span>
+    <b class="ds-stat-number">{{ clients|length }}</b>
+  </div>
+  <div class="ds-card ds-stat-tile">
+    <span class="ds-card__eyebrow">Hidden Clients</span>
+    <b class="ds-stat-number">{{ hidden_clients_count }}</b>
+  </div>
+  <div class="ds-card ds-stat-tile">
+    <span class="ds-card__eyebrow">Payment Alerts</span>
+    <b class="ds-stat-number">{{ payment_alerts|length }}</b>
   </div>
 </div>
 
-<div class="card">
-  <h3>Payment Alerts</h3>
-  {% if payment_alerts %}
-    {% for alert in payment_alerts %}
-      <div class="client-row">
-        <div>
-          <div class="client-name">{{ alert.client.name }}</div>
-          <div class="muted">
-            Status:
-            <span class="payment-badge payment-badge-{{ alert.tone }}">{{ alert.label }}</span>
+<div class="ds-dash-grid">
+  {% call ds_card(title="Data Tools", eyebrow="Admin Tools") %}
+    <p class="ds-field__hint" style="margin-bottom:var(--ds-space-4);">Exports, backups, and shared nutrition library maintenance.</p>
+    <div class="ds-quick-actions">
+      <a class="ds-quick-action" href="{{ url_for('export_clients_csv') }}">
+        <span>Clients</span><b>Export CSV</b>
+      </a>
+      <a class="ds-quick-action" href="{{ url_for('export_sessions_csv') }}">
+        <span>Sessions</span><b>Export CSV</b>
+      </a>
+      <a class="ds-quick-action" href="{{ url_for('export_payments_csv') }}">
+        <span>Payments</span><b>Export CSV</b>
+      </a>
+      <a class="ds-quick-action ds-quick-action--accent" href="{{ url_for('backup_database') }}">
+        <span>Database</span><b>Download Backup</b>
+      </a>
+      <form action="{{ url_for('import_capnutra_admin') }}" method="POST"
+            data-ds-confirm="Import CAPNUTRA foods into the shared nutrition library? This can take around a minute.">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="ds-quick-action" type="submit" style="width:100%; text-align:left; border:1px solid var(--ds-border); font:inherit; cursor:pointer;">
+          <span>Nutrition</span><b>Import Foods</b>
+        </button>
+      </form>
+    </div>
+  {% endcall %}
+
+  {% call ds_card(title="Payment Alerts", eyebrow="Needs Attention") %}
+    {% if payment_alerts %}
+      <div class="ds-alert-list">
+        {% for alert in payment_alerts %}
+          <div class="ds-alert-row">
+            <div>
+              <div class="ds-alert-row__name">{{ alert.client.name }}</div>
+              {{ ds_badge(alert.label, variant=("danger" if alert.tone == "overdue" else "warn")) }}
+            </div>
+            {{ ds_button("Open Payments", href=url_for('client_profile', client_id=alert.client.id, tab='payments'), variant="secondary", size="sm", attrs='data-ds-nav') }}
           </div>
-        </div>
-        <div style="display:flex; gap:10px; align-items:center;">
-          <a class="btn secondary" href="{{ url_for('client_profile', client_id=alert.client.id, tab='payments') }}">Open Payments</a>
-        </div>
+        {% endfor %}
       </div>
-    {% endfor %}
-  {% else %}
-    <div class="empty-state">No due-soon or overdue payments right now.</div>
-  {% endif %}
-</div>
-
-<div class="card">
-  <h3>Admin Credentials</h3>
-  <form class="form" action="{{ url_for('change_admin_credentials') }}" method="POST" style="max-width:720px;">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-
-    <label class="label">Current Password</label>
-    <div class="password-wrap">
-      <input id="adminCurrentPassword" class="input" type="password" name="current_password" autocomplete="current-password" required>
-      <button class="password-toggle" type="button" data-password-target="adminCurrentPassword" aria-label="Show password" aria-pressed="false">&#128065;</button>
-    </div>
-
-    <label class="label" style="margin-top:12px;">New Username</label>
-    <input class="input" name="new_username" autocomplete="username" pattern="[A-Za-z0-9._-]+" title="Use letters, numbers, dot, underscore, or hyphen." required>
-
-    <label class="label" style="margin-top:12px;">New Password (optional)</label>
-    <div class="password-wrap">
-      <input id="adminNewPassword" class="input" type="password" name="new_password" autocomplete="new-password" minlength="6">
-      <button class="password-toggle" type="button" data-password-target="adminNewPassword" aria-label="Show password" aria-pressed="false">&#128065;</button>
-    </div>
-
-    <label class="label" style="margin-top:12px;">Confirm New Password</label>
-    <div class="password-wrap">
-      <input id="adminConfirmPassword" class="input" type="password" name="confirm_password" autocomplete="new-password" minlength="6">
-      <button class="password-toggle" type="button" data-password-target="adminConfirmPassword" aria-label="Show password" aria-pressed="false">&#128065;</button>
-    </div>
-
-    <button class="btn" type="submit" style="margin-top:14px;">Update Admin Credentials</button>
-  </form>
-</div>
-
-<div class="card">
-  <h3>Add Client</h3>
-  <form class="form add-client-form" action="{{ url_for('add_client') }}" method="POST">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div class="add-client-grid">
-      <div class="field-span-2">
-        <label class="label">Client Name</label>
-        <input class="input" name="name" placeholder="e.g. John Doe" required>
-      </div>
-
-      <div>
-        <label class="label">Phone</label>
-        <input class="input" name="phone" placeholder="+389..." inputmode="tel" pattern="\+?\d*" title="Use only digits and optional leading +">
-      </div>
-
-      <div>
-        <label class="label">Training Plan</label>
-        <input class="input" name="plan" placeholder="e.g. Arnold Split">
-      </div>
-    </div>
-    <button class="btn add-client-btn" type="submit">Add Client</button>
-  </form>
-</div>
-
-<div class="card">
-  <h3>Your Clients</h3>
-  <div class="actions" style="margin:10px 0 14px;">
-    {% if show_inactive %}
-      <a class="btn secondary" href="{{ url_for('index') }}">Hide Inactive Clients</a>
     {% else %}
-      <a class="btn secondary" href="{{ url_for('index', show_inactive=1) }}">Show Inactive Clients ({{ hidden_clients_count }})</a>
+      <div class="ds-empty-icon">
+        {{ ds_icon("check", 32) }}
+        <span>No due-soon or overdue payments right now.</span>
+      </div>
+    {% endif %}
+  {% endcall %}
+</div>
+
+<details class="ds-card ds-collapsible">
+  <summary class="ds-card__title" style="cursor:pointer;">Admin Credentials</summary>
+  <form action="{{ url_for('change_admin_credentials') }}" method="POST" style="margin-top:var(--ds-space-4);">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="ds-field">
+      <label class="ds-field__label" for="adminCurrentPassword">Current Password</label>
+      <div class="password-wrap">
+        <input id="adminCurrentPassword" class="ds-input" type="password" name="current_password" autocomplete="current-password" required>
+        <button class="password-toggle" type="button" data-password-target="adminCurrentPassword" aria-label="Show password" aria-pressed="false">&#128065;</button>
+      </div>
+    </div>
+
+    {{ ds_input("new_username", label="New Username", required=True, id="adminNewUsername", attrs='autocomplete="username" pattern="[A-Za-z0-9._-]+" title="Use letters, numbers, dot, underscore, or hyphen."') }}
+
+    <div class="ds-field">
+      <label class="ds-field__label" for="adminNewPassword">New Password (optional)</label>
+      <div class="password-wrap">
+        <input id="adminNewPassword" class="ds-input" type="password" name="new_password" autocomplete="new-password" minlength="6">
+        <button class="password-toggle" type="button" data-password-target="adminNewPassword" aria-label="Show password" aria-pressed="false">&#128065;</button>
+      </div>
+    </div>
+
+    <div class="ds-field">
+      <label class="ds-field__label" for="adminConfirmPassword">Confirm New Password</label>
+      <div class="password-wrap">
+        <input id="adminConfirmPassword" class="ds-input" type="password" name="confirm_password" autocomplete="new-password" minlength="6">
+        <button class="password-toggle" type="button" data-password-target="adminConfirmPassword" aria-label="Show password" aria-pressed="false">&#128065;</button>
+      </div>
+    </div>
+
+    {{ ds_button("Update Admin Credentials", type="submit") }}
+  </form>
+</details>
+
+{% call ds_modal("addClientModal", "Add Client") %}
+  <p class="ds-field__hint" style="margin-bottom:var(--ds-space-4);">Create a profile, then open it to set goals, sessions, nutrition, and payments.</p>
+  <form action="{{ url_for('add_client') }}" method="POST" id="add-client">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {{ ds_input("name", label="Client Name", placeholder="e.g. John Doe", required=True) }}
+    {{ ds_input("phone", label="Phone", placeholder="+389...", attrs='inputmode="tel" pattern="\+?\d*" title="Use only digits and optional leading +"') }}
+    {{ ds_input("plan", label="Training Plan", placeholder="e.g. Arnold Split") }}
+    {{ ds_button("Add Client", type="submit", block=True) }}
+  </form>
+{% endcall %}
+
+{% call ds_card(title="Your Clients", eyebrow="Directory") %}
+  <div class="ds-dash-directory-head">
+    <p class="ds-field__hint">Open a profile to update workouts, body stats, food logs, and billing.</p>
+    {% if show_inactive %}
+      {{ ds_button("Hide Inactive", href=url_for('index'), variant="secondary", size="sm", attrs='data-ds-nav') }}
+    {% else %}
+      {{ ds_button("Show Inactive (" ~ hidden_clients_count ~ ")", href=url_for('index', show_inactive=1), variant="secondary", size="sm", attrs='data-ds-nav') }}
     {% endif %}
   </div>
 
   {% if clients %}
-    {% for c in clients %}
-      <div class="client-row">
-        <div>
-          <div class="client-name">{{ c.name }}</div>
-          <div class="muted">
-            Phone: {{ c.phone or "-" }} | Plan: {{ c.plan or "-" }}
-            {% if not c.is_active %}
-              | <span style="color:var(--warn); font-weight:700;">Inactive</span>
-            {% endif %}
+    <div class="ds-client-grid">
+      {% for c in clients %}
+        <div class="ds-card ds-client-card {% if not c.is_active %}is-inactive{% endif %}">
+          <div class="ds-client-card__top">
+            <div class="ds-client-avatar">{{ c.name[:1]|upper }}</div>
+            <div class="ds-client-card__info">
+              <div class="ds-client-card__name">{{ c.name }}</div>
+              <div class="ds-client-card__tags">
+                <span>{{ c.plan or "No plan set" }}</span>
+                <span>{{ c.phone or "No phone" }}</span>
+              </div>
+            </div>
+            {% if not c.is_active %}{{ ds_badge("Inactive", variant="warn") }}{% endif %}
+          </div>
+          <div class="ds-client-card__actions">
+            {{ ds_button("Open", href=url_for('client_profile', client_id=c.id), size="sm", icon="user", attrs='data-ds-nav') }}
+            <form action="{{ url_for('update_client_status', client_id=c.id) }}" method="POST" style="margin:0;">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="show_inactive" value="{{ 1 if show_inactive else 0 }}">
+              {% if c.is_active %}
+                <input type="hidden" name="action" value="hide">
+                {{ ds_button("Hide", type="submit", variant="secondary", size="sm") }}
+              {% else %}
+                <input type="hidden" name="action" value="show">
+                {{ ds_button("Unhide", type="submit", variant="secondary", size="sm") }}
+              {% endif %}
+            </form>
+            <form action="{{ url_for('delete_client', client_id=c.id) }}" method="POST"
+                  data-ds-confirm="Delete {{ c.name }}?" style="margin:0;">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              {{ ds_button("Delete", type="submit", variant="danger", size="sm") }}
+            </form>
           </div>
         </div>
-
-        <div style="display:flex; gap:10px; align-items:center;">
-          <a href="{{ url_for('client_profile', client_id=c.id) }}" class="btn">Open Profile</a>
-          <form action="{{ url_for('update_client_status', client_id=c.id) }}" method="POST" style="margin:0;">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="hidden" name="show_inactive" value="{{ 1 if show_inactive else 0 }}">
-            {% if c.is_active %}
-              <input type="hidden" name="action" value="hide">
-              <button class="btn secondary" type="submit">Hide</button>
-            {% else %}
-              <input type="hidden" name="action" value="show">
-              <button class="btn secondary" type="submit">Unhide</button>
-            {% endif %}
-          </form>
-          <form action="{{ url_for('delete_client', client_id=c.id) }}" method="POST"
-                onsubmit="return confirm('Delete {{ c.name }}?');" style="margin:0;">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button class="btn danger" type="submit">Delete</button>
-          </form>
-        </div>
-      </div>
-    {% endfor %}
+      {% endfor %}
+    </div>
   {% else %}
-    <div class="empty-state">No clients yet. Add your first client above.</div>
+    <div class="ds-empty-icon">
+      {{ ds_icon("user", 32) }}
+      <span>No clients yet. Tap "Add Client" to create your first profile.</span>
+    </div>
   {% endif %}
-</div>
+{% endcall %}
 {% endblock %}

@@ -1,67 +1,60 @@
 {% extends "base.html" %}
+{% from "components.html" import ds_button, ds_input %}
 {% set title = "Login | Trainer App" %}
-{% set page_class = "page-login" %}
+{% set page_class = "page-login ds-auth-page" %}
 
 {% block content %}
-<div class="login-split">
-  <section class="auth-visual auth-visual-full" style="--auth-photo:url('{{ url_for('static', filename='images/coach.png') }}');">
-    <div class="auth-visual-inner">
-      <h2 class="auth-title">Train. Track. Improve.</h2>
-      <p class="muted" style="max-width:30ch;">
-        Keep progress, sessions, and payment status in one clean system.
-      </p>
-      <div class="auth-metrics">
-        <div class="auth-chip">Sessions</div>
-        <div class="auth-chip">Progress</div>
-        <div class="auth-chip">Consistency</div>
+<div class="ds-auth-shell">
+  <section class="ds-auth-visual" style="--auth-photo:url('{{ url_for('static', filename='images/coach.png') }}');">
+    <div class="ds-auth-visual-overlay"></div>
+    <div class="ds-auth-visual-content">
+      <span class="ds-badge ds-badge--accent">Coach Platform</span>
+      <h1 class="ds-auth-headline">Train. Track.<br>Improve.</h1>
+      <p class="ds-auth-subhead">Sessions, progress, and payments in one clean workspace.</p>
+      <div class="ds-auth-chips">
+        <span class="ds-badge">Sessions</span>
+        <span class="ds-badge">Progress</span>
+        <span class="ds-badge">Consistency</span>
       </div>
-      <div class="auth-socials">
-        <a class="auth-social auth-social-icon" href="https://www.instagram.com/dame.17/?hl=en" target="_blank" rel="noopener noreferrer" aria-label="Instagram" title="Instagram">
-          <img src="{{ url_for('static', filename='images/social/instagram.png') }}" alt="Instagram">
-        </a>
-        <a class="auth-social auth-social-icon" href="https://www.facebook.com/damjan.atanasovski.96/" target="_blank" rel="noopener noreferrer" aria-label="Facebook" title="Facebook">
-          <img src="{{ url_for('static', filename='images/social/facebook.png') }}" alt="Facebook">
-        </a>
-        <button
-          class="auth-social auth-social-icon"
-          type="button"
-          id="viberCopyButton"
-          data-copy-number="+38979249666"
-          aria-label="Copy Viber number"
-          title="Copy Viber number"
-        >
-          <img src="{{ url_for('static', filename='images/social/viber.png') }}" alt="Viber">
-        </button>
-      </div>
-      <div id="copyToast" class="copy-toast" role="status" aria-live="polite"></div>
     </div>
+    <div class="ds-auth-socials">
+      <a class="ds-auth-social" href="https://www.instagram.com/dame.17/?hl=en" target="_blank" rel="noopener noreferrer" aria-label="Instagram" title="Instagram">
+        <img src="{{ url_for('static', filename='images/social/instagram.png') }}" alt="Instagram">
+      </a>
+      <a class="ds-auth-social" href="https://www.facebook.com/damjan.atanasovski.96/" target="_blank" rel="noopener noreferrer" aria-label="Facebook" title="Facebook">
+        <img src="{{ url_for('static', filename='images/social/facebook.png') }}" alt="Facebook">
+      </a>
+      <button class="ds-auth-social" type="button" id="viberCopyButton" data-copy-number="+38979249666" aria-label="Copy Viber number" title="Copy Viber number">
+        <img src="{{ url_for('static', filename='images/social/viber.png') }}" alt="Viber">
+      </button>
+    </div>
+    <div id="copyToast" class="copy-toast" role="status" aria-live="polite"></div>
   </section>
 
-  <section class="login-panel">
-    <div class="login-panel-inner">
-      <div class="login-card">
-        <h2 class="auth-title">Client Login</h2>
-        <p class="muted" style="margin-top:0;">Enter your username and password.</p>
+  <section class="ds-auth-panel">
+    <div class="ds-card ds-auth-card">
+      <h2 class="ds-card__title">Client Login</h2>
+      <p class="ds-field__hint" style="margin-bottom:var(--ds-space-5);">Enter your username and password.</p>
 
-        {% if err %}
-          <div class="alert error" style="margin-top:12px;">
-            <b style="color:var(--danger);">Error:</b>
-            {% if lock_seconds %}
-              Too many attempts. Try again in <span id="lock-seconds" data-seconds="{{ lock_seconds }}">{{ lock_seconds }}</span>s.
-            {% else %}
-              {{ err }}
-            {% endif %}
-          </div>
-        {% endif %}
+      {% if err %}
+        <div class="ds-badge ds-badge--danger ds-auth-alert">
+          {% if lock_seconds %}
+            Too many attempts. Try again in <span id="lock-seconds" data-seconds="{{ lock_seconds }}">{{ lock_seconds }}</span>s.
+          {% else %}
+            {{ err }}
+          {% endif %}
+        </div>
+      {% endif %}
 
-        <form class="form" action="{{ url_for('login') }}" method="POST">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <label class="label">Username</label>
-          <input class="input" name="username" autocomplete="username" required {% if lock_seconds %}disabled{% endif %}>
+      <form class="ds-auth-form" action="{{ url_for('login') }}" method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-          <label class="label">Password</label>
+        {{ ds_input("username", label="Username", required=True, id="loginUsername", attrs=('autocomplete="username"' ~ (' disabled' if lock_seconds else ''))) }}
+
+        <div class="ds-field">
+          <label class="ds-field__label" for="loginPassword">Password</label>
           <div class="password-wrap">
-            <input id="loginPassword" class="input" type="password" name="password" autocomplete="current-password" required {% if lock_seconds %}disabled{% endif %}>
+            <input id="loginPassword" class="ds-input" type="password" name="password" autocomplete="current-password" required {% if lock_seconds %}disabled{% endif %}>
             <button
               id="loginPasswordToggle"
               class="password-toggle"
@@ -72,18 +65,18 @@
               {% if lock_seconds %}disabled{% endif %}
             >&#128065;</button>
           </div>
-
-          <label class="muted" style="display:flex; align-items:center; gap:8px; margin-top:2px;">
-            <input type="checkbox" name="remember_me" value="1" {% if lock_seconds %}disabled{% endif %}>
-            Keep me signed in
-          </label>
-
-          <button class="btn" type="submit" style="margin-top:6px;" {% if lock_seconds %}disabled{% endif %}>Log in</button>
-        </form>
-
-        <div class="muted auth-foot">
-          If you do not have credentials, ask your coach.
         </div>
+
+        <label class="ds-auth-remember">
+          <input type="checkbox" name="remember_me" value="1" {% if lock_seconds %}disabled{% endif %}>
+          Keep me signed in
+        </label>
+
+        {{ ds_button("Log in", type="submit", block=True, disabled=(lock_seconds is defined and lock_seconds), attrs=('id="loginSubmitBtn"')) }}
+      </form>
+
+      <div class="ds-field__hint ds-auth-foot">
+        If you do not have credentials, ask your coach.
       </div>
     </div>
   </section>
@@ -112,7 +105,7 @@
 
     const el = document.getElementById("lock-seconds");
     if (!el) return;
-    const form = el.closest(".login-card")?.querySelector("form");
+    const form = el.closest(".ds-auth-card")?.querySelector("form");
     const fields = form ? form.querySelectorAll("input[name='username'], input[name='password'], button[type='submit'], #loginPasswordToggle") : [];
     let seconds = Number(el.dataset.seconds || 0);
     if (!Number.isFinite(seconds) || seconds <= 0) return;

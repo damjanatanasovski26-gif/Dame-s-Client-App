@@ -1,3 +1,4 @@
+{% from "components.html" import ds_icon %}
 {% set daily_totals = nutrition_summary.totals %}
 {% set energy_goal = nutrition_summary.goal or 0 %}
 {% set protein_goal = nutrition_summary.protein_goal or 0 %}
@@ -7,6 +8,9 @@
 {% set protein_ratio = (daily_totals.protein / protein_goal * 100) if protein_goal else 0 %}
 {% set carbs_ratio = (daily_totals.carbs / carbs_goal * 100) if carbs_goal else 0 %}
 {% set fat_ratio = (daily_totals.fat / fat_goal * 100) if fat_goal else 0 %}
+{% set protein_over_pct = ([((protein_ratio - 100) / 20 * 100), 100]|min) if protein_ratio >= 100 else 0 %}
+{% set carbs_over_pct = ([((carbs_ratio - 100) / 20 * 100), 100]|min) if carbs_ratio >= 100 else 0 %}
+{% set fat_over_pct = ([((fat_ratio - 100) / 20 * 100), 100]|min) if fat_ratio >= 100 else 0 %}
 {% set consumed_macro_kcal = daily_totals.protein * 4 + daily_totals.carbs * 4 + daily_totals.fat * 9 %}
 {% set consumed_protein_slice = (daily_totals.protein * 4 / consumed_macro_kcal * 100) if consumed_macro_kcal else 0 %}
 {% set consumed_carbs_slice = consumed_protein_slice + ((daily_totals.carbs * 4 / consumed_macro_kcal * 100) if consumed_macro_kcal else 0) %}
@@ -31,24 +35,40 @@
     <section class="nutrition-rings-card">
       <button class="nutrition-ring-nav nutrition-ring-nav-prev" type="button" data-date-step="-1" aria-label="Previous day"></button>
       <button class="nutrition-ring-nav nutrition-ring-nav-next" type="button" data-date-step="1" aria-label="Next day" {% if nutrition_date >= nutrition_today %}hidden{% endif %}></button>
-      <div class="nutrition-calorie-ring {% if energy_goal and daily_totals.calories > energy_goal %}nutrition-calorie-ring-over{% endif %}" data-ring="energy" style="--ring-progress: {{ energy_ratio if energy_ratio < 100 else 100 }};">
-        <div>
-          <b class="nutrition-ring-current">{{ daily_totals.calories|round|int }}</b>
-          <span>of <span class="nutrition-ring-goal">{{ energy_goal }}</span> kcal</span>
-          <small hidden>{{ energy_goal }} target</small>
+
+      <div class="nutrition-calorie-head">
+        <div class="nutrition-calorie-ring {% if energy_goal and daily_totals.calories > energy_goal %}nutrition-calorie-ring-over{% elif energy_ratio >= 85 %}nutrition-calorie-ring-warn{% endif %}" data-ring="energy" style="--ring-progress: {{ energy_ratio if energy_ratio < 100 else 100 }};">
+          <div>
+            <b class="nutrition-ring-current">{{ daily_totals.calories|round|int }}</b>
+            <span>of <span class="nutrition-ring-goal">{{ energy_goal }}</span> kcal</span>
+          </div>
         </div>
       </div>
-      <div class="nutrition-mini-rings">
-        <div class="nutrition-mini-ring nutrition-mini-ring-protein" data-ring="protein" style="--ring-progress: {{ protein_ratio if protein_ratio < 100 else 100 }};">
-          <div><b class="nutrition-ring-current">{{ daily_totals.protein }}</b><span>Protein</span><small><span class="nutrition-ring-goal">{{ protein_goal }}</span>g</small></div>
+
+      <div class="nutrition-macro-bars">
+        <div class="nutrition-macro-bar nutrition-macro-bar-protein {{ 'is-over-goal' if protein_ratio >= 100 else '' }}" data-ring="protein" style="--ring-progress: {{ protein_ratio if protein_ratio < 100 else 100 }}; --over-pct: {{ protein_over_pct }}%;">
+          <div class="nutrition-macro-bar__head">
+            <span class="nutrition-macro-bar__label">Protein</span>
+            <span class="nutrition-macro-bar__value"><b class="nutrition-ring-current">{{ daily_totals.protein }}</b>/<span class="nutrition-ring-goal">{{ protein_goal }}</span>g</span>
+          </div>
+          <div class="nutrition-macro-bar__track"><div class="nutrition-macro-bar__fill"></div></div>
         </div>
-        <div class="nutrition-mini-ring nutrition-mini-ring-carbs" data-ring="carbs" style="--ring-progress: {{ carbs_ratio if carbs_ratio < 100 else 100 }};">
-          <div><b class="nutrition-ring-current">{{ daily_totals.carbs }}</b><span>Carbs</span><small><span class="nutrition-ring-goal">{{ carbs_goal }}</span>g</small></div>
+        <div class="nutrition-macro-bar nutrition-macro-bar-carbs {{ 'is-over-goal' if carbs_ratio >= 100 else '' }}" data-ring="carbs" style="--ring-progress: {{ carbs_ratio if carbs_ratio < 100 else 100 }}; --over-pct: {{ carbs_over_pct }}%;">
+          <div class="nutrition-macro-bar__head">
+            <span class="nutrition-macro-bar__label">Carbs</span>
+            <span class="nutrition-macro-bar__value"><b class="nutrition-ring-current">{{ daily_totals.carbs }}</b>/<span class="nutrition-ring-goal">{{ carbs_goal }}</span>g</span>
+          </div>
+          <div class="nutrition-macro-bar__track"><div class="nutrition-macro-bar__fill"></div></div>
         </div>
-        <div class="nutrition-mini-ring nutrition-mini-ring-fat" data-ring="fat" style="--ring-progress: {{ fat_ratio if fat_ratio < 100 else 100 }};">
-          <div><b class="nutrition-ring-current">{{ daily_totals.fat }}</b><span>Fat</span><small><span class="nutrition-ring-goal">{{ fat_goal }}</span>g</small></div>
+        <div class="nutrition-macro-bar nutrition-macro-bar-fat {{ 'is-over-goal' if fat_ratio >= 100 else '' }}" data-ring="fat" style="--ring-progress: {{ fat_ratio if fat_ratio < 100 else 100 }}; --over-pct: {{ fat_over_pct }}%;">
+          <div class="nutrition-macro-bar__head">
+            <span class="nutrition-macro-bar__label">Fat</span>
+            <span class="nutrition-macro-bar__value"><b class="nutrition-ring-current">{{ daily_totals.fat }}</b>/<span class="nutrition-ring-goal">{{ fat_goal }}</span>g</span>
+          </div>
+          <div class="nutrition-macro-bar__track"><div class="nutrition-macro-bar__fill"></div></div>
         </div>
       </div>
+
       {% if is_admin %}
         <button class="nutrition-admin-target" type="button" data-open-target>Change Daily Calories</button>
       {% endif %}
@@ -85,7 +105,7 @@
                   </div>
                   <div>
                     <b>{{ item.calories }} kcal</b>
-                    <form class="nutrition-delete-form" action="{{ url_for('delete_food_log_entry', client_id=client.id, log_id=item.id) }}" method="POST">
+                    <form class="nutrition-delete-form" action="{{ url_for('delete_food_log_entry', client_id=client.id, log_id=item.id) }}" method="POST" data-ds-confirm="Delete this logged food?">
                       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                       <button type="submit">Delete</button>
                     </form>
@@ -129,6 +149,9 @@
       <button type="button" data-food-tab="frequent">Frequent</button>
       <button type="button" data-food-tab="custom">Custom</button>
     </div>
+    <button type="button" class="nutrition-add-custom-btn" data-open-manual-food>
+      {{ ds_icon("plus", 16) }} Add Custom Food
+    </button>
     <div>
       <div class="nutrition-food-results" id="nutritionFoodList">
         {% for food in foods %}
@@ -156,8 +179,8 @@
         {% endfor %}
       </div>
       <div class="nutrition-picker-empty" id="nutritionPickerEmpty" hidden>
-        <b>No saved food matches your search.</b>
-        <span>You can add it manually with calories and macros per 100g.</span>
+        <b id="nutritionPickerEmptyTitle">No saved food matches your search.</b>
+        <span id="nutritionPickerEmptyHint">You can add it manually with calories and macros per 100g.</span>
         <button type="button" data-open-manual-food>Add Custom Food</button>
       </div>
     </div>
@@ -217,21 +240,41 @@
       </div>
       <span></span>
     </header>
-    <form class="nutrition-review-form" id="customFoodForm" action="{{ url_for('add_food_item', client_id=client.id) }}" method="POST" autocomplete="off">
+    <form class="nutrition-review-form ds-review-form" id="customFoodForm" action="{{ url_for('add_food_item', client_id=client.id) }}" method="POST" autocomplete="off">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="nutrition_date" value="{{ nutrition_date.isoformat() }}">
-      <label>Food name<input name="name" maxlength="120" value="{{ nutrition_label_draft.get('name', '') }}" required></label>
-      <label>Brand<input name="brand" maxlength="120" value="{{ nutrition_label_draft.get('brand', '') }}"></label>
+
+      <div class="ds-field">
+        <label class="ds-field__label" for="reviewFoodName">Food name</label>
+        <input class="ds-input" id="reviewFoodName" name="name" maxlength="120" value="{{ nutrition_label_draft.get('name', '') }}" required>
+      </div>
+      <div class="ds-field">
+        <label class="ds-field__label" for="reviewFoodBrand">Brand</label>
+        <input class="ds-input" id="reviewFoodBrand" name="brand" maxlength="120" value="{{ nutrition_label_draft.get('brand', '') }}" placeholder="Optional">
+      </div>
       <input type="hidden" name="serving_label" value="{{ nutrition_label_draft.get('serving_label', '') }}">
+
       <p class="nutrition-macro-note">Nutrition values are entered per 100g.</p>
       <div class="nutrition-review-grid">
-        <label>Calories<input type="number" name="calories_per_100g" min="0" step="0.1" placeholder="kcal" value="{{ nutrition_label_draft.get('calories_per_100g', '') }}" required></label>
-        <label>Protein<input type="number" name="protein_per_100g" min="0" step="0.1" placeholder="g" value="{{ nutrition_label_draft.get('protein_per_100g', '') }}" required></label>
-        <label>Carbs<input type="number" name="carbs_per_100g" min="0" step="0.1" placeholder="g" value="{{ nutrition_label_draft.get('carbs_per_100g', '') }}" required></label>
-        <label>Fat<input type="number" name="fat_per_100g" min="0" step="0.1" placeholder="g" value="{{ nutrition_label_draft.get('fat_per_100g', '') }}" required></label>
+        <div class="ds-field">
+          <label class="ds-field__label" for="reviewCalories">Calories</label>
+          <input class="ds-input" id="reviewCalories" type="number" name="calories_per_100g" min="0" step="0.1" placeholder="kcal" value="{{ nutrition_label_draft.get('calories_per_100g', '') }}" required>
+        </div>
+        <div class="ds-field">
+          <label class="ds-field__label" for="reviewProtein">Protein</label>
+          <input class="ds-input" id="reviewProtein" type="number" name="protein_per_100g" min="0" step="0.1" placeholder="g" value="{{ nutrition_label_draft.get('protein_per_100g', '') }}" required>
+        </div>
+        <div class="ds-field">
+          <label class="ds-field__label" for="reviewCarbs">Carbs</label>
+          <input class="ds-input" id="reviewCarbs" type="number" name="carbs_per_100g" min="0" step="0.1" placeholder="g" value="{{ nutrition_label_draft.get('carbs_per_100g', '') }}" required>
+        </div>
+        <div class="ds-field">
+          <label class="ds-field__label" for="reviewFat">Fat</label>
+          <input class="ds-input" id="reviewFat" type="number" name="fat_per_100g" min="0" step="0.1" placeholder="g" value="{{ nutrition_label_draft.get('fat_per_100g', '') }}" required>
+        </div>
       </div>
       <div class="nutrition-review-actions">
-        <button type="submit" name="save_action" value="save">Save to Database</button>
+        <button class="ds-btn ds-btn--secondary ds-btn--block" type="submit" name="save_action" value="save">Save to Database</button>
       </div>
       <section class="nutrition-log-now">
         <div>
@@ -239,21 +282,22 @@
           <p>Choose a diary group and serving size only if you want this food added to today.</p>
         </div>
         <div class="nutrition-save-extra">
-          <label>
-            Group
-            <select name="log_meal_type" id="nutritionReviewMeal">
+          <div class="ds-field">
+            <label class="ds-field__label" for="nutritionReviewMeal">Group</label>
+            <select class="ds-input" name="log_meal_type" id="nutritionReviewMeal">
               <option value="breakfast">Breakfast</option>
               <option value="lunch">Lunch</option>
               <option value="dinner">Dinner</option>
               <option value="snack" selected>Snack</option>
             </select>
-          </label>
-          <label class="nutrition-review-serving">Serving size
-            <input type="number" name="log_quantity_grams" min="1" step="0.1" placeholder="grams to log">
+          </div>
+          <div class="ds-field nutrition-review-serving">
+            <label class="ds-field__label" for="reviewServingSize">Serving size</label>
+            <input class="ds-input" id="reviewServingSize" type="number" name="log_quantity_grams" min="1" step="0.1" placeholder="grams to log">
             <small hidden>Please enter serving size.</small>
-          </label>
+          </div>
         </div>
-        <button class="nutrition-log-now-submit" type="submit" name="save_action" value="save_and_log">Save and Log</button>
+        <button class="ds-btn ds-btn--primary ds-btn--block nutrition-log-now-submit" type="submit" name="save_action" value="save_and_log">Save and Log</button>
       </section>
     </form>
   </section>
@@ -443,29 +487,38 @@
       rail.style.top = `${top}px`;
     }
 
-    document.addEventListener("click", function (event) {
-      const opener = event.target.closest("[data-open-meal-actions]");
-      if (!opener) {
-        if (!event.target.closest(".nutrition-meal-action-rail")) closeMealActions();
-        return;
-      }
-      event.preventDefault();
-      event.stopPropagation();
-      const card = opener.closest(".nutrition-meal-card");
-      const rail = getMealRail(card);
-      if (!rail) return;
-      const willOpen = rail.hidden;
-      closeMealActions(card);
-      rail.hidden = !willOpen;
-      card.classList.toggle("nutrition-meal-card-open", willOpen);
-      if (willOpen) positionMealRail(opener, rail);
-    });
+    // These are delegated at document/window level, which persist across the
+    // AJAX content-swap layer (ds-components.js re-runs this whole script on
+    // every swap so it can pick up fresh server-rendered data). Guarding them
+    // behind a one-time flag stops duplicate listeners from stacking up each
+    // time this tab is revisited via AJAX nav.
+    if (!window.__dsNutritionGlobalBound) {
+      window.__dsNutritionGlobalBound = true;
 
-    window.addEventListener("resize", () => closeMealActions());
-    window.addEventListener("scroll", () => closeMealActions(), {passive: true});
-    document.addEventListener("keydown", event => {
-      if (event.key === "Escape") closeMealActions();
-    });
+      document.addEventListener("click", function (event) {
+        const opener = event.target.closest("[data-open-meal-actions]");
+        if (!opener) {
+          if (!event.target.closest(".nutrition-meal-action-rail")) closeMealActions();
+          return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        const card = opener.closest(".nutrition-meal-card");
+        const rail = getMealRail(card);
+        if (!rail) return;
+        const willOpen = rail.hidden;
+        closeMealActions(card);
+        rail.hidden = !willOpen;
+        card.classList.toggle("nutrition-meal-card-open", willOpen);
+        if (willOpen) positionMealRail(opener, rail);
+      });
+
+      window.addEventListener("resize", () => closeMealActions());
+      window.addEventListener("scroll", () => closeMealActions(), {passive: true});
+      document.addEventListener("keydown", event => {
+        if (event.key === "Escape") closeMealActions();
+      });
+    }
 
     document.querySelectorAll("[data-open-food-list]").forEach(button => {
       button.addEventListener("click", function () {
@@ -584,6 +637,15 @@
       rows.forEach(row => list?.appendChild(row));
     }
 
+    const emptyTitleEl = document.getElementById("nutritionPickerEmptyTitle");
+    const emptyHintEl = document.getElementById("nutritionPickerEmptyHint");
+    const emptyCopy = {
+      recent: ["No recently logged foods yet.", "Foods you log will show up here for quick re-adding."],
+      frequent: ["No frequently logged foods yet.", "Foods you log often will show up here."],
+      custom: ["No custom foods yet.", "Add one with calories and macros per 100g."],
+      all: ["No saved food matches your search.", "You can add it manually with calories and macros per 100g."],
+    };
+
     function filterFoods() {
       const query = (searchInput?.value || "").trim().toLowerCase();
       const visibleRows = [];
@@ -594,6 +656,11 @@
       });
       sortRows(visibleRows);
       if (emptyState) emptyState.hidden = visibleRows.length > 0;
+      if (!visibleRows.length) {
+        const copy = (query && emptyCopy[activeTab] === emptyCopy.custom) ? emptyCopy.all : (emptyCopy[activeTab] || emptyCopy.all);
+        if (emptyTitleEl) emptyTitleEl.textContent = copy[0];
+        if (emptyHintEl) emptyHintEl.textContent = copy[1];
+      }
     }
 
     document.querySelectorAll("[data-food-tab]").forEach(tab => {
@@ -706,12 +773,6 @@
       if (error) error.hidden = true;
     });
 
-    document.addEventListener("submit", function (event) {
-      const form = event.target;
-      if (!form.classList || !form.classList.contains("nutrition-delete-form")) return;
-      if (!window.confirm("Delete this logged food?")) event.preventDefault();
-    });
-
     function handleJsonResponse(response) {
       return response.json().catch(() => {
         throw new Error("Unexpected server response.");
@@ -726,8 +787,16 @@
       if (!ring) return;
       const ratio = goal ? Math.min(current / goal * 100, 100) : 0;
       ring.style.setProperty("--ring-progress", ratio);
+      const rawRatio = goal ? (Number(current || 0) / Number(goal || 1)) * 100 : 0;
       if (name === "energy") {
-        ring.classList.toggle("nutrition-calorie-ring-over", Boolean(goal && Number(current || 0) > Number(goal || 0)));
+        const isOver = Boolean(goal && Number(current || 0) > Number(goal || 0));
+        ring.classList.toggle("nutrition-calorie-ring-over", isOver);
+        ring.classList.toggle("nutrition-calorie-ring-warn", !isOver && rawRatio >= 85);
+      } else {
+        const isOverGoal = Boolean(goal && rawRatio >= 100);
+        const overPct = isOverGoal ? Math.min(((rawRatio - 100) / 20) * 100, 100) : 0;
+        ring.classList.toggle("is-over-goal", isOverGoal);
+        ring.style.setProperty("--over-pct", overPct + "%");
       }
       const currentEl = ring.querySelector(".nutrition-ring-current");
       const goalEl = ring.querySelector(".nutrition-ring-goal");
@@ -775,6 +844,7 @@
           form.className = "nutrition-delete-form";
           form.method = "POST";
           form.action = `/client/{{ client.id }}/nutrition/logs/delete/${item.id}`;
+          form.setAttribute("data-ds-confirm", "Delete this logged food?");
           const token = document.createElement("input");
           token.type = "hidden";
           token.name = "csrf_token";
