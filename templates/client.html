@@ -36,6 +36,11 @@
 
   {% if not is_admin %}
     {% call ds_modal("accountSettingsModal", "Account Information") %}
+      {% if must_change_password %}
+        {{ ds_alert("For your security, set a new password before continuing. Enter the temporary password you were given as your current password.", variant="danger") }}
+      {% endif %}
+      {% if err %}{{ ds_alert(err, variant="danger") }}{% endif %}
+      {% if msg %}{{ ds_alert(msg, variant="success") }}{% endif %}
       <form action="{{ url_for('change_client_password', client_id=client.id) }}" method="POST">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         {{ ds_input("username", label="Username", value=(client_user.username if client_user else ''), required=True, attrs='autocomplete="username"') }}
@@ -43,15 +48,16 @@
         <div class="ds-field">
           <label class="ds-field__label" for="clientSettingsCurrentPassword">Current password</label>
           <div class="password-wrap">
-            <input id="clientSettingsCurrentPassword" class="ds-input" type="password" name="current_password" autocomplete="current-password">
+            <input id="clientSettingsCurrentPassword" class="ds-input" type="password" name="current_password" autocomplete="current-password" required>
             <button class="password-toggle" type="button" data-password-target="clientSettingsCurrentPassword" aria-label="Show password" aria-pressed="false">&#128065;</button>
           </div>
+          {% if must_change_password %}<span class="ds-field__hint">This is the temporary password you were given to log in.</span>{% endif %}
         </div>
 
         <div class="ds-field">
           <label class="ds-field__label" for="clientSettingsNewPassword">New password</label>
           <div class="password-wrap">
-            <input id="clientSettingsNewPassword" class="ds-input" type="password" name="new_password" autocomplete="new-password" minlength="6">
+            <input id="clientSettingsNewPassword" class="ds-input" type="password" name="new_password" autocomplete="new-password" minlength="6"{{ ' required' if must_change_password else '' }}>
             <button class="password-toggle" type="button" data-password-target="clientSettingsNewPassword" aria-label="Show password" aria-pressed="false">&#128065;</button>
           </div>
         </div>
@@ -59,7 +65,7 @@
         <div class="ds-field">
           <label class="ds-field__label" for="clientSettingsConfirmPassword">Confirm new password</label>
           <div class="password-wrap">
-            <input id="clientSettingsConfirmPassword" class="ds-input" type="password" name="confirm_password" autocomplete="new-password" minlength="6">
+            <input id="clientSettingsConfirmPassword" class="ds-input" type="password" name="confirm_password" autocomplete="new-password" minlength="6"{{ ' required' if must_change_password else '' }}>
             <button class="password-toggle" type="button" data-password-target="clientSettingsConfirmPassword" aria-label="Show password" aria-pressed="false">&#128065;</button>
           </div>
         </div>
@@ -185,6 +191,11 @@
 
   (function () {
     if (localStorage.getItem("trainer_client_onboarding_seen") === "1") return;
+    // Don't stack this on top of the forced password-change modal -- it
+    // opens 350ms later and, being a same-z-index sibling, ends up
+    // intercepting clicks on the account-settings modal underneath it,
+    // making "Save" unclickable until this one is dismissed.
+    if ({{ 'true' if (not is_admin and must_change_password) else 'false' }}) return;
     const showOnTabs = ["info", "stats"];
     const current = "{{ tab }}";
     if (showOnTabs.indexOf(current) === -1) return;
