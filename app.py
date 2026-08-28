@@ -220,6 +220,15 @@ def inject_asset_v():
     return {"asset_v": asset_v}
 
 
+@app.template_filter("mkd")
+def format_mkd(value):
+    try:
+        value = round(float(value))
+    except (TypeError, ValueError):
+        return value
+    return f"{value:,}"
+
+
 @app.before_request
 def touch_last_seen():
     uid = session.get("user_id")
@@ -446,6 +455,18 @@ class Payment(db.Model):
     due_date_override = db.Column(db.Date, nullable=True)
 
     note = db.Column(db.String(200))
+
+
+class BudgetWeek(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    week_start = db.Column(db.Date, unique=True, nullable=False, index=True)
+    weekly_budget = db.Column(db.Integer, nullable=False, default=0)
+
+
+class BudgetDay(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    day = db.Column(db.Date, unique=True, nullable=False, index=True)
+    spent = db.Column(db.Integer, nullable=False, default=0)
 
 
 class User(db.Model):
@@ -2496,6 +2517,110 @@ def payment_due_date(payment: Payment) -> date:
     return add_months(payment.start_date, payment.months)
 
 
+BUDGET_DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+
+def get_budget_week(ws: date):
+    return BudgetWeek.query.filter_by(week_start=ws).first()
+
+
+def build_budget_week_view(ws: date):
+    week = get_budget_week(ws)
+    weekly_budget = week.weekly_budget if week else 0
+    daily_budget = round(weekly_budget / 7) if weekly_budget else 0
+
+    entries = {
+        e.day: e for e in BudgetDay.query.filter(
+            BudgetDay.day >= ws, BudgetDay.day <= ws + timedelta(days=6)
+        ).all()
+    }
+
+    today = date.today()
+    days = []
+    total_spent = 0
+    for i in range(7):
+        d = ws + timedelta(days=i)
+        entry = entries.get(d)
+        logged = entry is not None
+        spent = entry.spent if entry else 0
+        if logged:
+            total_spent += spent
+        over = logged and daily_budget > 0 and spent > daily_budget
+        pct = min(100, round((spent / daily_budget) * 100)) if daily_budget > 0 else 0
+        if not logged:
+            tone = "empty"
+        elif over:
+            tone = "over"
+        elif daily_budget > 0 and spent >= daily_budget * 0.85:
+            tone = "warn"
+        else:
+            tone = "ok"
+        days.append({
+            "date": d,
+            "name": BUDGET_DAY_NAMES[i],
+            "spent": spent,
+            "logged": logged,
+            "leftover": daily_budget - spent,
+            "over": over,
+            "pct": pct,
+            "tone": tone,
+            "is_today": d == today,
+            "is_future": d > today,
+        })
+
+    weekly_remaining = weekly_budget - total_spent
+
+    return {
+        "week_start": ws,
+        "week_end": ws + timedelta(days=6),
+        "weekly_budget": weekly_budget,
+        "daily_budget": daily_budget,
+        "days": days,
+        "total_spent": total_spent,
+        "weekly_remaining": weekly_remaining,
+        "week_over": weekly_budget > 0 and total_spent > weekly_budget,
+        "has_budget": weekly_budget > 0,
+        "over_amount": max(0, total_spent - weekly_budget),
+    }
+
+
+def budget_day_ajax_payload(d: date):
+    view = build_budget_week_view(week_start(d))
+    day_data = next(x for x in view["days"] if x["date"] == d)
+    return {
+        "ok": True,
+        "day": {
+            "date": day_data["date"].isoformat(),
+            "spent": day_data["spent"],
+            "logged": day_data["logged"],
+            "leftover": day_data["leftover"],
+            "over": day_data["over"],
+            "pct": day_data["pct"],
+            "tone": day_data["tone"],
+            "has_budget": view["has_budget"],
+        },
+        "week": {
+            "total_spent": view["total_spent"],
+            "weekly_remaining": view["weekly_remaining"],
+            "week_over": view["week_over"],
+            "over_amount": view["over_amount"],
+        },
+        "all_time_savings": compute_all_time_savings(),
+    }
+
+
+def compute_all_time_savings() -> int:
+    total = 0
+    week_daily_cache = {}
+    for entry in BudgetDay.query.all():
+        ws = week_start(entry.day)
+        if ws not in week_daily_cache:
+            week = get_budget_week(ws)
+            week_daily_cache[ws] = round(week.weekly_budget / 7) if week else 0
+        total += week_daily_cache[ws] - entry.spent
+    return total
+
+
 def seed_admin():
     existing = User.query.filter_by(username="admin").first()
     if not existing:
@@ -2798,6 +2923,107 @@ def index():
         show_inactive=show_inactive,
         hidden_clients_count=hidden_clients_count,
     )
+
+
+@app.route("/admin/budget")
+@login_required
+def budget_tracker():
+    if not is_admin():
+        return "Forbidden", 403
+
+    requested = parse_iso_date(request.args.get("week"))
+    ws = week_start(requested or date.today())
+    view = build_budget_week_view(ws)
+
+    return render_template(
+        "budget.html",
+        title="Weekly Budget",
+        view=view,
+        prev_week=(ws - timedelta(days=7)).isoformat(),
+        next_week=(ws + timedelta(days=7)).isoformat(),
+        this_week=week_start(date.today()).isoformat(),
+        is_current_week=(ws == week_start(date.today())),
+        all_time_savings=compute_all_time_savings(),
+        err=request.args.get("err"),
+        msg=request.args.get("msg"),
+    )
+
+
+@app.route("/admin/budget/set-weekly", methods=["POST"])
+@login_required
+def set_weekly_budget():
+    if not is_admin():
+        return "Forbidden", 403
+
+    ws = week_start(parse_iso_date(request.form.get("week_start")) or date.today())
+    raw = (request.form.get("weekly_budget") or "").strip()
+    try:
+        amount = round(max(0.0, float(raw)))
+    except ValueError:
+        return redirect(url_for("budget_tracker", week=ws.isoformat(), err="Enter a valid weekly budget."))
+
+    week = get_budget_week(ws)
+    if not week:
+        db.session.add(BudgetWeek(week_start=ws, weekly_budget=amount))
+    else:
+        week.weekly_budget = amount
+    db.session.commit()
+    return redirect(url_for("budget_tracker", week=ws.isoformat(), msg="Weekly budget updated."))
+
+
+@app.route("/admin/budget/log-day", methods=["POST"])
+@login_required
+def log_budget_day():
+    if not is_admin():
+        return "Forbidden", 403
+
+    is_ajax = request.headers.get("X-Budget-Ajax") == "1"
+
+    d = parse_iso_date(request.form.get("day"))
+    if not d:
+        return redirect(url_for("budget_tracker"))
+
+    raw = (request.form.get("spent") or "").strip()
+    try:
+        amount = round(max(0.0, float(raw)))
+    except ValueError:
+        if is_ajax:
+            return jsonify({"ok": False, "error": "Enter a valid amount spent."}), 400
+        return redirect(url_for("budget_tracker", week=week_start(d).isoformat(), err="Enter a valid amount spent."))
+
+    entry = BudgetDay.query.filter_by(day=d).first()
+    if not entry:
+        db.session.add(BudgetDay(day=d, spent=amount))
+    else:
+        entry.spent = amount
+    db.session.commit()
+
+    if is_ajax:
+        return jsonify(budget_day_ajax_payload(d))
+    return redirect(url_for(
+        "budget_tracker", week=week_start(d).isoformat(),
+        msg=f"Logged {amount} MKD spent on {d.strftime('%b %d')}.",
+    ))
+
+
+@app.route("/admin/budget/clear-day", methods=["POST"])
+@login_required
+def clear_budget_day():
+    if not is_admin():
+        return "Forbidden", 403
+
+    is_ajax = request.headers.get("X-Budget-Ajax") == "1"
+
+    d = parse_iso_date(request.form.get("day"))
+    if d:
+        entry = BudgetDay.query.filter_by(day=d).first()
+        if entry:
+            db.session.delete(entry)
+            db.session.commit()
+
+    if is_ajax and d:
+        return jsonify(budget_day_ajax_payload(d))
+    return redirect(url_for("budget_tracker", week=week_start(d).isoformat() if d else None, msg="Entry cleared."))
 
 
 @app.route("/client/<int:client_id>")

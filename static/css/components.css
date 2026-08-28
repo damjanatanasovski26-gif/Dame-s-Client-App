@@ -2115,3 +2115,207 @@ table.ds-table{
 .ds-modal__actions .ds-btn{
   flex: 1;
 }
+
+/* ==========================================================================
+   Weekly Budget tracker (admin-only)
+   ========================================================================== */
+#weekOverAlert[hidden]{
+  display: none;
+}
+
+.budget-value--danger{
+  color: var(--ds-danger) !important;
+}
+
+.budget-value--success{
+  color: var(--ds-success) !important;
+}
+
+.budget-stat-row .ds-stat-tile{
+  position: relative;
+  overflow: hidden;
+}
+
+.budget-savings-tile{
+  background: linear-gradient(160deg, color-mix(in srgb, var(--ds-success) 14%, var(--ds-surface)), var(--ds-surface));
+  border-color: color-mix(in srgb, var(--ds-success) 30%, var(--ds-border));
+}
+
+.budget-week-nav{
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  flex-wrap: wrap;
+  margin-bottom: var(--ds-space-4);
+}
+
+.budget-weekly-form{
+  display: flex;
+  align-items: flex-end;
+  gap: var(--ds-space-3);
+  flex-wrap: wrap;
+}
+
+.budget-weekly-form__field{
+  flex: 1 1 200px;
+  margin-bottom: 0;
+}
+
+.budget-daily-hint{
+  margin: var(--ds-space-3) 0 0;
+}
+
+.budget-grid{
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--ds-space-3);
+}
+
+@media (min-width: 560px){
+  .budget-grid{
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 860px){
+  .budget-grid{
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1080px){
+  .budget-grid{
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+}
+
+.budget-day-card{
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+  padding: var(--ds-space-3);
+  border-radius: var(--ds-radius-md);
+  border: 1px solid var(--ds-border);
+  background: var(--ds-surface-soft);
+  transition: border-color var(--ds-duration-fast) var(--ds-ease), transform var(--ds-duration-fast) var(--ds-ease);
+}
+
+.budget-day-card.is-today{
+  box-shadow: inset 0 0 0 2px var(--ds-accent);
+}
+
+.budget-day-card.tone-warn{
+  border-color: color-mix(in srgb, var(--ds-warn) 45%, var(--ds-border));
+}
+
+.budget-day-card.tone-over{
+  border-color: color-mix(in srgb, var(--ds-danger) 50%, var(--ds-border));
+  background: linear-gradient(160deg, color-mix(in srgb, var(--ds-danger) 10%, var(--ds-surface-soft)), var(--ds-surface-soft));
+}
+
+.budget-day-card.tone-ok{
+  border-color: color-mix(in srgb, var(--ds-success) 32%, var(--ds-border));
+}
+
+.budget-day-card__head{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ds-space-2);
+}
+
+.budget-day-card__name{
+  font-weight: var(--ds-fw-bold);
+  font-size: var(--ds-text-sm);
+  text-transform: uppercase;
+  letter-spacing: var(--ds-tracking-wide);
+}
+
+.budget-day-card__date{
+  display: block;
+  font-size: var(--ds-text-xs);
+  color: var(--ds-text-muted);
+}
+
+.budget-progress-track{
+  margin-bottom: 0;
+}
+
+.budget-progress-track span{
+  background: var(--ds-success);
+}
+
+.budget-progress-track span.tone-warn{
+  background: var(--ds-warn);
+}
+
+.budget-progress-track span.tone-over{
+  background: var(--ds-danger);
+}
+
+.budget-day-card__amounts{
+  display: flex;
+  justify-content: space-between;
+  gap: var(--ds-space-2);
+}
+
+.budget-day-card__amounts > div{
+  display: flex;
+  flex-direction: column;
+}
+
+.budget-day-card__amounts b{
+  font-size: var(--ds-text-base);
+  font-weight: var(--ds-fw-bold);
+}
+
+.budget-amount-label{
+  font-size: var(--ds-text-xs);
+  color: var(--ds-text-muted);
+}
+
+.budget-warning{
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-1);
+  font-size: var(--ds-text-xs);
+  font-weight: var(--ds-fw-semibold);
+  color: var(--ds-danger);
+}
+
+.budget-warning[hidden]{
+  display: none;
+}
+
+.budget-day-card__form{
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+}
+
+.budget-day-card__form .ds-input{
+  min-height: 36px;
+  padding: 0 var(--ds-space-3);
+}
+
+.budget-day-card__form .ds-btn{
+  width: 100%;
+}
+
+.budget-day-card__clear .ds-btn{
+  width: 100%;
+}
+
+.budget-day-card.is-saving{
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.budget-day-card.just-saved{
+  animation: budget-saved-flash 900ms var(--ds-ease);
+}
+
+@keyframes budget-saved-flash{
+  0%{ box-shadow: 0 0 0 2px var(--ds-success), var(--ds-glow-accent); }
+  100%{ box-shadow: none; }
+}

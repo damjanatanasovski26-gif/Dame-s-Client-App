@@ -55,6 +55,9 @@
       <a class="ds-quick-action ds-quick-action--accent" href="{{ url_for('backup_database') }}">
         <span>Database</span><b>Download Backup</b>
       </a>
+      <a class="ds-quick-action" href="{{ url_for('budget_tracker') }}" data-ds-nav>
+        <span>Personal</span><b>Weekly Budget</b>
+      </a>
       <form action="{{ url_for('import_capnutra_admin') }}" method="POST"
             data-ds-confirm="Import CAPNUTRA foods into the shared nutrition library? This can take around a minute.">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

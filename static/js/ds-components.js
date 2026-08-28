@@ -149,13 +149,23 @@ function dsSetLoading(isLoading) {
   if (root) root.classList.toggle("ds-loading", isLoading);
 }
 
-function dsSwapPage(html, finalUrl) {
+function dsSwapPage(html, finalUrl, method) {
   const parser = new DOMParser();
   const doc = parser.parseFromString(html, "text/html");
   const newRoot = doc.getElementById("dsPageRoot");
   const root = document.getElementById("dsPageRoot");
   if (!newRoot || !root) {
-    window.location.href = finalUrl;
+    // finalUrl is only safe to re-request when this came from a GET (a real
+    // navigable page). For a failed POST (e.g. a stale CSRF token after the
+    // session expired), finalUrl is the form's own POST-only action URL —
+    // re-requesting it via location.href would GET it and hit a 405.
+    // Reloading the current page is always safe and also refreshes the
+    // session/CSRF token for the next attempt.
+    if (method && method !== "GET") {
+      window.location.reload();
+    } else {
+      window.location.href = finalUrl;
+    }
     return;
   }
   document.title = doc.title;
@@ -177,15 +187,23 @@ function dsSwapPage(html, finalUrl) {
 
 function dsNavigate(url, fetchOptions) {
   dsSetLoading(true);
+  const method = ((fetchOptions && fetchOptions.method) || "GET").toUpperCase();
   return fetch(url, Object.assign({ credentials: "same-origin" }, fetchOptions))
     .then(function (resp) {
       if (!resp.ok && resp.status >= 500) throw new Error("Server error");
       return resp.text().then(function (html) {
-        dsSwapPage(html, resp.url);
+        dsSwapPage(html, resp.url, method);
       });
     })
     .catch(function () {
-      window.location.href = url;
+      // Same reasoning as in dsSwapPage: only re-request the target URL
+      // directly when it's a GET. A failed POST falls back to reloading the
+      // current page instead of GETing a POST-only endpoint.
+      if (method === "GET") {
+        window.location.href = url;
+      } else {
+        window.location.reload();
+      }
     })
     .finally(function () {
       dsSetLoading(false);

@@ -1,0 +1,235 @@
+{% extends "base.html" %}
+{% from "components.html" import ds_card, ds_button, ds_input, ds_badge, ds_icon, ds_alert %}
+{% set title = "Weekly Budget" %}
+{% set page_class = "ds-budget-page" %}
+
+{% block content %}
+<div class="ds-dash-hero">
+  <div>
+    <span class="ds-badge ds-badge--accent">Personal &middot; Admin Only</span>
+    <h1 class="ds-dash-title">Weekly Budget</h1>
+    <p class="ds-field__hint" style="font-size:var(--ds-text-base);">Split your weekly budget across 7 days, log what you spend, and watch leftover money stack up.</p>
+  </div>
+  <div class="ds-dash-hero-actions">
+    {{ ds_button("Dashboard", href=url_for('index'), variant="secondary", icon="home", attrs='data-ds-nav') }}
+  </div>
+</div>
+
+{% if err %}{{ ds_alert(err, variant="danger") }}{% endif %}
+{% if msg %}{{ ds_alert(msg, variant="success") }}{% endif %}
+
+<div class="ds-stat-row budget-stat-row">
+  <div class="ds-card ds-stat-tile">
+    <span class="ds-card__eyebrow">Weekly Budget</span>
+    <b class="ds-stat-number">{{ view.weekly_budget|mkd }}</b>
+  </div>
+  <div class="ds-card ds-stat-tile">
+    <span class="ds-card__eyebrow">Spent This Week</span>
+    <b id="statSpentThisWeek" class="ds-stat-number{{ ' budget-value--danger' if view.week_over else '' }}">{{ view.total_spent|mkd }}</b>
+  </div>
+  <div class="ds-card ds-stat-tile">
+    <span class="ds-card__eyebrow">Weekly Remaining</span>
+    <b id="statWeeklyRemaining" class="ds-stat-number{{ ' budget-value--danger' if view.weekly_remaining < 0 else ' budget-value--success' }}">{{ view.weekly_remaining|mkd }}</b>
+  </div>
+  <div class="ds-card ds-stat-tile budget-savings-tile">
+    <span class="ds-card__eyebrow">All-Time Savings</span>
+    <b id="statAllTimeSavings" class="ds-stat-number{{ ' budget-value--danger' if all_time_savings < 0 else ' budget-value--success' }}">{{ all_time_savings|mkd }}</b>
+  </div>
+</div>
+
+<div id="weekOverAlert" class="ds-alert ds-alert--danger"{{ '' if view.week_over else ' hidden' }}>
+  <span class="ds-alert__icon">{{ ds_icon("close", 18) }}</span>
+  <span class="ds-alert__text">Over the weekly budget by <span data-week-over-amount>{{ view.over_amount|mkd }}</span> MKD.</span>
+</div>
+
+{% call ds_card(eyebrow="Week", title=view.week_start.strftime('%b %d') ~ " – " ~ view.week_end.strftime('%b %d, %Y')) %}
+  <div class="budget-week-nav">
+    {{ ds_button("Prev", href=url_for('budget_tracker', week=prev_week), variant="secondary", size="sm", icon="chevron-left", attrs='data-ds-nav') }}
+    {% if not is_current_week %}
+      {{ ds_button("This Week", href=url_for('budget_tracker', week=this_week), variant="secondary", size="sm", attrs='data-ds-nav') }}
+    {% endif %}
+    {{ ds_button("Next", href=url_for('budget_tracker', week=next_week), variant="secondary", size="sm", attrs='data-ds-nav') }}
+  </div>
+
+  <form action="{{ url_for('set_weekly_budget') }}" method="POST" class="budget-weekly-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="week_start" value="{{ view.week_start.isoformat() }}">
+    <div class="ds-field budget-weekly-form__field">
+      <label class="ds-field__label" for="weeklyBudgetInput">Weekly budget (MKD)</label>
+      <input id="weeklyBudgetInput" class="ds-input" type="number" name="weekly_budget" min="0" step="1"
+             value="{{ view.weekly_budget if view.weekly_budget else '' }}" placeholder="e.g. 3500">
+    </div>
+    {{ ds_button("Save", type="submit") }}
+  </form>
+  {% if view.has_budget %}
+    <p class="ds-field__hint budget-daily-hint">&asymp; {{ view.daily_budget|mkd }} MKD / day</p>
+  {% else %}
+    <p class="ds-field__hint budget-daily-hint">Set a weekly budget to start tracking daily allotments.</p>
+  {% endif %}
+{% endcall %}
+
+{% call ds_card(eyebrow="Daily Breakdown", title="This Week") %}
+  <div class="budget-grid">
+    {% for d in view.days %}
+      <div class="budget-day-card tone-{{ d.tone }}{{ ' is-today' if d.is_today else '' }}" data-budget-day="{{ d.date.isoformat() }}">
+        <div class="budget-day-card__head">
+          <div>
+            <span class="budget-day-card__name">{{ d.name[:3] }}</span>
+            <span class="budget-day-card__date">{{ d.date.strftime('%b %d') }}</span>
+          </div>
+          {% if d.is_today %}{{ ds_badge("Today", variant="accent") }}{% endif %}
+        </div>
+
+        <div class="ds-progress-track budget-progress-track" data-budget-track{{ '' if view.has_budget else ' hidden' }}>
+          <span class="tone-{{ d.tone }}" data-budget-progress style="width:{{ d.pct }}%;"></span>
+        </div>
+
+        <div class="budget-day-card__amounts">
+          <div>
+            <span class="budget-amount-label">Spent</span>
+            <b data-budget-spent>{{ d.spent|mkd if d.logged else "—" }}</b>
+          </div>
+          <div>
+            <span class="budget-amount-label" data-budget-amount-label>{{ 'Over by' if d.over else 'Left' }}</span>
+            <b data-budget-leftover class="{{ 'budget-value--danger' if d.leftover < 0 else 'budget-value--success' }}">{{ (d.leftover|abs)|mkd if view.has_budget and d.logged else "—" }}</b>
+          </div>
+        </div>
+
+        <div class="budget-warning" data-budget-warning{{ '' if d.over else ' hidden' }}>{{ ds_icon("alert-triangle", 14) }} <span>Over daily budget</span></div>
+
+        <form action="{{ url_for('log_budget_day') }}" method="POST" class="budget-day-card__form" data-budget-scoped="log">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="day" value="{{ d.date.isoformat() }}">
+          <input class="ds-input" type="number" name="spent" min="0" step="1" placeholder="0"
+                 value="{{ d.spent if d.logged else '' }}" aria-label="Spent on {{ d.name }}" data-budget-input>
+          {{ ds_button("Log", type="submit", size="sm") }}
+        </form>
+        <form action="{{ url_for('clear_budget_day') }}" method="POST" class="budget-day-card__clear" data-budget-scoped="clear"
+              data-ds-confirm="Clear spending logged for {{ d.name }}, {{ d.date.strftime('%b %d') }}?"{{ '' if d.logged else ' hidden' }}>
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="day" value="{{ d.date.isoformat() }}">
+          {{ ds_button("Clear", type="submit", variant="secondary", size="sm") }}
+        </form>
+      </div>
+    {% endfor %}
+  </div>
+{% endcall %}
+
+<script>
+(function () {
+  if (window.__budgetScopedBound) return;
+  window.__budgetScopedBound = true;
+
+  function fmtMkd(n) {
+    return Math.round(n).toLocaleString("en-US");
+  }
+
+  function setToneClass(el, prefix, tone) {
+    el.className = el.className.replace(new RegExp("\\b" + prefix + "-\\S+", "g"), "").trim();
+    el.classList.add(prefix + "-" + tone);
+  }
+
+  function applyBudgetUpdate(card, data) {
+    const day = data.day;
+    const week = data.week;
+
+    setToneClass(card, "tone", day.tone);
+
+    const track = card.querySelector("[data-budget-track]");
+    const bar = card.querySelector("[data-budget-progress]");
+    if (track) track.hidden = !day.has_budget;
+    if (bar) {
+      bar.style.width = day.pct + "%";
+      setToneClass(bar, "tone", day.tone);
+    }
+
+    const spentEl = card.querySelector("[data-budget-spent]");
+    if (spentEl) spentEl.textContent = day.logged ? fmtMkd(day.spent) : "—";
+
+    const labelEl = card.querySelector("[data-budget-amount-label]");
+    if (labelEl) labelEl.textContent = day.over ? "Over by" : "Left";
+
+    const leftoverEl = card.querySelector("[data-budget-leftover]");
+    if (leftoverEl) {
+      leftoverEl.textContent = (day.has_budget && day.logged) ? fmtMkd(Math.abs(day.leftover)) : "—";
+      leftoverEl.classList.toggle("budget-value--danger", day.leftover < 0);
+      leftoverEl.classList.toggle("budget-value--success", day.leftover >= 0);
+    }
+
+    const warnEl = card.querySelector("[data-budget-warning]");
+    if (warnEl) warnEl.hidden = !day.over;
+
+    const input = card.querySelector("[data-budget-input]");
+    if (input) input.value = day.logged ? day.spent : "";
+
+    const clearForm = card.querySelector(".budget-day-card__clear");
+    if (clearForm) clearForm.hidden = !day.logged;
+
+    card.classList.remove("just-saved");
+    void card.offsetWidth;
+    card.classList.add("just-saved");
+
+    const spentStat = document.getElementById("statSpentThisWeek");
+    if (spentStat) {
+      spentStat.textContent = fmtMkd(week.total_spent);
+      spentStat.classList.toggle("budget-value--danger", week.week_over);
+    }
+    const remainingStat = document.getElementById("statWeeklyRemaining");
+    if (remainingStat) {
+      remainingStat.textContent = fmtMkd(week.weekly_remaining);
+      remainingStat.classList.toggle("budget-value--danger", week.weekly_remaining < 0);
+      remainingStat.classList.toggle("budget-value--success", week.weekly_remaining >= 0);
+    }
+    const savingsStat = document.getElementById("statAllTimeSavings");
+    if (savingsStat) {
+      savingsStat.textContent = fmtMkd(data.all_time_savings);
+      savingsStat.classList.toggle("budget-value--danger", data.all_time_savings < 0);
+      savingsStat.classList.toggle("budget-value--success", data.all_time_savings >= 0);
+    }
+
+    const banner = document.getElementById("weekOverAlert");
+    if (banner) {
+      banner.hidden = !week.week_over;
+      const amountEl = banner.querySelector("[data-week-over-amount]");
+      if (amountEl) amountEl.textContent = fmtMkd(week.over_amount);
+    }
+  }
+
+  function submitBudgetForm(form) {
+    const card = form.closest(".budget-day-card");
+    if (!card) return;
+    card.classList.add("is-saving");
+    fetch(form.getAttribute("action"), {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "X-Budget-Ajax": "1" },
+      body: new FormData(form),
+    })
+      .then(function (resp) { return resp.json().then(function (data) { return { ok: resp.ok, data: data }; }); })
+      .then(function (result) {
+        if (!result.ok || !result.data.ok) throw new Error((result.data && result.data.error) || "Request failed");
+        applyBudgetUpdate(card, result.data);
+      })
+      .catch(function () {
+        window.location.reload();
+      })
+      .finally(function () {
+        card.classList.remove("is-saving");
+      });
+  }
+
+  document.addEventListener("submit", function (event) {
+    const form = event.target;
+    if (!(form instanceof HTMLFormElement)) return;
+    const kind = form.getAttribute("data-budget-scoped");
+    if (!kind) return;
+    event.preventDefault();
+    if (kind === "clear" && window.dsShowConfirm) {
+      dsShowConfirm(form.getAttribute("data-ds-confirm"), function () { submitBudgetForm(form); });
+    } else {
+      submitBudgetForm(form);
+    }
+  }, true);
+})();
+</script>
+{% endblock %}
