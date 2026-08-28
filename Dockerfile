@@ -12,6 +12,7 @@ RUN apt-get update \
         tesseract-ocr-eng \
         tesseract-ocr-mkd \
         tesseract-ocr-sqi \
+        tesseract-ocr-deu \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
@@ -21,7 +22,7 @@ COPY . .
 
 ENV FLASK_APP=app \
     TESSERACT_CMD=/usr/bin/tesseract \
-    TESSERACT_LANGS=eng+mkd+sqi
+    TESSERACT_LANGS=eng+mkd+sqi+deu
 
 EXPOSE 8080
 

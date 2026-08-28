@@ -123,7 +123,7 @@ app.config["GOOGLE_VISION_API_KEY"] = os.environ.get("GOOGLE_VISION_API_KEY", ""
 app.config["GOOGLE_VISION_FEATURE_TYPE"] = os.environ.get("GOOGLE_VISION_FEATURE_TYPE", "DOCUMENT_TEXT_DETECTION").strip()
 app.config["GOOGLE_VISION_LANGUAGE_HINTS"] = os.environ.get("GOOGLE_VISION_LANGUAGE_HINTS", "en,mk,sq").strip()
 app.config["TESSERACT_CMD"] = os.environ.get("TESSERACT_CMD", "").strip()
-app.config["TESSERACT_LANGS"] = os.environ.get("TESSERACT_LANGS", "eng+mkd+sqi").strip()
+app.config["TESSERACT_LANGS"] = os.environ.get("TESSERACT_LANGS", "eng+mkd+sqi+deu").strip()
 
 os.makedirs(app.config["UPLOAD_PROGRESS_DIR"], exist_ok=True)
 os.makedirs(app.config["UPLOAD_LABEL_DIR"], exist_ok=True)
@@ -812,9 +812,7 @@ def google_vision_enabled():
     return bool(app.config.get("GOOGLE_VISION_API_KEY", "").strip())
 
 
-def label_scan_enabled():
-    if google_vision_enabled():
-        return True
+def tesseract_scan_enabled():
     if pytesseract is None:
         return False
     tesseract_cmd = resolve_tesseract_cmd()
@@ -828,10 +826,14 @@ def label_scan_enabled():
         return False
 
 
+def label_scan_enabled():
+    return google_vision_enabled() or tesseract_scan_enabled()
+
+
 def label_scan_provider_label():
     if google_vision_enabled():
         return "Google Vision OCR"
-    if label_scan_enabled():
+    if tesseract_scan_enabled():
         return "Tesseract OCR"
     return ""
 
@@ -1814,7 +1816,14 @@ def scan_label_image_text(image):
 
 def scan_label_file_text(image_path: str):
     if google_vision_enabled():
-        return scan_label_with_google_vision(image_path)
+        try:
+            return scan_label_with_google_vision(image_path)
+        except Exception:
+            # A configured key doesn't mean a working one (expired, over
+            # quota, revoked...). Fall back to local Tesseract rather than
+            # taking label scanning down entirely whenever that happens.
+            if not tesseract_scan_enabled():
+                raise
 
     with Image.open(image_path) as image:
         return scan_label_image_text(image)

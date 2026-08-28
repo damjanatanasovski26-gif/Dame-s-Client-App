@@ -25,7 +25,7 @@ Optional nutrition/OCR variables:
 - `GOOGLE_VISION_FEATURE_TYPE=DOCUMENT_TEXT_DETECTION`
 - `GOOGLE_VISION_LANGUAGE_HINTS=en,mk,sq`
 - `TESSERACT_CMD=/usr/bin/tesseract` (already set in the Docker image, only override if needed)
-- `TESSERACT_LANGS=eng+mkd+sqi` (English, Macedonian, Albanian; already set in the Docker image)
+- `TESSERACT_LANGS=eng+mkd+sqi+deu` (English, Macedonian, Albanian, German; already set in the Docker image)
 
 ## 3) Build/start
 Railway should build from the included `Dockerfile`.
