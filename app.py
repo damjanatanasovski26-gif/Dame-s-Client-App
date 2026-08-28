@@ -1709,24 +1709,35 @@ def score_label_text_candidates(label_text: str):
     return found_values, digit_count, -len(label_text or "")
 
 
-def build_label_ocr_images(image):
-    base = ImageOps.exif_transpose(image)
-    variants = [base]
-    for angle in (-2, 2):
-        variants.append(base.rotate(angle, expand=True, fillcolor="white"))
+MAX_LABEL_OCR_DIMENSION = 1800
 
-    processed = []
-    for variant in variants:
-        grayscale = ImageOps.grayscale(variant)
-        autocontrast = ImageOps.autocontrast(grayscale)
-        scale = 2 if max(autocontrast.size) < 1600 else 1
-        enlarged = autocontrast.resize(
-            (autocontrast.width * scale, autocontrast.height * scale),
+
+def prepare_label_base_image(image):
+    base = ImageOps.exif_transpose(image)
+    if max(base.size) > MAX_LABEL_OCR_DIMENSION:
+        # Phone photos routinely come in at 3000-4000px+ on the long edge --
+        # far more resolution than OCR needs, and every step below (rotate,
+        # filter, resize, and Tesseract's own per-pixel work) scales with
+        # pixel count. Capping this up front is the single biggest lever on
+        # both processing time and memory for a real-world photo.
+        ratio = MAX_LABEL_OCR_DIMENSION / max(base.size)
+        base = base.resize(
+            (max(1, round(base.width * ratio)), max(1, round(base.height * ratio))),
             Image.Resampling.LANCZOS,
-        ).filter(ImageFilter.UnsharpMask(radius=1, percent=150, threshold=3))
-        threshold = enlarged.point(lambda pixel: 255 if pixel > 160 else 0)
-        processed.extend([enlarged, threshold])
-    return processed
+        )
+    return base
+
+
+def process_label_variant(variant):
+    grayscale = ImageOps.grayscale(variant)
+    autocontrast = ImageOps.autocontrast(grayscale)
+    scale = 2 if max(autocontrast.size) < 1600 else 1
+    enlarged = autocontrast.resize(
+        (autocontrast.width * scale, autocontrast.height * scale),
+        Image.Resampling.LANCZOS,
+    ).filter(ImageFilter.UnsharpMask(radius=1, percent=150, threshold=3))
+    threshold = enlarged.point(lambda pixel: 255 if pixel > 160 else 0)
+    return [enlarged, threshold]
 
 
 def get_google_vision_language_hints():
@@ -1799,17 +1810,36 @@ def scan_label_image_text(image):
 
     best_text = ""
     best_score = (-1, -1, 0)
-    for ocr_image in build_label_ocr_images(image):
-        for config in configs:
-            text = pytesseract.image_to_string(ocr_image, lang=lang, config=config)
-            if not text.strip():
-                continue
-            score = score_label_text_candidates(text)
-            if score > best_score:
-                best_score = score
-                best_text = text
-            if score[0] == 4:
-                return text.strip()
+
+    def try_images(images):
+        nonlocal best_text, best_score
+        for ocr_image in images:
+            for config in configs:
+                text = pytesseract.image_to_string(ocr_image, lang=lang, config=config)
+                if not text.strip():
+                    continue
+                score = score_label_text_candidates(text)
+                if score > best_score:
+                    best_score = score
+                    best_text = text
+                if score[0] == 4:
+                    return True
+        return False
+
+    base = prepare_label_base_image(image)
+
+    # The straight-on shot alone resolves the vast majority of clean,
+    # reasonably-aligned label photos in 4 passes. Slightly-rotated variants
+    # are only worth the extra cost when that read wasn't clean -- trying
+    # them unconditionally would triple the work (and the OCR time) on
+    # every single scan just to cover a minority of crooked photos.
+    if try_images(process_label_variant(base)):
+        return best_text.strip()
+
+    for angle in (-2, 2):
+        rotated = base.rotate(angle, expand=True, fillcolor="white")
+        if try_images(process_label_variant(rotated)):
+            return best_text.strip()
 
     return best_text.strip()
 
