@@ -274,6 +274,12 @@ def enforce_https():
 
 @app.after_request
 def apply_security_headers(resp):
+    if request.endpoint not in ("static", "pwa_manifest", "pwa_service_worker"):
+        content_type = resp.headers.get("Content-Type", "")
+        if resp.status_code in (301, 302, 303, 307, 308) or "text/html" in content_type:
+            resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+            resp.headers["Pragma"] = "no-cache"
+            resp.headers["Expires"] = "0"
     if not app.config.get("ENABLE_SECURITY_HEADERS", True):
         return resp
     resp.headers["X-Frame-Options"] = "DENY"

@@ -188,7 +188,12 @@ function dsSwapPage(html, finalUrl, method) {
 function dsNavigate(url, fetchOptions) {
   dsSetLoading(true);
   const method = ((fetchOptions && fetchOptions.method) || "GET").toUpperCase();
-  return fetch(url, Object.assign({ credentials: "same-origin" }, fetchOptions))
+  const options = Object.assign({ credentials: "same-origin", cache: "no-store" }, fetchOptions);
+  options.headers = Object.assign(
+    { "Accept": "text/html", "Cache-Control": "no-cache", "X-Requested-With": "XMLHttpRequest" },
+    options.headers || {}
+  );
+  return fetch(url, options)
     .then(function (resp) {
       if (!resp.ok && resp.status >= 500) throw new Error("Server error");
       return resp.text().then(function (html) {
